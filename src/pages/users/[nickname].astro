@@ -1,0 +1,392 @@
+---
+import { supabase } from '../../lib/supabase.js';
+import '../../styles/global.css';
+
+export async function getStaticPaths() {
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select(
+      'id, nickname, best_product_id_1, best_product_id_2, best_product_id_3, best_product_reason_1, best_product_reason_2, best_product_reason_3, best_review_product_id, oshi_maker, oshi_maker_reason, avatar_url, header_url, bio, sns_links, is_public'
+    );
+
+  return (profiles ?? []).map((p) => ({
+    params: { nickname: p.nickname },
+    props: { profile: p },
+  }));
+}
+
+let { profile } = Astro.props;
+
+// 非公開プロフィールは、存在しないページと同じ扱いにして完全に非表示にする
+if (profile && profile.is_public === false) {
+  profile = null;
+}
+
+const snsLinks = Array.isArray(profile?.sns_links) ? profile.sns_links.filter((l) => l?.url) : [];
+
+let checks = [];
+if (profile) {
+  const { data } = await supabase
+    .from('checks')
+    .select(
+      'status, tier, rating, review_title, review_text, detail_review_title, detail_review_text, updated_at, products(id, dmm_content_id, name, maker, price, image_url)'
+    )
+    .eq('user_id', profile.id)
+    .eq('is_public', true)
+    .order('updated_at', { ascending: false });
+  checks = data ?? [];
+}
+
+const usedCount = checks.filter((c) => c.status === 'used').length;
+
+const TOP3_IDS = profile
+  ? [profile.best_product_id_1, profile.best_product_id_2, profile.best_product_id_3]
+  : [null, null, null];
+const TOP3_REASONS = profile
+  ? [profile.best_product_reason_1, profile.best_product_reason_2, profile.best_product_reason_3]
+  : [null, null, null];
+
+const top3 = TOP3_IDS.map((pid, i) => {
+  if (!pid) return null;
+  const check = checks.find((c) => c.products?.id === pid);
+  if (!check) return null;
+  return { check, reason: TOP3_REASONS[i], rank: i + 1 };
+}).filter(Boolean);
+
+const bestReviewCheck = profile
+  ? checks.find((c) => c.products?.id === profile.best_review_product_id) ?? null
+  : null;
+const bestReviewIsDetail = Boolean(bestReviewCheck?.detail_review_text);
+const bestReviewText = bestReviewCheck
+  ? bestReviewCheck.detail_review_text || bestReviewCheck.review_text || ''
+  : '';
+const bestReviewTitle = bestReviewCheck
+  ? bestReviewIsDetail
+    ? bestReviewCheck.detail_review_title
+    : bestReviewCheck.review_title
+  : '';
+
+let totalUsedCount = 0;
+if (profile) {
+  const { data: usedCountData } = await supabase.rpc('get_used_count', {
+    target_user_id: profile.id,
+  });
+  totalUsedCount = usedCountData ?? 0;
+}
+
+const BADGE_TIERS = [
+  { threshold: 100, name: 'レジェンド' },
+  { threshold: 50, name: 'マスター' },
+  { threshold: 30, name: 'ベテラン' },
+  { threshold: 10, name: 'レギュラー' },
+  { threshold: 5, name: 'ビギナー' },
+  { threshold: 1, name: 'はじめての一本' },
+];
+const badgeCurrent = BADGE_TIERS.find((t) => totalUsedCount >= t.threshold) ?? null;
+const badgeNext = [...BADGE_TIERS].reverse().find((t) => t.threshold > totalUsedCount) ?? null;
+const badgeNextText = badgeNext
+  ? `次の「${badgeNext.name}」まであと${badgeNext.threshold - totalUsedCount}本`
+  : '最高ランクに到達しました';
+
+const MAKER_BADGE_TIERS = [
+  { threshold: 10, name: 'コレクター' },
+  { threshold: 5, name: 'マニア' },
+  { threshold: 3, name: 'ファン' },
+  { threshold: 1, name: 'デビュー' },
+];
+
+let makerBadges = [];
+if (profile) {
+  const { data: makerCountsData } = await supabase.rpc('get_used_maker_counts', {
+    target_user_id: profile.id,
+  });
+  makerBadges = (makerCountsData ?? [])
+    .map((row) => ({
+      maker: row.maker,
+      count: row.used_count,
+      badge: MAKER_BADGE_TIERS.find((t) => row.used_count >= t.threshold) ?? null,
+    }))
+    .filter((b) => b.badge)
+    .sort((a, b) => b.count - a.count);
+}
+
+let publicFolders = [];
+if (profile) {
+  const { data: foldersData } = await supabase
+    .from('folders')
+    .select(
+      'id, name, sort_order, folder_items(id, product_id, products(id, dmm_content_id, name, maker, image_url))'
+    )
+    .eq('user_id', profile.id)
+    .eq('is_public', true)
+    .order('sort_order', { ascending: true });
+  publicFolders = foldersData ?? [];
+}
+
+let followerCount = 0;
+let followingCount = 0;
+if (profile) {
+  const { count: fc } = await supabase
+    .from('follows')
+    .select('*', { count: 'exact', head: true })
+    .eq('followee_id', profile.id);
+  followerCount = fc ?? 0;
+
+  const { count: gc } = await supabase
+    .from('follows')
+    .select('*', { count: 'exact', head: true })
+    .eq('follower_id', profile.id);
+  followingCount = gc ?? 0;
+}
+
+const STATUS_LABELS = { interested: '気になる', used: '使った' };
+const TIER_LABELS = { first: '一軍', second: '二軍', retired: '引退' };
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>{profile ? `${profile.nickname}さんのプロフィール` : 'ユーザーが見つかりません'} | オナホめも</title>
+  </head>
+  <body>
+    <header>
+      <a href="/">← 一覧に戻る</a>
+    </header>
+    <main class="profile-page">
+      {!profile && <p>そのニックネームのユーザーは見つかりませんでした。</p>}
+
+      {profile && (
+        <>
+          <div
+            class={`profile-page-header ${profile.header_url ? '' : 'profile-page-header-empty'}`}
+            style={profile.header_url ? `background-image:url('${profile.header_url}')` : ''}
+          >
+          </div>
+
+          <div class="profile-page-avatar-row">
+            {profile.avatar_url ? (
+              <img class="profile-page-avatar" src={profile.avatar_url} alt="アイコン" />
+            ) : (
+              <div class="profile-page-avatar-empty"></div>
+            )}
+            <h1 class="profile-page-title">{profile.nickname}</h1>
+          </div>
+
+          {profile.bio && <p class="profile-bio">{profile.bio}</p>}
+
+          {snsLinks.length > 0 && (
+            <ul class="profile-sns-links">
+              {snsLinks.map((l) => (
+                <li>
+                  <a class="profile-sns-link" href={l.url} target="_blank" rel="noopener noreferrer nofollow">
+                    {l.label || l.url}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div id="follow-section" class="follow-section" data-profile-id={profile.id}>
+            <span class="follow-counts">
+              フォロワー <strong id="follower-count">{followerCount}</strong>人 ・
+              フォロー中 <strong id="following-count">{followingCount}</strong>人
+            </span>
+            <button id="follow-btn" class="follow-btn" style="display:none;">フォローする</button>
+          </div>
+
+          {badgeCurrent && (
+            <div class="badge-section">
+              <span class="badge-chip">{badgeCurrent.name}</span>
+              <p class="badge-detail">使った本数: {totalUsedCount}本 ・ {badgeNextText}</p>
+            </div>
+          )}
+
+          {makerBadges.length > 0 && (
+            <div class="maker-badge-section">
+              <h2 class="maker-badge-title">メーカーバッジ</h2>
+              <div class="maker-badge-list">
+                {makerBadges.map((b) => (
+                  <span class="maker-badge-chip">
+                    {b.maker} {b.badge.name}
+                    <span class="maker-badge-count">({b.count}本)</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {top3.length > 0 && (
+            <div class="top3-section">
+              <h2 class="top3-title">マイベストTOP3</h2>
+              <div class="top3-grid">
+                {top3.map((slot) => (
+                  <div class="top3-slot filled">
+                    <span class="top3-rank">{slot.rank}位</span>
+                    <a href={`/products/${slot.check.products.dmm_content_id}/`} class="top3-card">
+                      <img src={slot.check.products.image_url} alt={slot.check.products.name} loading="lazy" />
+                      <div class="top3-card-body">
+                        <p class="mp-maker">{slot.check.products.maker ?? ''}</p>
+                        <h3>{slot.check.products.name}</h3>
+                      </div>
+                    </a>
+                    {slot.reason && <p class="top3-reason-text">{slot.reason}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {publicFolders.length > 0 && (
+            <div class="folders-section">
+              <h2 class="folders-title">マイフォルダ</h2>
+              <div class="folder-list">
+                {publicFolders.map((folder) => {
+                  const items = (folder.folder_items ?? []).filter((fi) => fi.products);
+                  return (
+                    <div class="folder-card">
+                      <div class="folder-card-head">
+                        <h3 class="folder-name">{folder.name}</h3>
+                        <span class="folder-count">{items.length}件</span>
+                      </div>
+                      {items.length === 0 ? (
+                        <p class="badge-empty">まだ商品が入っていません。</p>
+                      ) : (
+                        <ul class="folder-items-grid">
+                          {items.map((fi) => (
+                            <li class="folder-item-card">
+                              <a href={`/products/${fi.products.dmm_content_id}/`}>
+                                <img src={fi.products.image_url} alt={fi.products.name} loading="lazy" />
+                                <p class="folder-item-name">{fi.products.name}</p>
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {bestReviewCheck && bestReviewCheck.products && (
+            <div class="best-review-section">
+              <h2 class="best-review-title">ベストな口コミ</h2>
+              <a href={`/products/${bestReviewCheck.products.dmm_content_id}/`} class="best-review-product">
+                <img src={bestReviewCheck.products.image_url} alt={bestReviewCheck.products.name} loading="lazy" />
+                <div class="best-review-product-body">
+                  <p class="mp-maker">{bestReviewCheck.products.maker ?? ''}</p>
+                  <h3>{bestReviewCheck.products.name}</h3>
+                </div>
+              </a>
+              {bestReviewTitle && <p class="best-review-quote-title">{bestReviewTitle}</p>}
+              {bestReviewIsDetail ? (
+                <p class="best-review-quote" set:html={bestReviewText} />
+              ) : (
+                <p class="best-review-quote">{bestReviewText}</p>
+              )}
+            </div>
+          )}
+
+          {profile.oshi_maker && (
+            <div class="oshi-maker-section">
+              <h2 class="oshi-maker-title">推しメーカー</h2>
+              <span class="badge-chip oshi-maker-chip">{profile.oshi_maker}</span>
+              {profile.oshi_maker_reason && <p class="badge-detail">{profile.oshi_maker_reason}</p>}
+            </div>
+          )}
+
+          <p class="profile-page-count">公開記録: {checks.length}件(使った: {usedCount}件)</p>
+
+          {checks.length === 0 && <p class="mp-empty">まだ公開されている記録がありません。</p>}
+
+          <ul class="mp-grid">
+            {checks.map((c) => {
+              const p = c.products;
+              return (
+                <li class="mp-card">
+                  <a href={`/products/${p.dmm_content_id}/`}>
+                    <img src={p.image_url} alt={p.name} loading="lazy" />
+                    <div class="mp-card-body">
+                      <p class="mp-maker">{p.maker ?? ''}</p>
+                      <h3>{p.name}</h3>
+                      <p class="mp-price">{p.price ? `¥${p.price.toLocaleString()}` : ''}</p>
+                      <div class="mp-tags">
+                        <span class="mp-tag">{STATUS_LABELS[c.status]}</span>
+                        {c.tier && <span class="mp-tag">{TIER_LABELS[c.tier]}</span>}
+                        {c.rating && <span class="mp-tag">★{c.rating}</span>}
+                      </div>
+                      {c.review_text && <p class="mp-memo">{c.review_text}</p>}
+                    </div>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </main>
+
+    <script>
+      import { supabase } from '../../lib/supabase.js';
+
+      async function initFollow() {
+        const section = document.getElementById('follow-section');
+        if (!section) return;
+        const profileId = section.dataset.profileId;
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session || session.user.id === profileId) return;
+
+        const btn = document.getElementById('follow-btn');
+        btn.style.display = 'inline-block';
+
+        async function refreshFollowState() {
+          const { data: existing } = await supabase
+            .from('follows')
+            .select('follower_id')
+            .eq('follower_id', session.user.id)
+            .eq('followee_id', profileId)
+            .maybeSingle();
+          const following = Boolean(existing);
+          btn.textContent = following ? 'フォロー解除' : 'フォローする';
+          btn.classList.toggle('following', following);
+          return following;
+        }
+
+        async function refreshFollowerCount() {
+          const { count } = await supabase
+            .from('follows')
+            .select('*', { count: 'exact', head: true })
+            .eq('followee_id', profileId);
+          const countEl = document.getElementById('follower-count');
+          if (countEl) countEl.textContent = count ?? 0;
+        }
+
+        let isFollowing = await refreshFollowState();
+
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          if (isFollowing) {
+            await supabase
+              .from('follows')
+              .delete()
+              .eq('follower_id', session.user.id)
+              .eq('followee_id', profileId);
+          } else {
+            await supabase.from('follows').insert({ follower_id: session.user.id, followee_id: profileId });
+          }
+          isFollowing = await refreshFollowState();
+          await refreshFollowerCount();
+          btn.disabled = false;
+        });
+      }
+
+      initFollow();
+    </script>
+  </body>
+</html>

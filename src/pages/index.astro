@@ -1,17 +1,949 @@
 ---
+import { supabase } from '../lib/supabase.js';
+import '../styles/global.css';
 
+const PAGE_SIZE = 60;
+
+const { data: products, error } = await supabase
+  .from('products_with_stats')
+  .select(
+    'id, dmm_content_id, name, maker, price, image_url, dmm_review_average, dmm_review_count, raw_data, genre_tags, site_rating_avg, site_rating_count, want_count, release_date'
+  )
+  .eq('is_onahole', true)
+  .order('release_date', { ascending: false, nullsFirst: false })
+  .range(0, PAGE_SIZE - 1);
+
+const { count } = await supabase
+  .from('products')
+  .select('*', { count: 'exact', head: true })
+  .eq('is_onahole', true);
+
+const { data: memberCountData } = await supabase.rpc('get_member_count');
+const memberCount = memberCountData ?? 0;
+
+const makerRows_result = await supabase
+  .from('products')
+  .select('maker')
+  .eq('is_onahole', true)
+  .not('maker', 'is', null)
+  .range(0, 4999);
+const makerRows = makerRows_result.data;
+
+const makerCounts = {};
+for (const row of makerRows ?? []) {
+  makerCounts[row.maker] = (makerCounts[row.maker] ?? 0) + 1;
+}
+const topMakers = Object.entries(makerCounts)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 40)
+  .map(([name]) => name);
+  const CAMPAIGN_KEYWORDS = ['セール', '特価', '祭', 'キャンペーン', 'OFF', '割引'];
+
+const { data: allTagsData } = await supabase
+  .from('products')
+  .select('genre_tags')
+  .eq('is_onahole', true)
+  .range(0, 4999);
+
+const allTagsSet = new Set();
+for (const row of allTagsData ?? []) {
+  for (const tag of row.genre_tags ?? []) {
+    allTagsSet.add(tag);
+  }
+}
+const campaignTags = [...allTagsSet].filter((tag) =>
+  CAMPAIGN_KEYWORDS.some((k) => tag.includes(k))
+);
+
+const tagCounts = {};
+for (const row of allTagsData ?? []) {
+  for (const tag of row.genre_tags ?? []) {
+    tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
+  }
+}
+const topTags = Object.entries(tagCounts)
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 40)
+  .map(([name]) => name);
+
+const { data: minDateRow } = await supabase
+  .from('products')
+  .select('release_date')
+  .eq('is_onahole', true)
+  .not('release_date', 'is', null)
+  .order('release_date', { ascending: true })
+  .limit(1);
+const { data: maxDateRow } = await supabase
+  .from('products')
+  .select('release_date')
+  .eq('is_onahole', true)
+  .not('release_date', 'is', null)
+  .order('release_date', { ascending: false })
+  .limit(1);
+const minYear = minDateRow?.[0]?.release_date
+  ? new Date(minDateRow[0].release_date).getFullYear()
+  : null;
+const maxYear = maxDateRow?.[0]?.release_date
+  ? new Date(maxDateRow[0].release_date).getFullYear()
+  : null;
+const yearOptions = [];
+if (minYear && maxYear) {
+  for (let y = maxYear; y >= minYear; y--) yearOptions.push(y);
+}
+
+const RANKING_SELECT =
+  'id, dmm_content_id, name, maker, price, image_url, dmm_review_average, dmm_review_count, site_rating_avg, site_rating_count, want_count, used_count, monthly_view_count';
+
+const NEW_ARRIVAL_DAYS = 14;
+const newArrivalCutoff = new Date();
+newArrivalCutoff.setDate(newArrivalCutoff.getDate() - NEW_ARRIVAL_DAYS);
+const newArrivalCutoffStr = newArrivalCutoff.toISOString().slice(0, 10);
+const todayStr = new Date().toISOString().slice(0, 10);
+
+const { data: newArrivalRankingData } = await supabase
+  .from('products_with_stats')
+  .select(`${RANKING_SELECT}, release_date`)
+  .eq('is_onahole', true)
+  .gte('release_date', newArrivalCutoffStr)
+  .lte('release_date', todayStr)
+  .order('release_date', { ascending: false })
+  .limit(10);
+
+const { data: wantRankingData } = await supabase
+  .from('products_with_stats')
+  .select(RANKING_SELECT)
+  .eq('is_onahole', true)
+  .gt('want_count', 0)
+  .order('want_count', { ascending: false })
+  .limit(10);
+
+const { data: usedRankingData } = await supabase
+  .from('products_with_stats')
+  .select(RANKING_SELECT)
+  .eq('is_onahole', true)
+  .gt('used_count', 0)
+  .order('used_count', { ascending: false })
+  .limit(10);
+
+const { data: siteRatingRankingData } = await supabase
+  .from('products_with_stats')
+  .select(RANKING_SELECT)
+  .eq('is_onahole', true)
+  .gte('site_rating_count', 3)
+  .order('site_rating_avg', { ascending: false })
+  .order('site_rating_count', { ascending: false })
+  .limit(10);
+
+const { data: fanzaRankingData } = await supabase
+  .from('products_with_stats')
+  .select(RANKING_SELECT)
+  .eq('is_onahole', true)
+  .gt('dmm_review_count', 0)
+  .order('dmm_review_count', { ascending: false })
+  .order('dmm_review_average', { ascending: false })
+  .limit(10);
+
+const { data: monthlyViewRankingData } = await supabase
+  .from('products_with_stats')
+  .select(RANKING_SELECT)
+  .eq('is_onahole', true)
+  .gt('monthly_view_count', 0)
+  .order('monthly_view_count', { ascending: false })
+  .limit(10);
+
+const { data: newlyOnSaleData } = await supabase.rpc('refresh_sale_watch', {
+  new_arrival_days: NEW_ARRIVAL_DAYS,
+});
+const newlyOnSaleCount = (newlyOnSaleData ?? []).length;
+
+const newInfoItems = (newArrivalRankingData ?? []).map((p) => ({
+  id: p.id,
+  dmm_content_id: p.dmm_content_id,
+  name: p.name,
+  tag: 'NEW',
+  detail: `発売日: ${p.release_date}`,
+}));
+
+if (newlyOnSaleCount > 0) {
+  newInfoItems.unshift({
+    id: 'sale-summary',
+    dmm_content_id: null,
+    name: `${newlyOnSaleCount}件の商品が新しくセール対象になりました`,
+    tag: 'SALE',
+    detail: '',
+  });
+}
+
+const RANKINGS = [
+  {
+    key: 'want',
+    title: '人気ランキング',
+    subtitle: '「気になる」登録数順',
+    items: wantRankingData ?? [],
+    metric: (p) => `気になる ${p.want_count}件`,
+  },
+  {
+    key: 'used',
+    title: '使った人ランキング',
+    subtitle: '実際に使った人数順',
+    items: usedRankingData ?? [],
+    metric: (p) => `使った人 ${p.used_count}人`,
+  },
+  {
+    key: 'site_rating',
+    title: '高評価ランキング',
+    subtitle: 'オナホめも評価順(3件以上レビューがある商品が対象)',
+    items: siteRatingRankingData ?? [],
+    metric: (p) => `★${p.site_rating_avg}(${p.site_rating_count}件)`,
+  },
+  {
+    key: 'fanza',
+    title: 'FANZA人気ランキング',
+    subtitle: 'FANZAレビュー件数順',
+    items: fanzaRankingData ?? [],
+    metric: (p) => `★${p.dmm_review_average}(${p.dmm_review_count}件)`,
+  },
+  {
+    key: 'monthly_view',
+    title: '今月のアクセスランキング',
+    subtitle: '今月見られた回数順',
+    items: monthlyViewRankingData ?? [],
+    metric: (p) => `今月 ${p.monthly_view_count}回`,
+  },
+].filter((r) => r.items.length > 0);
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>オナホめも</title>
+  </head>
+  <body>
+    <header class="hero">
+      <p class="eyebrow">ONAHOLE CATALOG</p>
+      <h1>
+        使ったオナホールを<strong>記録</strong>して、<br />
+        <strong>発見</strong>しよう。
+      </h1>
+      <p class="lead">
+        オナホめもは、使ったオナホールの記録ができるWebサービスです。
+        星評価やレビューを残したり、公開プロフィールで
+        自分のコレクションをシェアすることができます。
+      </p>
+
+      <div class="hero-actions" id="hero-actions">
+        <button id="signup-btn" class="btn-primary">アカウント作成</button>
+        <a href="/login" class="btn-outline">ログイン</a>
+      </div>
+
+      <div class="hero-stats">
+        <p class="stat">
+          <span class="stat-number">{count?.toLocaleString() ?? '-'}</span>
+          <span class="stat-label">点を掲載中</span>
+        </p>
+        <p class="stat">
+          <span class="stat-number">{memberCount?.toLocaleString() ?? '-'}</span>
+          <span class="stat-label">人が利用中</span>
+        </p>
+      </div>
+
+      <div id="auth-area" class="auth-area"></div>
+    </header>
+
+    {newInfoItems.length > 0 && (
+      <section class="new-info-section">
+        <h2 class="new-info-title">新着情報</h2>
+        <ul class="new-info-list">
+          {newInfoItems.map((p) => (
+            <li class="new-info-item">
+              <span class={`new-info-tag new-info-tag-${p.tag.toLowerCase()}`}>{p.tag}</span>
+              {p.dmm_content_id ? (
+                <a href={`/products/${p.dmm_content_id}/`} class="new-info-link">{p.name}</a>
+              ) : (
+                <span class="new-info-link new-info-link-text">{p.name}</span>
+              )}
+              {p.detail && <span class="new-info-detail">{p.detail}</span>}
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    {RANKINGS.length > 0 && (
+      <section class="rankings">
+        {RANKINGS.map((r) => (
+          <div class="ranking-block">
+            <h2 class="ranking-title">
+              {r.title}
+              <span class="ranking-subtitle">{r.subtitle}</span>
+            </h2>
+            <ul class="ranking-scroll">
+              {r.items.map((p, idx) => (
+                <li class="ranking-card">
+                  <span class="ranking-rank">{idx + 1}</span>
+                  <a href={`/products/${p.dmm_content_id}/`}>
+                    <img src={p.image_url} alt={p.name} loading="lazy" />
+                    <div class="ranking-card-body">
+                      <p class="ranking-maker">{p.maker ?? ''}</p>
+                      <h3>{p.name}</h3>
+                      <p class="ranking-metric">{r.metric(p)}</p>
+                    </div>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </section>
+    )}
+
+    <div id="my-sale-section"></div>
+
+    <main>
+      {error && <p>データの取得に失敗しました: {error.message}</p>}
+
+      <div class="toolbar">
+        <input
+          type="text"
+          id="search-input"
+          class="search-input"
+          placeholder="商品名で検索..."
+        />
+
+<label class="sale-filter-label">
+          <input type="checkbox" id="sale-filter" />
+          セール対象のみ
+        </label>
+        <label>
+          並び替え
+          <select id="sort-select">
+            <option value="new">新着順</option>
+            <option value="price_asc">価格が安い順</option>
+            <option value="price_desc">価格が高い順</option>
+            <option value="dmm_rating_desc">FANZA評価が高い順</option>
+            <option value="dmm_count_desc">FANZAレビューが多い順</option>
+            <option value="site_rating_desc">オナホめも評価が高い順</option>
+            <option value="site_count_desc">オナホめもレビューが多い順</option>
+            <option value="want_count_desc">気になる人気順</option>
+          </select>
+        </label>
+
+        <label>
+          メーカー
+          <select id="maker-select">
+            <option value="">すべて</option>
+            {topMakers.map((m) => (
+              <option value={m}>{m}</option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          ジャンル
+          <select id="tag-select">
+            <option value="">すべて</option>
+            {topTags.map((t) => (
+              <option value={t}>{t}</option>
+            ))}
+          </select>
+        </label>
+
+        <label class="range-filter-label">
+          発売年
+          <select id="year-from-select">
+            <option value="">指定なし</option>
+            {yearOptions.map((y) => (
+              <option value={y}>{y}</option>
+            ))}
+          </select>
+          〜
+          <select id="year-to-select">
+            <option value="">指定なし</option>
+            {yearOptions.map((y) => (
+              <option value={y}>{y}</option>
+            ))}
+          </select>
+        </label>
+
+        <label class="range-filter-label">
+          価格
+          <input type="number" id="price-min-input" class="range-number-input" placeholder="下限" min="0" />
+          〜
+          <input type="number" id="price-max-input" class="range-number-input" placeholder="上限" min="0" />
+        </label>
+      </div>
+
+      <h2 class="section-title">商品一覧</h2>
+      <ul class="grid" id="product-grid"></ul>
+
+      <div class="pager" id="pager" data-total={count} data-page-size={PAGE_SIZE}>
+        <button id="prev-page" disabled>← 前へ</button>
+        <span id="page-indicator">1 / -</span>
+        <button id="next-page">次へ →</button>
+      </div>
+    </main>
+
+   <script type="application/json" id="initial-products-data" set:html={JSON.stringify(products ?? [])}></script>
+    <script type="application/json" id="campaign-tags-data" set:html={JSON.stringify(campaignTags)}></script>
+
+    <script>
+      import { supabase } from '../lib/supabase.js';
+
+      const STATUS_LABELS = {
+        interested: '気になる',
+        used: '使った',
+      };
+      const TIER_LABELS = {
+        first: '一軍',
+        second: '二軍',
+        retired: '引退',
+      };
+
+      const NEW_ARRIVAL_DAYS = 14;
+      function isNewArrival(releaseDate) {
+        if (!releaseDate) return false;
+        const release = new Date(releaseDate);
+        if (Number.isNaN(release.getTime())) return false;
+        const diffDays = (new Date() - release) / (1000 * 60 * 60 * 24);
+        return diffDays >= 0 && diffDays <= NEW_ARRIVAL_DAYS;
+      }
+
+      function isPreorder(releaseDate) {
+        if (!releaseDate) return false;
+        const release = new Date(releaseDate);
+        if (Number.isNaN(release.getTime())) return false;
+        return release.getTime() > new Date().getTime();
+      }
+
+      const sortSelect = document.getElementById('sort-select');
+      const searchInput = document.getElementById('search-input');
+      const saleFilter = document.getElementById('sale-filter');
+      let campaignTags = [];
+      function isCampaignTag(tag) {
+        return campaignTags.includes(tag);
+      }
+      const makerSelect = document.getElementById('maker-select');
+      const tagSelect = document.getElementById('tag-select');
+      const yearFromSelect = document.getElementById('year-from-select');
+      const yearToSelect = document.getElementById('year-to-select');
+      const priceMinInput = document.getElementById('price-min-input');
+      const priceMaxInput = document.getElementById('price-max-input');
+      const grid = document.getElementById('product-grid');
+      const pager = document.getElementById('pager');
+      const prevBtn = document.getElementById('prev-page');
+      const nextBtn = document.getElementById('next-page');
+      const pageIndicator = document.getElementById('page-indicator');
+      const authArea = document.getElementById('auth-area');
+      const heroActions = document.getElementById('hero-actions');
+
+      const pageSize = Number(pager.dataset.pageSize);
+      let currentPage = 1;
+      let currentTotal = Number(pager.dataset.total) || 0;
+      let userChecksMap = {};
+
+      function totalPages() {
+        return Math.max(1, Math.ceil(currentTotal / pageSize));
+      }
+
+      function updatePagerUI() {
+        pageIndicator.textContent = `${currentPage} / ${totalPages()}`;
+        prevBtn.disabled = currentPage <= 1;
+        nextBtn.disabled = currentPage >= totalPages();
+      }
+
+      function statusBadgeText(productId) {
+        const c = userChecksMap[productId];
+        if (!c) return null;
+        if (c.status === 'used') {
+          return `${STATUS_LABELS.used}(${TIER_LABELS[c.tier] ?? ''})`;
+        }
+        return STATUS_LABELS[c.status] ?? null;
+      }
+
+      function renderCards(products) {
+        grid.innerHTML = products
+          .map((p) => {
+            const badge = statusBadgeText(p.id);
+            const memoValue = userChecksMap[p.id]?.memo ?? '';
+
+            const isCampaign = (p.genre_tags ?? []).some((t) => isCampaignTag(t));
+
+            const listPrice = p.raw_data?.prices?.list_price
+              ? Number(p.raw_data.prices.list_price)
+              : null;
+            const hasDiscount = isCampaign && listPrice && p.price && listPrice > p.price;
+            const discountPercent = hasDiscount
+              ? Math.round((1 - p.price / listPrice) * 100)
+              : null;
+
+            return `
+          <li class="card">
+            ${hasDiscount ? '<span class="sale-ribbon">SALE</span>' : ''}
+            ${
+              isPreorder(p.release_date)
+                ? '<span class="new-badge preorder-badge">予約受付中</span>'
+                : isNewArrival(p.release_date)
+                  ? '<span class="new-badge">NEW</span>'
+                  : ''
+            }
+            <a href="/products/${p.dmm_content_id}/">
+              <img src="${p.image_url}" alt="${p.name}" loading="lazy" />
+              <div class="body">
+                <p class="maker">${p.maker ?? 'メーカー不明'}</p>
+                <h3>${p.name}</h3>
+                <p class="price">
+                  ${p.price ? `¥${p.price.toLocaleString()}` : '価格情報なし'}
+                  ${hasDiscount ? `<span class="discount-badge-small">${discountPercent}%OFF</span>` : ''}
+                </p>
+                <div class="card-ratings">
+                  ${
+                    p.dmm_review_average
+                      ? `<p class="card-rating dmm"><span class="rating-label">FANZA</span>★${p.dmm_review_average}(${p.dmm_review_count})</p>`
+                      : ''
+                  }
+                  ${
+                    p.site_rating_count > 0
+                      ? `<p class="card-rating site"><span class="rating-label">オナホめも</span>★${p.site_rating_avg}(${p.site_rating_count})</p>`
+                      : ''
+                  }
+                </div>
+              </div>
+            </a>
+            <div class="quick-check" data-product-id="${p.id}">
+              <button type="button" class="quick-check-btn">☰ 記録${badge ? `: ${badge}` : ''}</button>
+              <div class="quick-check-menu" hidden>
+                <button type="button" class="qc-status" data-status="interested">気になる</button>
+                <button type="button" class="qc-status" data-status="used">使った</button>
+                <div class="quick-check-tiers" hidden>
+                  <button type="button" class="qc-tier" data-tier="first">一軍</button>
+                  <button type="button" class="qc-tier" data-tier="second">二軍</button>
+                  <button type="button" class="qc-tier" data-tier="retired">引退</button>
+                </div>
+                <textarea class="qc-memo" placeholder="ひとことメモ(任意)" maxlength="100">${memoValue}</textarea>
+                <button type="button" class="qc-save-memo">メモを保存</button>
+                <button type="button" class="qc-reset">記録をクリア</button>
+              </div>
+            </div>
+          </li>
+        `;
+          })
+          .join('');
+      }
+
+      async function loadUserChecksMap(productIds) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session || productIds.length === 0) return {};
+
+        const { data } = await supabase
+          .from('checks')
+          .select('product_id, status, tier, memo')
+          .eq('user_id', session.user.id)
+          .in('product_id', productIds);
+
+        const map = {};
+        for (const row of data ?? []) {
+          map[row.product_id] = row;
+        }
+        return map;
+      }
+
+      function applyFilters(q, { maker, tag, searchTerm, yearFrom, yearTo, priceMin, priceMax }) {
+        if (maker) q = q.eq('maker', maker);
+        if (tag) q = q.contains('genre_tags', [tag]);
+        if (searchTerm) q = q.ilike('name', `%${searchTerm}%`);
+        if (saleFilter.checked) q = q.overlaps('genre_tags', campaignTags);
+        if (yearFrom) q = q.gte('release_date', `${yearFrom}-01-01`);
+        if (yearTo) q = q.lte('release_date', `${yearTo}-12-31`);
+        if (priceMin) q = q.gte('price', Number(priceMin));
+        if (priceMax) q = q.lte('price', Number(priceMax));
+        return q;
+      }
+
+      async function reload({ resetPage = false } = {}) {
+        if (resetPage) currentPage = 1;
+
+        const filters = {
+          maker: makerSelect.value,
+          tag: tagSelect.value,
+          searchTerm: searchInput.value.trim(),
+          yearFrom: yearFromSelect.value,
+          yearTo: yearToSelect.value,
+          priceMin: priceMinInput.value,
+          priceMax: priceMaxInput.value,
+        };
+
+        let countQuery = supabase
+          .from('products_with_stats')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_onahole', true);
+        countQuery = applyFilters(countQuery, filters);
+        const { count: newCount } = await countQuery;
+        currentTotal = newCount ?? 0;
+
+        const from = (currentPage - 1) * pageSize;
+        const to = from + pageSize - 1;
+
+        let query = supabase
+          .from('products_with_stats')
+          .select(
+            'id, dmm_content_id, name, maker, price, image_url, dmm_review_average, dmm_review_count, raw_data, genre_tags, site_rating_avg, site_rating_count, want_count, release_date'
+          )
+          .eq('is_onahole', true)
+          .range(from, to);
+        query = applyFilters(query, filters);
+
+        const sort = sortSelect.value;
+        if (sort === 'price_asc') {
+          query = query.order('price', { ascending: true, nullsFirst: false });
+        } else if (sort === 'price_desc') {
+          query = query.order('price', { ascending: false, nullsFirst: false });
+        } else if (sort === 'dmm_rating_desc') {
+          query = query.order('dmm_review_average', { ascending: false, nullsFirst: false });
+        } else if (sort === 'dmm_count_desc') {
+          query = query.order('dmm_review_count', { ascending: false, nullsFirst: false });
+        } else if (sort === 'site_rating_desc') {
+          query = query.order('site_rating_avg', { ascending: false });
+        } else if (sort === 'site_count_desc') {
+          query = query.order('site_rating_count', { ascending: false });
+        } else if (sort === 'want_count_desc') {
+          query = query.order('want_count', { ascending: false });
+        } else {
+          query = query.order('release_date', { ascending: false, nullsFirst: false });
+        }
+
+        const { data, error } = await query;
+        if (error) {
+          console.error(error);
+          return;
+        }
+
+        const ids = data.map((p) => p.id);
+        userChecksMap = await loadUserChecksMap(ids);
+
+        renderCards(data);
+        updatePagerUI();
+        window.scrollTo({ top: grid.offsetTop - 100, behavior: 'smooth' });
+      }
+
+      // --- クイックチェック(トップページからの記録)の操作 ---
+      grid.addEventListener('click', async (e) => {
+        const qc = e.target.closest('.quick-check');
+        if (!qc) return;
+
+        const productId = qc.dataset.productId;
+        const menu = qc.querySelector('.quick-check-menu');
+
+        if (e.target.classList.contains('quick-check-btn')) {
+          document.querySelectorAll('.quick-check-menu').forEach((m) => {
+            if (m !== menu) m.hidden = true;
+          });
+          menu.hidden = !menu.hidden;
+          return;
+        }
+
+        if (e.target.classList.contains('qc-status')) {
+          const status = e.target.dataset.status;
+
+          if (status === 'used') {
+            qc.querySelector('.quick-check-tiers').hidden = false;
+            return;
+          }
+
+          await saveQuickCheck(productId, status, null);
+          menu.hidden = true;
+          return;
+        }
+
+        if (e.target.classList.contains('qc-tier')) {
+          const tier = e.target.dataset.tier;
+          await saveQuickCheck(productId, 'used', tier);
+          menu.hidden = true;
+          return;
+        }
+
+        if (e.target.classList.contains('qc-save-memo')) {
+          const existing = userChecksMap[productId];
+          if (!existing) {
+            alert('先に「気になる」「使った」のいずれかを選んでください');
+            return;
+          }
+          const memo = qc.querySelector('.qc-memo').value.trim();
+          await saveQuickCheck(productId, existing.status, existing.tier, memo);
+          return;
+        }
+
+        if (e.target.classList.contains('qc-reset')) {
+          await resetQuickCheck(productId);
+          menu.hidden = true;
+          return;
+        }
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.quick-check')) {
+          document.querySelectorAll('.quick-check-menu').forEach((m) => (m.hidden = true));
+        }
+      });
+
+      async function saveQuickCheck(productId, status, tier, memo) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          window.location.href = '/login';
+          return;
+        }
+
+        const existingMemo = userChecksMap[productId]?.memo ?? null;
+        const memoValue = memo !== undefined ? (memo || null) : existingMemo;
+
+        const { error } = await supabase.from('checks').upsert(
+          {
+            user_id: session.user.id,
+            product_id: productId,
+            status,
+            tier,
+            memo: memoValue,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,product_id' }
+        );
+
+        if (error) {
+          console.error(error);
+          return;
+        }
+
+        userChecksMap[productId] = { product_id: productId, status, tier, memo: memoValue };
+
+        const btn = document.querySelector(`.quick-check[data-product-id="${productId}"] .quick-check-btn`);
+        if (btn) {
+          const badge = statusBadgeText(productId);
+          btn.textContent = `☰ 記録${badge ? `: ${badge}` : ''}`;
+        }
+
+        loadMySaleSection();
+      }
+
+      async function resetQuickCheck(productId) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          window.location.href = '/login';
+          return;
+        }
+
+        const { error } = await supabase
+          .from('checks')
+          .delete()
+          .eq('user_id', session.user.id)
+          .eq('product_id', productId);
+
+        if (error) {
+          console.error(error);
+          return;
+        }
+
+        delete userChecksMap[productId];
+
+        const qc = document.querySelector(`.quick-check[data-product-id="${productId}"]`);
+        if (qc) {
+          qc.querySelector('.quick-check-btn').textContent = '☰ 記録';
+          const memoBox = qc.querySelector('.qc-memo');
+          if (memoBox) memoBox.value = '';
+          qc.querySelectorAll('.qc-status, .qc-tier').forEach((b) => b.classList.remove('active'));
+          qc.querySelector('.quick-check-tiers').hidden = true;
+        }
+
+        loadMySaleSection();
+      }
+
+      sortSelect.addEventListener('change', () => reload({ resetPage: true }));
+
+      let searchTimeout;
+      searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => reload({ resetPage: true }), 400);
+      });
+
+      makerSelect.addEventListener('change', () => reload({ resetPage: true }));
+      saleFilter.addEventListener('change', () => reload({ resetPage: true }));
+      tagSelect.addEventListener('change', () => reload({ resetPage: true }));
+      yearFromSelect.addEventListener('change', () => reload({ resetPage: true }));
+      yearToSelect.addEventListener('change', () => reload({ resetPage: true }));
+
+      let priceTimeout;
+      function schedulePriceReload() {
+        clearTimeout(priceTimeout);
+        priceTimeout = setTimeout(() => reload({ resetPage: true }), 400);
+      }
+      priceMinInput.addEventListener('input', schedulePriceReload);
+      priceMaxInput.addEventListener('input', schedulePriceReload);
+
+      prevBtn.addEventListener('click', () => {
+        if (currentPage > 1) {
+          currentPage -= 1;
+          reload();
+        }
+      });
+      nextBtn.addEventListener('click', () => {
+        if (currentPage < totalPages()) {
+          currentPage += 1;
+          reload();
+        }
+      });
+
+      async function renderAuthArea() {
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (session) {
+          const email = session.user.email;
+          heroActions.style.display = 'none';
+          authArea.innerHTML = `
+            <span class="auth-email">${email}</span>
+            <a href="/mypage" class="auth-btn">マイページ</a>
+            <button id="logout-btn" class="auth-btn">ログアウト</button>
+          `;
+          document.getElementById('logout-btn').addEventListener('click', async () => {
+            await supabase.auth.signOut();
+            renderAuthArea();
+          });
+        } else {
+          heroActions.style.display = 'flex';
+          authArea.innerHTML = '';
+        }
+      }
+
+      document.getElementById('signup-btn').addEventListener('click', async () => {
+        await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.origin },
+        });
+      });
+
+      async function loadMySaleSection() {
+        const container = document.getElementById('my-sale-section');
+        if (!container) return;
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          container.innerHTML = '';
+          return;
+        }
+
+        const { data: interestedChecks } = await supabase
+          .from('checks')
+          .select('product_id')
+          .eq('user_id', session.user.id)
+          .eq('status', 'interested');
+
+        const ids = (interestedChecks ?? []).map((c) => c.product_id);
+        if (ids.length === 0) {
+          container.innerHTML = '';
+          return;
+        }
+
+        const { data: productsData } = await supabase
+          .from('products')
+          .select('id, dmm_content_id, name, maker, price, image_url, raw_data')
+          .in('id', ids);
+
+        const saleItems = (productsData ?? [])
+          .map((p) => {
+            const listPrice = p.raw_data?.prices?.list_price ? Number(p.raw_data.prices.list_price) : null;
+            const hasDiscount = Boolean(listPrice && p.price && listPrice > p.price);
+            if (!hasDiscount) return null;
+            const discountPercent = Math.round((1 - p.price / listPrice) * 100);
+            return { ...p, listPrice, discountPercent };
+          })
+          .filter(Boolean)
+          .sort((a, b) => b.discountPercent - a.discountPercent);
+
+        if (saleItems.length === 0) {
+          container.innerHTML = '';
+          return;
+        }
+
+        container.innerHTML = `
+          <section class="rankings">
+            <div class="ranking-block">
+              <h2 class="ranking-title">
+                気になるでセール中
+                <span class="ranking-subtitle">「気になる」に登録した商品のうち、いま値下がりしているもの</span>
+              </h2>
+              <ul class="ranking-scroll">
+                ${saleItems
+                  .map(
+                    (p) => `
+                  <li class="ranking-card">
+                    <span class="ranking-rank ranking-rank-sale">${p.discountPercent}%OFF</span>
+                    <a href="/products/${p.dmm_content_id}/">
+                      <img src="${p.image_url}" alt="${p.name}" loading="lazy" />
+                      <div class="ranking-card-body">
+                        <p class="ranking-maker">${p.maker ?? ''}</p>
+                        <h3>${p.name}</h3>
+                        <p class="ranking-metric">
+                          ¥${p.price.toLocaleString()}
+                          <span class="ranking-list-price">¥${p.listPrice.toLocaleString()}</span>
+                        </p>
+                      </div>
+                    </a>
+                  </li>
+                `
+                  )
+                  .join('')}
+              </ul>
+            </div>
+          </section>
+        `;
+      }
+
+      async function init() {
+        renderAuthArea();
+        loadMySaleSection();
+        campaignTags = JSON.parse(document.getElementById('campaign-tags-data').textContent);
+
+        const initialProducts = JSON.parse(document.getElementById('initial-products-data').textContent);
+
+        const ids = initialProducts.map((p) => p.id);
+        userChecksMap = await loadUserChecksMap(ids);
+
+        // 商品詳細ページのメーカー名/タグのリンクから来た場合、
+        // 絞り込みを引き継いで検索結果を絞り込んだ状態にする
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlMaker = urlParams.get('maker');
+        const urlTag = urlParams.get('tag');
+        let needsReload = false;
+
+        if (urlMaker) {
+          if (![...makerSelect.options].some((o) => o.value === urlMaker)) {
+            const opt = document.createElement('option');
+            opt.value = urlMaker;
+            opt.textContent = urlMaker;
+            makerSelect.appendChild(opt);
+          }
+          makerSelect.value = urlMaker;
+          needsReload = true;
+        }
+
+        if (urlTag) {
+          if (![...tagSelect.options].some((o) => o.value === urlTag)) {
+            const opt = document.createElement('option');
+            opt.value = urlTag;
+            opt.textContent = urlTag;
+            tagSelect.appendChild(opt);
+          }
+          tagSelect.value = urlTag;
+          needsReload = true;
+        }
+
+        if (needsReload) {
+          reload({ resetPage: true });
+        } else {
+          renderCards(initialProducts);
+          updatePagerUI();
+        }
+      }
+
+      init();
+    </script>
+  </body>
 </html>

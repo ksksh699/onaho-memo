@@ -1,0 +1,207 @@
+---
+import '../styles/global.css';
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>フォロー中 | オナホめも</title>
+  </head>
+  <body>
+    <header>
+      <a href="/">← 一覧に戻る</a>
+      <a href="/mypage">マイページへ</a>
+    </header>
+    <main class="mypage-main">
+      <h1 class="mypage-title">フォロー中のユーザー</h1>
+
+      <div id="following-content">
+        <p class="mypage-loading">読み込み中...</p>
+      </div>
+    </main>
+
+    <script>
+      import { supabase } from '../lib/supabase.js';
+
+      const content = document.getElementById('following-content');
+
+      function renderLoggedOut() {
+        content.innerHTML = `
+          <p>フォロー中の一覧を見るには、ログインが必要です。</p>
+          <a href="/login" class="auth-btn">ログインする</a>
+        `;
+      }
+
+      function followeeCardHtml(profile, top3, bestReviewInfo) {
+        const top3Html = top3.length
+          ? `
+            <div class="following-top3">
+              ${top3
+                .map(
+                  (slot) => `
+                <a href="/products/${slot.check.products.dmm_content_id}/" class="following-top3-item">
+                  <span class="top3-rank">${slot.rank}位</span>
+                  <img src="${slot.check.products.image_url}" alt="${slot.check.products.name}" loading="lazy" />
+                  <span class="following-top3-name">${slot.check.products.name}</span>
+                </a>
+              `
+                )
+                .join('')}
+            </div>
+          `
+          : `<p class="badge-empty">マイベストTOP3はまだ未設定です。</p>`;
+
+        const bestReviewHtml = bestReviewInfo
+          ? `
+            <div class="best-review-section following-best-review">
+              <h3 class="best-review-title">ベストな口コミ</h3>
+              <a href="/products/${bestReviewInfo.check.products.dmm_content_id}/" class="best-review-product">
+                <img src="${bestReviewInfo.check.products.image_url}" alt="${bestReviewInfo.check.products.name}" loading="lazy" />
+                <div class="best-review-product-body">
+                  <p class="mp-maker">${bestReviewInfo.check.products.maker ?? ''}</p>
+                  <h3>${bestReviewInfo.check.products.name}</h3>
+                </div>
+              </a>
+              ${bestReviewInfo.title ? `<p class="best-review-quote-title">${bestReviewInfo.title}</p>` : ''}
+              <p class="best-review-quote">${bestReviewInfo.text}</p>
+            </div>
+          `
+          : '';
+
+        return `
+          <li class="following-card">
+            <div class="following-card-head">
+              <a href="/users/${encodeURIComponent(profile.nickname)}" class="following-nickname">${profile.nickname}</a>
+              <button class="unfollow-btn" data-user-id="${profile.id}">フォロー解除</button>
+            </div>
+            ${
+              profile.oshi_maker
+                ? `<span class="badge-chip oshi-maker-chip">推し: ${profile.oshi_maker}</span>`
+                : ''
+            }
+            ${top3Html}
+            ${bestReviewHtml}
+          </li>
+        `;
+      }
+
+      async function unfollow(userId) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) return;
+
+        await supabase.from('follows').delete().eq('follower_id', session.user.id).eq('followee_id', userId);
+        init();
+      }
+
+      async function init() {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session) {
+          renderLoggedOut();
+          return;
+        }
+
+        const { data: followRows, error: followError } = await supabase
+          .from('follows')
+          .select('followee_id')
+          .eq('follower_id', session.user.id);
+
+        if (followError) {
+          content.innerHTML = `<p>読み込みに失敗しました: ${followError.message}</p>`;
+          return;
+        }
+
+        const followeeIds = (followRows ?? []).map((r) => r.followee_id);
+
+        if (followeeIds.length === 0) {
+          content.innerHTML = `
+            <p class="mp-empty">まだ誰もフォローしていません。公開プロフィールページの「フォローする」ボタンからフォローできます。</p>
+          `;
+          return;
+        }
+
+        const { data: profiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select(
+            'id, nickname, oshi_maker, best_product_id_1, best_product_id_2, best_product_id_3, best_product_reason_1, best_product_reason_2, best_product_reason_3, best_review_product_id'
+          )
+          .in('id', followeeIds);
+
+        if (profilesError) {
+          content.innerHTML = `<p>読み込みに失敗しました: ${profilesError.message}</p>`;
+          return;
+        }
+
+        const relevantProductIds = new Set();
+        for (const p of profiles ?? []) {
+          [p.best_product_id_1, p.best_product_id_2, p.best_product_id_3, p.best_review_product_id].forEach(
+            (id) => {
+              if (id) relevantProductIds.add(id);
+            }
+          );
+        }
+
+        let checksByKey = {};
+        if (relevantProductIds.size > 0) {
+          const { data: checksData } = await supabase
+            .from('checks')
+            .select(
+              'user_id, product_id, review_title, review_text, detail_review_title, detail_review_text, products(id, dmm_content_id, name, maker, price, image_url)'
+            )
+            .in('user_id', followeeIds)
+            .in('product_id', [...relevantProductIds])
+            .eq('is_public', true);
+
+          for (const c of checksData ?? []) {
+            checksByKey[`${c.user_id}__${c.product_id}`] = c;
+          }
+        }
+
+        const cardsHtml = (profiles ?? [])
+          .map((p) => {
+            const top3 = [p.best_product_id_1, p.best_product_id_2, p.best_product_id_3]
+              .map((pid, i) => {
+                if (!pid) return null;
+                const check = checksByKey[`${p.id}__${pid}`];
+                if (!check) return null;
+                const reason = [p.best_product_reason_1, p.best_product_reason_2, p.best_product_reason_3][i];
+                return { check, reason, rank: i + 1 };
+              })
+              .filter(Boolean);
+
+            let bestReviewInfo = null;
+            if (p.best_review_product_id) {
+              const check = checksByKey[`${p.id}__${p.best_review_product_id}`];
+              if (check) {
+                const isDetail = Boolean(check.detail_review_text);
+                bestReviewInfo = {
+                  check,
+                  text: check.detail_review_text || check.review_text || '',
+                  title: isDetail ? check.detail_review_title : check.review_title,
+                };
+              }
+            }
+
+            return followeeCardHtml(p, top3, bestReviewInfo);
+          })
+          .join('');
+
+        content.innerHTML = `<ul class="following-list">${cardsHtml}</ul>`;
+      }
+
+      content.addEventListener('click', (e) => {
+        const btn = e.target.closest('.unfollow-btn');
+        if (!btn) return;
+        e.preventDefault();
+        unfollow(btn.dataset.userId);
+      });
+
+      init();
+    </script>
+  </body>
+</html>

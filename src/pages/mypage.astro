@@ -1,0 +1,1718 @@
+---
+import '../styles/global.css';
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>マイページ | オナホめも</title>
+  </head>
+  <body>
+    <header>
+      <a href="/">← 一覧に戻る</a>
+    </header>
+    <main class="mypage-main">
+      <h1 class="mypage-title">マイページ</h1>
+
+      <div id="profile-section" class="profile-section"></div>
+
+      <div id="profile-details-container"></div>
+
+      <div id="top3-container"></div>
+
+      <div id="best-review-container"></div>
+
+      <div id="oshi-maker-container"></div>
+
+      <div id="folders-container"></div>
+
+      <div id="onaking-links-container"></div>
+
+      <div id="manual-product-container"></div>
+
+      <div id="badge-section-container"></div>
+
+      <div id="maker-badge-section-container"></div>
+
+      <div id="titles-section-container"></div>
+
+      <div id="mypage-content">
+        <p class="mypage-loading">読み込み中...</p>
+      </div>
+    </main>
+
+    <script>
+      import { supabase } from '../lib/supabase.js';
+      import { compressImage } from '../lib/imageCompress.js';
+
+      const content = document.getElementById('mypage-content');
+      const profileSection = document.getElementById('profile-section');
+      const top3Container = document.getElementById('top3-container');
+      const bestReviewContainer = document.getElementById('best-review-container');
+      const oshiMakerContainer = document.getElementById('oshi-maker-container');
+      const foldersContainer = document.getElementById('folders-container');
+      const onakingLinksContainer = document.getElementById('onaking-links-container');
+      const manualProductContainer = document.getElementById('manual-product-container');
+      const profileDetailsContainer = document.getElementById('profile-details-container');
+      const PRODUCT_IMAGE_BUCKET = 'product-images';
+      const PROFILE_IMAGE_BUCKET = 'profile-images';
+      let manualProducts = [];
+      let editingManualProductId = null;
+
+      let currentTop3 = [null, null, null]; // each: { productId, reason } or null
+      let currentBestReviewProductId = null;
+      let currentOshiMaker = null;
+      let currentOshiMakerReason = null;
+      let lastChecks = [];
+      let top3EditingRank = null;
+      let oshiMakerEditing = false;
+      let makerOptionsCache = null;
+      let currentFolders = [];
+      let editingFolderId = null;
+      let currentAvatarUrl = null;
+      let currentHeaderUrl = null;
+      let currentBio = null;
+      let currentSnsLinks = []; // [{ label, url }]
+      let currentIsPublic = true;
+      let profileDetailsEditing = false;
+      let editingSnsLinks = [];
+      const ADMIN_USER_ID = '278377ee-a457-41bc-ab79-c1be9f4b768e';
+
+      const STATUS_LABELS = {
+        interested: '気になる',
+        used: '使った',
+      };
+      const TIER_LABELS = {
+        first: '一軍',
+        second: '二軍',
+        retired: '引退',
+      };
+      const STATUS_ORDER = ['used', 'interested'];
+
+      function isOnSale(check) {
+        const p = check.products;
+        if (!p) return false;
+        const listPrice = p.raw_data?.prices?.list_price ? Number(p.raw_data.prices.list_price) : null;
+        return Boolean(listPrice && p.price && listPrice > p.price);
+      }
+
+      const BADGE_TIERS = [
+        { threshold: 100, name: 'レジェンド' },
+        { threshold: 50, name: 'マスター' },
+        { threshold: 30, name: 'ベテラン' },
+        { threshold: 10, name: 'レギュラー' },
+        { threshold: 5, name: 'ビギナー' },
+        { threshold: 1, name: 'はじめての一本' },
+      ];
+
+      function getBadgeInfo(usedCount) {
+        const current = BADGE_TIERS.find((t) => usedCount >= t.threshold) ?? null;
+        const next = [...BADGE_TIERS].reverse().find((t) => t.threshold > usedCount) ?? null;
+        return { current, next };
+      }
+
+      function badgeSectionHtml(usedCount) {
+        const { current, next } = getBadgeInfo(usedCount);
+
+        if (!current) {
+          return `
+            <div class="badge-section">
+              <p class="badge-empty">まだバッジがありません。1本使うと「はじめての一本」バッジがもらえます。</p>
+            </div>
+          `;
+        }
+
+        const nextText = next
+          ? `次の「${next.name}」まであと${next.threshold - usedCount}本`
+          : '最高ランクに到達しました';
+
+        return `
+          <div class="badge-section">
+            <span class="badge-chip">${current.name}</span>
+            <p class="badge-detail">使った本数: ${usedCount}本 ・ ${nextText}</p>
+          </div>
+        `;
+      }
+
+      const MAKER_BADGE_TIERS = [
+        { threshold: 10, name: 'コレクター' },
+        { threshold: 5, name: 'マニア' },
+        { threshold: 3, name: 'ファン' },
+        { threshold: 1, name: 'デビュー' },
+      ];
+
+      function getMakerBadge(count) {
+        return MAKER_BADGE_TIERS.find((t) => count >= t.threshold) ?? null;
+      }
+
+      function makerBadgeSectionHtml(checks) {
+        const makerCounts = {};
+        for (const c of checks) {
+          const maker = c.products?.maker;
+          if (c.status === 'used' && maker) {
+            makerCounts[maker] = (makerCounts[maker] ?? 0) + 1;
+          }
+        }
+
+        const badges = Object.entries(makerCounts)
+          .map(([maker, count]) => ({ maker, count, badge: getMakerBadge(count) }))
+          .filter((b) => b.badge)
+          .sort((a, b) => b.count - a.count);
+
+        if (badges.length === 0) return '';
+
+        return `
+          <div class="maker-badge-section">
+            <h2 class="maker-badge-title">メーカーバッジ</h2>
+            <div class="maker-badge-list">
+              ${badges
+                .map(
+                  (b) => `
+                <span class="maker-badge-chip">${b.maker} ${b.badge.name}<span class="maker-badge-count">(${b.count}本)</span></span>
+              `
+                )
+                .join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      const TITLES = [
+        {
+          id: 'first_check',
+          icon: '🎯',
+          name: '一歩目',
+          desc: 'はじめてチェックを記録する',
+          check: (checks) => checks.length > 0,
+        },
+        {
+          id: 'interested_one',
+          icon: '👀',
+          name: '気になる屋さん',
+          desc: '「気になる」を1件登録する',
+          check: (checks) => checks.some((c) => c.status === 'interested'),
+        },
+        {
+          id: 'used_one',
+          icon: '✅',
+          name: '使用開始',
+          desc: '「使った」を1件記録する',
+          check: (checks) => checks.some((c) => c.status === 'used'),
+        },
+        {
+          id: 'first_tier',
+          icon: '🥇',
+          name: '一軍認定',
+          desc: '「一軍」を1件選ぶ',
+          check: (checks) => checks.some((c) => c.tier === 'first'),
+        },
+        {
+          id: 'retired_one',
+          icon: '👋',
+          name: '卒業',
+          desc: '「引退」を1件記録する',
+          check: (checks) => checks.some((c) => c.tier === 'retired'),
+        },
+        {
+          id: 'rating_one',
+          icon: '⭐',
+          name: '星をつけた',
+          desc: '星評価を1件つける',
+          check: (checks) => checks.some((c) => c.rating),
+        },
+        {
+          id: 'rating_five',
+          icon: '🌟',
+          name: '満点評価',
+          desc: '★5をつける',
+          check: (checks) => checks.some((c) => c.rating === 5),
+        },
+        {
+          id: 'review_one',
+          icon: '✍️',
+          name: 'ひとことレビュアー',
+          desc: 'ひとことレビューを1件書く',
+          check: (checks) => checks.some((c) => c.review_text),
+        },
+        {
+          id: 'detail_review_one',
+          icon: '📝',
+          name: '語り部',
+          desc: '詳細レビューを1件書く',
+          check: (checks) => checks.some((c) => c.detail_review_text),
+        },
+        {
+          id: 'image_one',
+          icon: '📷',
+          name: 'カメラマン',
+          desc: 'レビュー画像を1件投稿する',
+          check: (checks) => checks.some((c) => c.review_images && c.review_images.length > 0),
+        },
+        {
+          id: 'retirement_reason_one',
+          icon: '💌',
+          name: '正直者',
+          desc: '手放した理由を1件書く',
+          check: (checks) => checks.some((c) => c.retirement_reason),
+        },
+        {
+          id: 'similar_one',
+          icon: '🔍',
+          name: '目利き',
+          desc: '似てるオナホールを1件記入する',
+          check: (checks) => checks.some((c) => c.similar_products),
+        },
+        {
+          id: 'public_one',
+          icon: '📢',
+          name: '公開派',
+          desc: 'レビューを1件公開する',
+          check: (checks) => checks.some((c) => c.is_public),
+        },
+        {
+          id: 'memo_one',
+          icon: '🗒️',
+          name: 'メモ魔',
+          desc: 'ひとことメモを1件書く',
+          check: (checks) => checks.some((c) => c.memo),
+        },
+        {
+          id: 'genre_explorer',
+          icon: '🧭',
+          name: 'ジャンル探検家',
+          desc: '3種類以上のジャンルの商品を使う',
+          check: (checks) => {
+            const genres = new Set();
+            for (const c of checks) {
+              if (c.status !== 'used') continue;
+              for (const g of c.products?.genre_tags ?? []) genres.add(g);
+            }
+            return genres.size >= 3;
+          },
+        },
+        {
+          id: 'multi_maker',
+          icon: '🏭',
+          name: '多メーカー派',
+          desc: '3社以上のメーカーの商品を使う',
+          check: (checks) => {
+            const makers = new Set();
+            for (const c of checks) {
+              if (c.status === 'used' && c.products?.maker) makers.add(c.products.maker);
+            }
+            return makers.size >= 3;
+          },
+        },
+        {
+          id: 'nickname_set',
+          icon: '🪪',
+          name: '名乗り',
+          desc: 'ニックネームを設定する',
+          check: (_checks, hasNickname) => hasNickname,
+        },
+      ];
+
+      const META_RANK_TIERS = [
+        { threshold: 17, name: 'マスター' },
+        { threshold: 12, name: 'エキスパート' },
+        { threshold: 6, name: 'ミドル' },
+        { threshold: 1, name: 'ビギナー' },
+      ];
+
+      function titlesSectionHtml(checks, hasNickname) {
+        const earnedIds = new Set();
+        const cards = TITLES.map((t) => {
+          const earned = t.check(checks, hasNickname);
+          if (earned) earnedIds.add(t.id);
+          return { ...t, earned };
+        });
+
+        const earnedCount = earnedIds.size;
+        const metaRank = META_RANK_TIERS.find((r) => earnedCount >= r.threshold) ?? null;
+
+        let previouslyEarned = [];
+        try {
+          previouslyEarned = JSON.parse(localStorage.getItem('onahole_earned_titles') || '[]');
+        } catch (e) {
+          previouslyEarned = [];
+        }
+        const newlyEarnedIds = [...earnedIds].filter((id) => !previouslyEarned.includes(id));
+        try {
+          localStorage.setItem('onahole_earned_titles', JSON.stringify([...earnedIds]));
+        } catch (e) {
+          // localStorageが使えない環境は無視
+        }
+
+        const rankHtml = metaRank
+          ? `
+            <div class="title-rank-section">
+              <span class="badge-chip title-rank-chip">${metaRank.name}</span>
+              <p class="badge-detail">称号 ${earnedCount}/${TITLES.length}個 獲得</p>
+            </div>
+          `
+          : `
+            <div class="title-rank-section">
+              <p class="badge-empty">称号を1つ集めると「ビギナー」ランクがもらえます。</p>
+            </div>
+          `;
+
+        const cardsHtml = cards
+          .map((t) => {
+            const isNew = newlyEarnedIds.includes(t.id);
+            return `
+            <div class="title-card ${t.earned ? 'earned' : 'locked'} ${isNew ? 'title-new' : ''}">
+              ${isNew ? '<span class="title-new-badge">NEW</span>' : ''}
+              <span class="title-icon">${t.icon}</span>
+              <p class="title-name">${t.name}</p>
+              <p class="title-desc">${t.desc}</p>
+            </div>
+          `;
+          })
+          .join('');
+
+        return `
+          <div class="titles-section">
+            <h2 class="titles-title">称号(実績)</h2>
+            ${rankHtml}
+            <div class="title-grid">${cardsHtml}</div>
+          </div>
+        `;
+      }
+
+      function buildTop3Slots() {
+        return currentTop3.map((slot) => {
+          if (!slot) return null;
+          const check = lastChecks.find((c) => c.products?.id === slot.productId);
+          if (!check) return null;
+          return { check, reason: slot.reason };
+        });
+      }
+
+      function topThreeSectionHtml(slots, editingRank) {
+        const slotsHtml = [0, 1, 2]
+          .map((i) => {
+            const rank = i + 1;
+            const slot = slots[i];
+
+            if (!slot) {
+              return `
+                <div class="top3-slot empty">
+                  <span class="top3-rank">${rank}位</span>
+                  <p class="badge-empty">「使った」の商品カードから選べます</p>
+                </div>
+              `;
+            }
+
+            const p = slot.check.products;
+            const reasonHtml =
+              editingRank === rank
+                ? `
+                  <div class="top3-reason-area">
+                    <input type="text" class="top3-reason-input nickname-input" data-rank="${rank}" maxlength="60" placeholder="選んだ理由(任意)" value="${slot.reason ?? ''}" />
+                    <button class="top3-reason-save-btn" data-rank="${rank}">保存</button>
+                  </div>
+                `
+                : `
+                  <div class="top3-reason-area">
+                    <p class="top3-reason-text" data-rank="${rank}">${slot.reason ? slot.reason : '理由を追加する'}</p>
+                  </div>
+                `;
+
+            return `
+              <div class="top3-slot filled">
+                <span class="top3-rank">${rank}位</span>
+                <a href="/products/${p.dmm_content_id}/" class="top3-card">
+                  <img src="${p.image_url}" alt="${p.name}" loading="lazy" />
+                  <div class="top3-card-body">
+                    <p class="mp-maker">${p.maker ?? ''}</p>
+                    <h3>${p.name}</h3>
+                  </div>
+                </a>
+                ${reasonHtml}
+                <button class="top3-clear-btn" data-rank="${rank}">解除</button>
+              </div>
+            `;
+          })
+          .join('');
+
+        return `
+          <div class="top3-section">
+            <h2 class="top3-title">マイベストTOP3</h2>
+            <div class="top3-grid">${slotsHtml}</div>
+          </div>
+        `;
+      }
+
+      function renderTop3Section() {
+        top3Container.innerHTML = topThreeSectionHtml(buildTop3Slots(), top3EditingRank);
+      }
+
+      async function saveTop3() {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            best_product_id_1: currentTop3[0]?.productId ?? null,
+            best_product_id_2: currentTop3[1]?.productId ?? null,
+            best_product_id_3: currentTop3[2]?.productId ?? null,
+            best_product_reason_1: currentTop3[0]?.reason ?? null,
+            best_product_reason_2: currentTop3[1]?.reason ?? null,
+            best_product_reason_3: currentTop3[2]?.reason ?? null,
+          })
+          .eq('id', session.user.id);
+
+        if (error) console.error(error);
+      }
+
+      async function toggleTop3(productId) {
+        const idx = currentTop3.findIndex((s) => s && s.productId === productId);
+        if (idx >= 0) {
+          currentTop3[idx] = null;
+        } else {
+          const emptyIdx = currentTop3.findIndex((s) => !s);
+          if (emptyIdx === -1) return;
+          currentTop3[emptyIdx] = { productId, reason: null };
+        }
+        await saveTop3();
+        init();
+      }
+
+      function bestReviewSectionHtml(bestReviewCheck) {
+        if (!bestReviewCheck || !bestReviewCheck.products) {
+          return `
+            <div class="best-review-section">
+              <h2 class="best-review-title">ベストな口コミ</h2>
+              <p class="badge-empty">まだ選ばれていません。レビューを書いた商品カードの「ベスト口コミに設定」ボタンで選べます。</p>
+            </div>
+          `;
+        }
+
+        const p = bestReviewCheck.products;
+        const isDetail = Boolean(bestReviewCheck.detail_review_text);
+        const text = bestReviewCheck.detail_review_text || bestReviewCheck.review_text || '';
+        const title = isDetail ? bestReviewCheck.detail_review_title : bestReviewCheck.review_title;
+
+        return `
+          <div class="best-review-section">
+            <h2 class="best-review-title">ベストな口コミ</h2>
+            <a href="/products/${p.dmm_content_id}/" class="best-review-product">
+              <img src="${p.image_url}" alt="${p.name}" loading="lazy" />
+              <div class="best-review-product-body">
+                <p class="mp-maker">${p.maker ?? ''}</p>
+                <h3>${p.name}</h3>
+              </div>
+            </a>
+            ${title ? `<p class="best-review-quote-title">${title}</p>` : ''}
+            <p class="best-review-quote">${text}</p>
+            <button id="clear-best-review-btn" class="best-one-clear-btn">解除する</button>
+          </div>
+        `;
+      }
+
+      async function toggleBestReview(productId) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const newVal = currentBestReviewProductId === productId ? null : productId;
+
+        const { error } = await supabase
+          .from('profiles')
+          .update({ best_review_product_id: newVal })
+          .eq('id', session.user.id);
+
+        if (error) {
+          console.error(error);
+          return;
+        }
+
+        init();
+      }
+
+      async function loadMakerOptions() {
+        if (makerOptionsCache) return makerOptionsCache;
+
+        // Supabase/PostgRESTの1回あたりの取得上限に引っかからないよう、
+        // 全件取得できるまでページ分割して取得する
+        const set = new Set();
+        const pageSize = 1000;
+        let from = 0;
+        while (true) {
+          const { data, error } = await supabase
+            .from('products')
+            .select('maker')
+            .not('maker', 'is', null)
+            .range(from, from + pageSize - 1);
+
+          if (error) {
+            console.error(error);
+            break;
+          }
+          for (const r of data ?? []) {
+            if (r.maker) set.add(r.maker);
+          }
+          if (!data || data.length < pageSize) break;
+          from += pageSize;
+        }
+
+        makerOptionsCache = [...set].sort((a, b) => a.localeCompare(b, 'ja'));
+        return makerOptionsCache;
+      }
+
+      function oshiMakerDisplayHtml() {
+        return `
+          <div class="oshi-maker-section">
+            <h2 class="oshi-maker-title">推しメーカー</h2>
+            ${
+              currentOshiMaker
+                ? `
+                  <span class="badge-chip oshi-maker-chip">${currentOshiMaker}</span>
+                  ${currentOshiMakerReason ? `<p class="badge-detail">${currentOshiMakerReason}</p>` : ''}
+                `
+                : `<p class="badge-empty">まだ設定されていません。</p>`
+            }
+            <button id="edit-oshi-maker-btn" class="best-one-clear-btn">${currentOshiMaker ? '変更する' : '推しメーカーを選ぶ'}</button>
+          </div>
+        `;
+      }
+
+      function oshiMakerEditHtml(options) {
+        return `
+          <div class="oshi-maker-section">
+            <h2 class="oshi-maker-title">推しメーカー</h2>
+            <input type="text" id="oshi-maker-input" class="nickname-input" list="oshi-maker-datalist" maxlength="60" placeholder="メーカー名を入力(候補から選ぶこともできます)" value="${currentOshiMaker ?? ''}" />
+            <datalist id="oshi-maker-datalist">
+              ${options.map((m) => `<option value="${m}"></option>`).join('')}
+            </datalist>
+            <input type="text" id="oshi-maker-reason-input" class="nickname-input" maxlength="60" placeholder="理由(任意)" value="${currentOshiMakerReason ?? ''}" />
+            <button id="save-oshi-maker-btn" class="btn-primary">保存する</button>
+            <button id="cancel-oshi-maker-btn" class="best-one-clear-btn">キャンセル</button>
+          </div>
+        `;
+      }
+
+      async function renderOshiMakerSection() {
+        if (!oshiMakerEditing) {
+          oshiMakerContainer.innerHTML = oshiMakerDisplayHtml();
+          return;
+        }
+        oshiMakerContainer.innerHTML = `<p class="mypage-loading">読み込み中...</p>`;
+        const options = await loadMakerOptions();
+        oshiMakerContainer.innerHTML = oshiMakerEditHtml(options);
+      }
+
+      async function saveOshiMaker(maker, reason) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const { error } = await supabase
+          .from('profiles')
+          .update({ oshi_maker: maker || null, oshi_maker_reason: reason || null })
+          .eq('id', session.user.id);
+
+        if (error) {
+          console.error(error);
+          return;
+        }
+
+        init();
+      }
+
+      async function loadFolders(userId) {
+        const { data, error } = await supabase
+          .from('folders')
+          .select(
+            'id, name, is_public, sort_order, folder_items(id, product_id, products(id, dmm_content_id, name, maker, image_url))'
+          )
+          .eq('user_id', userId)
+          .order('sort_order', { ascending: true });
+
+        if (error) {
+          console.error(error);
+          return [];
+        }
+        return data ?? [];
+      }
+
+      function folderCardHtml(folder, idx, total) {
+        const items = (folder.folder_items ?? []).filter((fi) => fi.products);
+        const isEditing = editingFolderId === folder.id;
+
+        return `
+          <div class="folder-card" data-folder-id="${folder.id}">
+            <div class="folder-card-head">
+              ${
+                isEditing
+                  ? `<input type="text" class="folder-name-input nickname-input" id="folder-name-edit-${folder.id}" value="${folder.name}" maxlength="30" />`
+                  : `<h3 class="folder-name">${folder.name}</h3>`
+              }
+              <span class="folder-count">${items.length}件</span>
+            </div>
+            <div class="folder-card-actions">
+              <button type="button" class="folder-move-btn" data-folder-id="${folder.id}" data-dir="up" ${idx === 0 ? 'disabled' : ''}>↑</button>
+              <button type="button" class="folder-move-btn" data-folder-id="${folder.id}" data-dir="down" ${idx === total - 1 ? 'disabled' : ''}>↓</button>
+              ${
+                isEditing
+                  ? `<button type="button" class="folder-rename-save-btn" data-folder-id="${folder.id}">保存</button>
+                     <button type="button" class="folder-rename-cancel-btn" data-folder-id="${folder.id}">キャンセル</button>`
+                  : `<button type="button" class="folder-rename-btn" data-folder-id="${folder.id}">名前変更</button>`
+              }
+              <label class="folder-public-toggle">
+                <input type="checkbox" class="folder-public-checkbox" data-folder-id="${folder.id}" ${folder.is_public ? 'checked' : ''} />
+                公開する
+              </label>
+              <button type="button" class="folder-delete-btn" data-folder-id="${folder.id}">削除</button>
+            </div>
+            ${
+              items.length === 0
+                ? '<p class="badge-empty">まだ商品が入っていません。商品ページの「フォルダに追加」から追加できます。</p>'
+                : `<ul class="folder-items-grid">
+                    ${items
+                      .map(
+                        (fi) => `
+                      <li class="folder-item-card">
+                        <a href="/products/${fi.products.dmm_content_id}/">
+                          <img src="${fi.products.image_url}" alt="${fi.products.name}" loading="lazy" />
+                          <p class="folder-item-name">${fi.products.name}</p>
+                        </a>
+                        <button type="button" class="folder-item-remove-btn" data-folder-item-id="${fi.id}">×</button>
+                      </li>
+                    `
+                      )
+                      .join('')}
+                  </ul>`
+            }
+          </div>
+        `;
+      }
+
+      function foldersSectionHtml(folders) {
+        return `
+          <div class="folders-section">
+            <h2 class="folders-title">マイフォルダ</h2>
+            <div class="folder-create-area">
+              <input type="text" id="new-folder-name" class="nickname-input" maxlength="30" placeholder="新しいフォルダ名" />
+              <button type="button" id="create-folder-btn" class="btn-primary">＋ 作成</button>
+            </div>
+            ${
+              folders.length === 0
+                ? '<p class="badge-empty">まだフォルダがありません。好きな名前でフォルダを作って商品を仕分けできます。</p>'
+                : `<div class="folder-list">${folders.map((f, i) => folderCardHtml(f, i, folders.length)).join('')}</div>`
+            }
+          </div>
+        `;
+      }
+
+      async function renderFoldersSection(userId) {
+        currentFolders = await loadFolders(userId);
+        foldersContainer.innerHTML = foldersSectionHtml(currentFolders);
+      }
+
+      foldersContainer.addEventListener('click', async (e) => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        if (e.target.closest('#create-folder-btn')) {
+          const input = document.getElementById('new-folder-name');
+          const name = input.value.trim();
+          if (!name) return;
+          const maxOrder = currentFolders.reduce((m, f) => Math.max(m, f.sort_order ?? 0), -1);
+          const { error } = await supabase
+            .from('folders')
+            .insert({ user_id: session.user.id, name, sort_order: maxOrder + 1 });
+          if (error) console.error(error);
+          await renderFoldersSection(session.user.id);
+          return;
+        }
+
+        const renameBtn = e.target.closest('.folder-rename-btn');
+        if (renameBtn) {
+          editingFolderId = renameBtn.dataset.folderId;
+          foldersContainer.innerHTML = foldersSectionHtml(currentFolders);
+          return;
+        }
+
+        const cancelBtn = e.target.closest('.folder-rename-cancel-btn');
+        if (cancelBtn) {
+          editingFolderId = null;
+          foldersContainer.innerHTML = foldersSectionHtml(currentFolders);
+          return;
+        }
+
+        const saveBtn = e.target.closest('.folder-rename-save-btn');
+        if (saveBtn) {
+          const folderId = saveBtn.dataset.folderId;
+          const nameInput = document.getElementById(`folder-name-edit-${folderId}`);
+          const name = nameInput ? nameInput.value.trim() : '';
+          if (!name) return;
+          const { error } = await supabase
+            .from('folders')
+            .update({ name, updated_at: new Date().toISOString() })
+            .eq('id', folderId);
+          if (error) console.error(error);
+          editingFolderId = null;
+          await renderFoldersSection(session.user.id);
+          return;
+        }
+
+        const deleteBtn = e.target.closest('.folder-delete-btn');
+        if (deleteBtn) {
+          if (!confirm('このフォルダを削除しますか？中の商品リストも削除されます。')) return;
+          const folderId = deleteBtn.dataset.folderId;
+          const { error } = await supabase.from('folders').delete().eq('id', folderId);
+          if (error) console.error(error);
+          await renderFoldersSection(session.user.id);
+          return;
+        }
+
+        const moveBtn = e.target.closest('.folder-move-btn');
+        if (moveBtn && !moveBtn.disabled) {
+          const folderId = moveBtn.dataset.folderId;
+          const dir = moveBtn.dataset.dir;
+          const idx = currentFolders.findIndex((f) => f.id === folderId);
+          const swapIdx = dir === 'up' ? idx - 1 : idx + 1;
+          if (swapIdx < 0 || swapIdx >= currentFolders.length) return;
+          const a = currentFolders[idx];
+          const b = currentFolders[swapIdx];
+          const { error: e1 } = await supabase
+            .from('folders')
+            .update({ sort_order: b.sort_order })
+            .eq('id', a.id);
+          const { error: e2 } = await supabase
+            .from('folders')
+            .update({ sort_order: a.sort_order })
+            .eq('id', b.id);
+          if (e1 || e2) console.error(e1 || e2);
+          await renderFoldersSection(session.user.id);
+          return;
+        }
+
+        const removeItemBtn = e.target.closest('.folder-item-remove-btn');
+        if (removeItemBtn) {
+          const folderItemId = removeItemBtn.dataset.folderItemId;
+          const { error } = await supabase.from('folder_items').delete().eq('id', folderItemId);
+          if (error) console.error(error);
+          await renderFoldersSection(session.user.id);
+        }
+      });
+
+      foldersContainer.addEventListener('change', async (e) => {
+        const checkbox = e.target.closest('.folder-public-checkbox');
+        if (!checkbox) return;
+        const folderId = checkbox.dataset.folderId;
+        const { error } = await supabase
+          .from('folders')
+          .update({ is_public: checkbox.checked })
+          .eq('id', folderId);
+        if (error) console.error(error);
+      });
+
+      function onakingLinksSectionHtml(count, resultMessage) {
+        return `
+          <div class="onaking-links-section">
+            <h2 class="onaking-links-title">オナ王リンク登録(管理用)</h2>
+            <p class="onaking-links-desc">
+              「商品名(の一部でOK), オナ王の記事URL」を1行に1件、まとめて貼り付けて登録できます。商品名は「オナホめも」に登録されている名前と部分一致で検索されます。
+            </p>
+            <p class="onaking-links-count">現在 ${count}件 登録済み</p>
+            <textarea
+              id="onaking-links-input"
+              class="review-textarea onaking-links-textarea"
+              placeholder="例:&#10;ツインフィニティ ブレイク リズ,https://ona-king.com/onahole/twinfinity-break-rizz/&#10;ヤバイカラミティ紅テール,https://ona-king.com/onahole/yabaikaramity-kurenaitail/"
+            ></textarea>
+            <button type="button" id="onaking-links-submit-btn" class="btn-primary">登録する</button>
+            ${resultMessage ? `<p class="onaking-links-result">${resultMessage}</p>` : ''}
+          </div>
+        `;
+      }
+
+      async function loadOnakingLinksCount() {
+        const { count, error } = await supabase
+          .from('onaking_links')
+          .select('*', { count: 'exact', head: true });
+        if (error) {
+          console.error(error);
+          return 0;
+        }
+        return count ?? 0;
+      }
+
+      async function renderOnakingLinksSection(resultMessage) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session || session.user.id !== ADMIN_USER_ID) {
+          onakingLinksContainer.innerHTML = '';
+          return;
+        }
+        const count = await loadOnakingLinksCount();
+        onakingLinksContainer.innerHTML = onakingLinksSectionHtml(count, resultMessage);
+      }
+
+      async function resolveProductByNameFragment(fragment) {
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, name')
+          .ilike('name', `%${fragment}%`)
+          .limit(5);
+
+        if (error) return { status: 'error' };
+        if (!data || data.length === 0) return { status: 'not_found' };
+        if (data.length > 1) return { status: 'ambiguous', candidates: data };
+        return { status: 'ok', product: data[0] };
+      }
+
+      onakingLinksContainer.addEventListener('click', async (e) => {
+        if (!e.target.closest('#onaking-links-submit-btn')) return;
+
+        const textarea = document.getElementById('onaking-links-input');
+        const lines = textarea.value
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean);
+        if (lines.length === 0) return;
+
+        let successCount = 0;
+        const notFound = [];
+        const ambiguous = [];
+        const invalid = [];
+
+        for (const line of lines) {
+          const commaIdx = line.indexOf(',');
+          if (commaIdx === -1) {
+            invalid.push(line);
+            continue;
+          }
+          const nameFragment = line.slice(0, commaIdx).trim();
+          const onakingUrlValue = line.slice(commaIdx + 1).trim();
+          if (!nameFragment || !onakingUrlValue) {
+            invalid.push(line);
+            continue;
+          }
+
+          const result = await resolveProductByNameFragment(nameFragment);
+
+          if (result.status === 'not_found' || result.status === 'error') {
+            notFound.push(nameFragment);
+            continue;
+          }
+          if (result.status === 'ambiguous') {
+            ambiguous.push(`${nameFragment}(${result.candidates.length}件ヒット)`);
+            continue;
+          }
+
+          const { error: upsertError } = await supabase.from('onaking_links').upsert(
+            {
+              product_id: result.product.id,
+              onaking_url: onakingUrlValue,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'product_id' }
+          );
+
+          if (upsertError) {
+            console.error(upsertError);
+            notFound.push(nameFragment);
+            continue;
+          }
+
+          successCount++;
+        }
+
+        let message = `${successCount}件登録しました。`;
+        if (notFound.length > 0) message += ` 商品が見つからなかった: ${notFound.join(', ')}`;
+        if (ambiguous.length > 0)
+          message += ` 複数の商品にヒットして特定できなかった(もう少し詳しい名前で試すか、商品ページから個別に登録してください): ${ambiguous.join(', ')}`;
+        if (invalid.length > 0) message += ` 形式が不正な行が${invalid.length}件ありました。`;
+
+        await renderOnakingLinksSection(message);
+      });
+
+      function manualProductListHtml(products, editingId) {
+        if (products.length === 0) {
+          return '<p class="badge-empty">まだ手動追加した商品はありません。</p>';
+        }
+        return `
+          <ul class="manual-product-list">
+            ${products
+              .map(
+                (p) => `
+              <li class="manual-product-list-item ${editingId === p.id ? 'editing' : ''}">
+                <a href="/products/${p.dmm_content_id}/" target="_blank">${p.name}</a>
+                <span class="manual-product-list-maker">${p.maker ?? ''}</span>
+                <button type="button" class="manual-product-edit-btn" data-id="${p.id}">編集</button>
+                <button type="button" class="manual-product-delete-btn" data-id="${p.id}">削除</button>
+              </li>
+            `
+              )
+              .join('')}
+          </ul>
+        `;
+      }
+
+      function manualProductFormHtml(p) {
+        return `
+          <input type="text" id="mp-name" class="nickname-input" placeholder="商品名(必須)" maxlength="200" value="${p?.name ?? ''}" />
+          <input type="text" id="mp-maker" class="nickname-input" placeholder="メーカー(任意)" maxlength="100" value="${p?.maker ?? ''}" />
+          <input type="number" id="mp-price" class="nickname-input" placeholder="価格(任意・数字のみ)" min="0" value="${p?.price ?? ''}" />
+          <input type="text" id="mp-tags" class="nickname-input" placeholder="ジャンルタグ(任意・カンマ区切り)" value="${(p?.genre_tags ?? []).join(', ')}" />
+          <input type="text" id="mp-url" class="nickname-input" placeholder="購入先URL(任意)" value="${p?.affiliate_url ?? ''}" />
+          <label class="field-label">発売日(任意)</label>
+          <input
+            type="text"
+            id="mp-release"
+            class="nickname-input"
+            placeholder="わかる範囲でOK。例: 2026-08-28 / 2026年8月 / 2026年"
+            value="${p?.release_date_text ?? p?.release_date ?? ''}"
+          />
+          <label class="field-label">メモ・説明(任意)</label>
+          <textarea id="mp-note" class="review-textarea" placeholder="どこで買えるか、なぜFANZAにないか等" maxlength="500">${p?.manual_note ?? ''}</textarea>
+          <label class="field-label">画像${p ? '(変更する場合のみ選択してください)' : '(任意)'}</label>
+          ${p?.image_url ? `<img src="${p.image_url}" alt="現在の画像" class="manual-product-current-image" />` : ''}
+          <input type="file" id="mp-image" accept="image/*" />
+          <div class="manual-product-form-actions">
+            <button type="button" id="mp-submit-btn" class="btn-primary">${p ? '更新する' : '追加する'}</button>
+            ${p ? '<button type="button" id="mp-cancel-btn" class="best-one-clear-btn">キャンセル</button>' : ''}
+          </div>
+          <p id="mp-status" class="save-status"></p>
+        `;
+      }
+
+      function manualProductSectionHtml(products, editingId, resultMessage) {
+        const editingProduct = editingId ? products.find((p) => p.id === editingId) ?? null : null;
+        return `
+          <div class="manual-product-section">
+            <h2 class="manual-product-title">商品を手動追加(FANZA未掲載品)</h2>
+            <p class="onaking-links-desc">FANZAで取り扱いのない商品を、独自に登録・編集できます。</p>
+            ${manualProductListHtml(products, editingId)}
+            <h3 class="manual-product-form-title">${editingProduct ? `「${editingProduct.name}」を編集` : '新しく追加'}</h3>
+            ${manualProductFormHtml(editingProduct)}
+            ${resultMessage ? `<p class="onaking-links-result">${resultMessage}</p>` : ''}
+          </div>
+        `;
+      }
+
+      async function loadManualProducts() {
+        const { data, error } = await supabase
+          .from('products')
+          .select(
+            'id, dmm_content_id, name, maker, price, image_url, genre_tags, affiliate_url, release_date, release_date_text, manual_note'
+          )
+          .eq('is_manual', true)
+          .order('name');
+        if (error) {
+          console.error(error);
+          return [];
+        }
+        return data ?? [];
+      }
+
+      async function renderManualProductSection(resultMessage) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session || session.user.id !== ADMIN_USER_ID) {
+          manualProductContainer.innerHTML = '';
+          return;
+        }
+        manualProducts = await loadManualProducts();
+        manualProductContainer.innerHTML = manualProductSectionHtml(
+          manualProducts,
+          editingManualProductId,
+          resultMessage
+        );
+      }
+
+      function generateManualContentId() {
+        return `manual-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+      }
+
+      // 発売日は「2010年」のようなあいまいな書き方でも、絞り込み・並び替えで
+      // 使えるように、可能な範囲でrelease_date(date型)に変換する。
+      // 表示にはユーザーが入力したそのままの文字列(release_date_text)を使う。
+      function parseReleaseDate(input) {
+        if (!input) return null;
+        const trimmed = input.trim();
+
+        let m = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+        if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+
+        m = trimmed.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日$/);
+        if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+
+        m = trimmed.match(/^(\d{4})-(\d{1,2})$/);
+        if (m) return `${m[1]}-${m[2].padStart(2, '0')}-01`;
+
+        m = trimmed.match(/^(\d{4})年(\d{1,2})月$/);
+        if (m) return `${m[1]}-${m[2].padStart(2, '0')}-01`;
+
+        m = trimmed.match(/^(\d{4})年?(頃)?$/);
+        if (m) return `${m[1]}-01-01`;
+
+        return null;
+      }
+
+      manualProductContainer.addEventListener('click', async (e) => {
+        const editBtn = e.target.closest('.manual-product-edit-btn');
+        if (editBtn) {
+          editingManualProductId = editBtn.dataset.id;
+          manualProductContainer.innerHTML = manualProductSectionHtml(manualProducts, editingManualProductId);
+          return;
+        }
+
+        if (e.target.closest('#mp-cancel-btn')) {
+          editingManualProductId = null;
+          manualProductContainer.innerHTML = manualProductSectionHtml(manualProducts, editingManualProductId);
+          return;
+        }
+
+        const deleteBtn = e.target.closest('.manual-product-delete-btn');
+        if (deleteBtn) {
+          if (!confirm('この商品を削除しますか？関連するレビュー等からも参照できなくなります。')) return;
+          const id = deleteBtn.dataset.id;
+          const { error } = await supabase.from('products').delete().eq('id', id);
+          if (error) {
+            console.error(error);
+            alert('削除に失敗しました');
+            return;
+          }
+          if (editingManualProductId === id) editingManualProductId = null;
+          await renderManualProductSection('削除しました');
+          return;
+        }
+
+        if (!e.target.closest('#mp-submit-btn')) return;
+
+        const statusEl = document.getElementById('mp-status');
+        const name = document.getElementById('mp-name').value.trim();
+        if (!name) {
+          statusEl.textContent = '商品名を入力してください';
+          return;
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        statusEl.textContent = editingManualProductId ? '更新中...' : '追加中...';
+
+        const maker = document.getElementById('mp-maker').value.trim() || null;
+        const priceRaw = document.getElementById('mp-price').value;
+        const price = priceRaw ? Number(priceRaw) : null;
+        const tagsRaw = document.getElementById('mp-tags').value.trim();
+        const genreTags = tagsRaw
+          ? tagsRaw
+              .split(',')
+              .map((t) => t.trim())
+              .filter(Boolean)
+          : null;
+        const purchaseUrl = document.getElementById('mp-url').value.trim() || null;
+        const releaseInput = document.getElementById('mp-release').value.trim();
+        const releaseDateText = releaseInput || null;
+        const releaseDate = parseReleaseDate(releaseInput);
+        const note = document.getElementById('mp-note').value.trim() || null;
+        const imageFile = document.getElementById('mp-image').files[0];
+
+        let imageUrl = editingManualProductId
+          ? manualProducts.find((p) => p.id === editingManualProductId)?.image_url ?? null
+          : null;
+
+        if (imageFile) {
+          const compressedImageFile = await compressImage(imageFile, {
+            maxWidth: 1200,
+            maxHeight: 1200,
+            quality: 0.82,
+          });
+          const ext = compressedImageFile.name.split('.').pop() || 'jpg';
+          const path = `manual/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from(PRODUCT_IMAGE_BUCKET)
+            .upload(path, compressedImageFile);
+          if (uploadError) {
+            console.error(uploadError);
+            statusEl.textContent = '画像のアップロードに失敗しました';
+            return;
+          }
+          const { data: publicUrlData } = supabase.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(path);
+          imageUrl = publicUrlData.publicUrl;
+        }
+
+        const payload = {
+          name,
+          maker,
+          price,
+          image_url: imageUrl,
+          genre_tags: genreTags,
+          affiliate_url: purchaseUrl,
+          release_date: releaseDate,
+          release_date_text: releaseDateText,
+          manual_note: note,
+        };
+
+        if (editingManualProductId) {
+          const { error } = await supabase.from('products').update(payload).eq('id', editingManualProductId);
+          if (error) {
+            console.error(error);
+            statusEl.textContent = '更新に失敗しました';
+            return;
+          }
+          const updatedProduct = manualProducts.find((p) => p.id === editingManualProductId);
+          editingManualProductId = null;
+          await renderManualProductSection(
+            updatedProduct
+              ? `更新しました → <a href="/products/${updatedProduct.dmm_content_id}/" target="_blank">商品ページを見る</a>`
+              : '更新しました'
+          );
+        } else {
+          const dmmContentId = generateManualContentId();
+          const { error } = await supabase.from('products').insert({
+            dmm_content_id: dmmContentId,
+            is_manual: true,
+            is_onahole: true,
+            ...payload,
+          });
+          if (error) {
+            console.error(error);
+            statusEl.textContent = '追加に失敗しました';
+            return;
+          }
+          await renderManualProductSection(
+            `追加しました → <a href="/products/${dmmContentId}/" target="_blank">商品ページを見る</a>`
+          );
+        }
+      });
+
+      function renderLoggedOut() {
+        content.innerHTML = `
+          <p>マイページを見るには、ログインが必要です。</p>
+          <a href="/login" class="auth-btn">ログインする</a>
+        `;
+      }
+      async function renderProfileSection(userId) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select(
+            'nickname, best_product_id_1, best_product_id_2, best_product_id_3, best_product_reason_1, best_product_reason_2, best_product_reason_3, best_review_product_id, oshi_maker, oshi_maker_reason, avatar_url, header_url, bio, sns_links, is_public'
+          )
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (profile) {
+          profileSection.innerHTML = `
+            <p class="profile-nickname">ニックネーム: <strong>${profile.nickname}</strong></p>
+            <a href="/users/${encodeURIComponent(profile.nickname)}" class="auth-btn">公開ページを見る</a>
+            <a href="/following" class="auth-btn">フォロー中を見る</a>
+            <button id="edit-nickname-btn" class="auth-btn">変更する</button>
+          `;
+          document.getElementById('edit-nickname-btn').addEventListener('click', () => {
+            showNicknameForm(userId, profile.nickname);
+          });
+        } else {
+          showNicknameForm(userId, '');
+        }
+        return profile;
+      }
+
+      function showNicknameForm(userId, current) {
+        profileSection.innerHTML = `
+          <p class="profile-hint">公開プロフィールで使うニックネームを設定してください(他の人と重複はできません)。</p>
+          <input type="text" id="nickname-input" class="nickname-input" value="${current}" maxlength="20" placeholder="例: じょい" />
+          <button id="save-nickname-btn" class="btn-primary">保存する</button>
+          <p id="nickname-status" class="nickname-status"></p>
+        `;
+
+        document.getElementById('save-nickname-btn').addEventListener('click', async () => {
+          const statusEl = document.getElementById('nickname-status');
+          const nickname = document.getElementById('nickname-input').value.trim();
+
+          if (!nickname) {
+            statusEl.textContent = 'ニックネームを入力してください';
+            return;
+          }
+
+          const { error } = await supabase
+            .from('profiles')
+            .upsert({ id: userId, nickname }, { onConflict: 'id' });
+
+          if (error) {
+            if (error.code === '23505') {
+              statusEl.textContent = 'そのニックネームは既に使われています';
+            } else {
+              statusEl.textContent = '保存に失敗しました';
+              console.error(error);
+            }
+            return;
+          }
+
+          renderProfileSection(userId);
+        });
+      }
+
+      function snsRowHtml(link, idx) {
+        return `
+          <div class="profile-sns-row" data-idx="${idx}">
+            <input type="text" class="nickname-input profile-sns-label" placeholder="ラベル(例: X)" maxlength="20" value="${link.label ?? ''}" />
+            <input type="text" class="nickname-input profile-sns-url" placeholder="URL" maxlength="300" value="${link.url ?? ''}" />
+            <button type="button" class="profile-sns-remove-btn" data-idx="${idx}">削除</button>
+          </div>
+        `;
+      }
+
+      function profileDetailsSectionHtml() {
+        const headerStyle = currentHeaderUrl ? `background-image:url('${currentHeaderUrl}')` : '';
+        const linksHtml = currentSnsLinks.length
+          ? `
+            <ul class="profile-sns-links">
+              ${currentSnsLinks
+                .map(
+                  (l) =>
+                    `<li><a class="profile-sns-link" href="${l.url}" target="_blank" rel="noopener noreferrer nofollow">${l.label || l.url}</a></li>`
+                )
+                .join('')}
+            </ul>
+          `
+          : '';
+
+        return `
+          <div class="profile-details-section">
+            <div class="profile-details-header ${currentHeaderUrl ? '' : 'profile-details-header-empty'}" style="${headerStyle}">
+              <div class="profile-avatar-wrap">
+                ${
+                  currentAvatarUrl
+                    ? `<img class="profile-avatar" src="${currentAvatarUrl}" alt="アイコン" />`
+                    : `<div class="profile-avatar-empty"></div>`
+                }
+              </div>
+            </div>
+            <div class="profile-details-body">
+              ${currentBio ? `<p class="profile-bio">${currentBio}</p>` : `<p class="badge-empty">自己紹介はまだ設定されていません。</p>`}
+              ${linksHtml}
+              <p class="profile-visibility">公開設定: <strong>${currentIsPublic ? '公開中' : '非公開'}</strong></p>
+              <button id="edit-profile-details-btn" class="best-one-clear-btn">プロフィールを編集する</button>
+            </div>
+          </div>
+        `;
+      }
+
+      function profileDetailsEditHtml() {
+        const snsRows = editingSnsLinks.map((l, i) => snsRowHtml(l, i)).join('');
+
+        return `
+          <div class="profile-details-edit">
+            <label class="profile-edit-label">アイコン画像(トプ画)</label>
+            ${currentAvatarUrl ? `<img class="profile-details-preview" src="${currentAvatarUrl}" alt="現在のアイコン" />` : ''}
+            <input type="file" id="profile-avatar-input" accept="image/*" />
+
+            <label class="profile-edit-label">ヘッダー画像(壁紙)</label>
+            ${currentHeaderUrl ? `<img class="profile-details-preview profile-details-preview-header" src="${currentHeaderUrl}" alt="現在のヘッダー" />` : ''}
+            <input type="file" id="profile-header-input" accept="image/*" />
+
+            <label class="profile-edit-label">自己紹介</label>
+            <textarea id="profile-bio-input" class="nickname-input" maxlength="300" rows="4" placeholder="自己紹介を書きましょう">${currentBio ?? ''}</textarea>
+
+            <label class="profile-edit-label">SNS・ブログリンク</label>
+            <div id="profile-sns-list">${snsRows}</div>
+            <button type="button" id="profile-sns-add-btn" class="best-one-clear-btn">+ リンクを追加</button>
+
+            <label class="profile-edit-label">
+              <input type="checkbox" id="profile-public-input" ${currentIsPublic ? 'checked' : ''} />
+              プロフィールを公開する(オフにすると公開ページが完全に非表示になります)
+            </label>
+
+            <div class="profile-details-actions">
+              <button id="save-profile-details-btn" class="btn-primary">保存する</button>
+              <button id="cancel-profile-details-btn" class="best-one-clear-btn">キャンセル</button>
+            </div>
+            <p id="profile-details-status" class="nickname-status"></p>
+          </div>
+        `;
+      }
+
+      function renderProfileDetailsSection() {
+        if (!profileDetailsEditing) {
+          profileDetailsContainer.innerHTML = profileDetailsSectionHtml();
+          return;
+        }
+        editingSnsLinks = currentSnsLinks.length
+          ? currentSnsLinks.map((l) => ({ ...l }))
+          : [{ label: '', url: '' }];
+        profileDetailsContainer.innerHTML = profileDetailsEditHtml();
+      }
+
+      async function uploadProfileImage(file, prefix, userId, compressOptions) {
+        const compressedFile = await compressImage(file, compressOptions);
+        const ext = compressedFile.name.split('.').pop() || 'jpg';
+        const path = `${userId}/${prefix}-${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from(PROFILE_IMAGE_BUCKET)
+          .upload(path, compressedFile, { upsert: true });
+        if (uploadError) {
+          console.error(uploadError);
+          return null;
+        }
+        const { data } = supabase.storage.from(PROFILE_IMAGE_BUCKET).getPublicUrl(path);
+        return data.publicUrl;
+      }
+
+      async function saveProfileDetails() {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const statusEl = document.getElementById('profile-details-status');
+        statusEl.textContent = '保存中...';
+
+        const avatarFile = document.getElementById('profile-avatar-input').files[0];
+        const headerFile = document.getElementById('profile-header-input').files[0];
+        const bio = document.getElementById('profile-bio-input').value.trim();
+        const isPublic = document.getElementById('profile-public-input').checked;
+
+        const rows = [...document.querySelectorAll('#profile-sns-list .profile-sns-row')];
+        const snsLinks = rows
+          .map((row) => ({
+            label: row.querySelector('.profile-sns-label').value.trim(),
+            url: row.querySelector('.profile-sns-url').value.trim(),
+          }))
+          .filter((l) => l.url);
+
+        let avatarUrl = currentAvatarUrl;
+        if (avatarFile) {
+          const uploaded = await uploadProfileImage(avatarFile, 'avatar', session.user.id, {
+            maxWidth: 500,
+            maxHeight: 500,
+            quality: 0.85,
+          });
+          if (!uploaded) {
+            statusEl.textContent = 'アイコン画像のアップロードに失敗しました';
+            return;
+          }
+          avatarUrl = uploaded;
+        }
+
+        let headerUrl = currentHeaderUrl;
+        if (headerFile) {
+          const uploaded = await uploadProfileImage(headerFile, 'header', session.user.id, {
+            maxWidth: 1600,
+            maxHeight: 800,
+            quality: 0.8,
+          });
+          if (!uploaded) {
+            statusEl.textContent = 'ヘッダー画像のアップロードに失敗しました';
+            return;
+          }
+          headerUrl = uploaded;
+        }
+
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            avatar_url: avatarUrl,
+            header_url: headerUrl,
+            bio: bio || null,
+            sns_links: snsLinks,
+            is_public: isPublic,
+          })
+          .eq('id', session.user.id);
+
+        if (error) {
+          console.error(error);
+          statusEl.textContent = '保存に失敗しました';
+          return;
+        }
+
+        currentAvatarUrl = avatarUrl;
+        currentHeaderUrl = headerUrl;
+        currentBio = bio || null;
+        currentSnsLinks = snsLinks;
+        currentIsPublic = isPublic;
+        profileDetailsEditing = false;
+        renderProfileDetailsSection();
+      }
+
+      function productCardHtml(check) {
+        const p = check.products;
+        if (!p) return '';
+
+        const top3Idx = currentTop3.findIndex((s) => s && s.productId === p.id);
+        const isTop3 = check.status === 'used' && top3Idx >= 0;
+        const top3Full = currentTop3.filter(Boolean).length >= 3;
+        const hasReview = Boolean(check.review_text || check.detail_review_text);
+        const isBestReview = hasReview && p.id === currentBestReviewProductId;
+        const onSale = isOnSale(check);
+        const listPrice = onSale ? Number(p.raw_data.prices.list_price) : null;
+        const discountPercent = onSale ? Math.round((1 - p.price / listPrice) * 100) : null;
+
+        let subInfo = '';
+        if (check.status === 'used' && check.tier) {
+          subInfo += `<span class="mp-tag">${TIER_LABELS[check.tier]}</span>`;
+        }
+        if (check.rating) {
+          subInfo += `<span class="mp-tag">★${check.rating}</span>`;
+        }
+        if (check.is_public) {
+          subInfo += `<span class="mp-tag mp-public">公開中</span>`;
+        }
+        if (isTop3) {
+          subInfo += `<span class="mp-tag mp-best">TOP3: ${top3Idx + 1}位</span>`;
+        }
+        if (isBestReview) {
+          subInfo += `<span class="mp-tag mp-best">ベスト口コミ</span>`;
+        }
+
+        let actions = '';
+        if (check.status === 'used') {
+          if (isTop3) {
+            actions += `<button class="top3-set-btn" data-product-id="${p.id}">TOP3(${top3Idx + 1}位)を解除</button>`;
+          } else if (top3Full) {
+            actions += `<button class="top3-set-btn" data-product-id="${p.id}" disabled>TOP3は3つまでです</button>`;
+          } else {
+            actions += `<button class="top3-set-btn" data-product-id="${p.id}">TOP3に追加</button>`;
+          }
+        }
+        if (hasReview) {
+          actions += `<button class="best-review-set-btn" data-product-id="${p.id}">${isBestReview ? 'ベスト口コミを解除' : 'ベスト口コミに設定'}</button>`;
+        }
+
+        return `
+          <li class="mp-card ${isTop3 ? 'mp-card-best' : ''}">
+            ${onSale ? '<span class="sale-ribbon">SALE</span>' : ''}
+            <a href="/products/${p.dmm_content_id}/">
+              <img src="${p.image_url}" alt="${p.name}" loading="lazy" />
+              <div class="mp-card-body">
+                <p class="mp-maker">${p.maker ?? ''}</p>
+                <h3>${p.name}</h3>
+                <p class="mp-price">
+                  ${p.price ? `¥${p.price.toLocaleString()}` : ''}
+                  ${onSale ? `<span class="discount-badge-small">${discountPercent}%OFF</span>` : ''}
+                </p>
+                <div class="mp-tags">${subInfo}</div>
+                ${check.memo ? `<p class="mp-memo">${check.memo}</p>` : ''}
+              </div>
+            </a>
+            ${actions ? `<div class="mp-card-actions">${actions}</div>` : ''}
+          </li>
+        `;
+      }
+
+      async function init() {
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (!session) {
+          renderLoggedOut();
+          return;
+        }
+
+        const profile = await renderProfileSection(session.user.id);
+        const hasNickname = Boolean(profile?.nickname);
+
+        currentTop3 = [
+          profile?.best_product_id_1
+            ? { productId: profile.best_product_id_1, reason: profile.best_product_reason_1 }
+            : null,
+          profile?.best_product_id_2
+            ? { productId: profile.best_product_id_2, reason: profile.best_product_reason_2 }
+            : null,
+          profile?.best_product_id_3
+            ? { productId: profile.best_product_id_3, reason: profile.best_product_reason_3 }
+            : null,
+        ];
+        currentBestReviewProductId = profile?.best_review_product_id ?? null;
+        currentOshiMaker = profile?.oshi_maker ?? null;
+        currentOshiMakerReason = profile?.oshi_maker_reason ?? null;
+        currentAvatarUrl = profile?.avatar_url ?? null;
+        currentHeaderUrl = profile?.header_url ?? null;
+        currentBio = profile?.bio ?? null;
+        currentSnsLinks = Array.isArray(profile?.sns_links) ? profile.sns_links : [];
+        currentIsPublic = profile?.is_public ?? true;
+        profileDetailsEditing = false;
+        renderProfileDetailsSection();
+
+        const { data: checks, error } = await supabase
+          .from('checks')
+          .select(
+            'status, tier, rating, review_title, review_text, detail_review_title, detail_review_text, review_images, retirement_reason, similar_products, memo, is_public, updated_at, products(id, dmm_content_id, name, maker, price, image_url, genre_tags, raw_data)'
+          )
+          .eq('user_id', session.user.id)
+          .order('updated_at', { ascending: false });
+
+        if (error) {
+          content.innerHTML = `<p>読み込みに失敗しました: ${error.message}</p>`;
+          return;
+        }
+
+        lastChecks = checks ?? [];
+
+        top3EditingRank = null;
+        renderTop3Section();
+
+        const bestReviewCheck = lastChecks.find((c) => c.products?.id === currentBestReviewProductId) ?? null;
+        bestReviewContainer.innerHTML = bestReviewSectionHtml(bestReviewCheck);
+
+        oshiMakerEditing = false;
+        renderOshiMakerSection();
+
+        await renderFoldersSection(session.user.id);
+        await renderOnakingLinksSection();
+        await renderManualProductSection();
+
+        const usedCountForBadge = lastChecks.filter((c) => c.status === 'used').length;
+        document.getElementById('badge-section-container').innerHTML = badgeSectionHtml(usedCountForBadge);
+        document.getElementById('maker-badge-section-container').innerHTML = makerBadgeSectionHtml(
+          lastChecks
+        );
+        document.getElementById('titles-section-container').innerHTML = titlesSectionHtml(
+          lastChecks,
+          hasNickname
+        );
+
+        if (lastChecks.length === 0) {
+          content.innerHTML = `<p class="mp-empty">まだ記録がありません。気になる商品を見つけたら「☰ 記録」から登録してみましょう。</p>`;
+          return;
+        }
+
+        const grouped = { used: [], interested: [] };
+        for (const c of lastChecks) {
+          if (grouped[c.status]) grouped[c.status].push(c);
+        }
+
+        const usedByTier = { first: [], second: [], retired: [] };
+        for (const c of grouped.used) {
+          if (c.tier && usedByTier[c.tier]) usedByTier[c.tier].push(c);
+        }
+
+        const saleInterestedCount = grouped.interested.filter(isOnSale).length;
+
+        let html = `
+          <div class="mp-stats">
+            <div class="mp-stat"><span class="mp-stat-num">${grouped.used.length}</span><span>使った</span></div>
+            <div class="mp-stat"><span class="mp-stat-num">${usedByTier.first.length}</span><span>一軍</span></div>
+            <div class="mp-stat"><span class="mp-stat-num">${grouped.interested.length}</span><span>気になる</span></div>
+            <div class="mp-stat"><span class="mp-stat-num">${saleInterestedCount}</span><span>気になるでセール中</span></div>
+          </div>
+        `;
+
+        for (const status of STATUS_ORDER) {
+          const list = grouped[status];
+          if (list.length === 0) continue;
+
+          html += `<h2 class="mp-section-title">${STATUS_LABELS[status]}(${list.length})</h2>`;
+          html += `<ul class="mp-grid">${list.map(productCardHtml).join('')}</ul>`;
+        }
+
+        content.innerHTML = html;
+      }
+
+      content.addEventListener('click', (e) => {
+        const top3Btn = e.target.closest('.top3-set-btn');
+        if (top3Btn && !top3Btn.disabled) {
+          e.preventDefault();
+          toggleTop3(top3Btn.dataset.productId);
+          return;
+        }
+
+        const reviewBtn = e.target.closest('.best-review-set-btn');
+        if (reviewBtn) {
+          e.preventDefault();
+          toggleBestReview(reviewBtn.dataset.productId);
+        }
+      });
+
+      top3Container.addEventListener('click', async (e) => {
+        const reasonTextEl = e.target.closest('.top3-reason-text');
+        if (reasonTextEl) {
+          top3EditingRank = Number(reasonTextEl.dataset.rank);
+          renderTop3Section();
+          return;
+        }
+
+        const saveBtn = e.target.closest('.top3-reason-save-btn');
+        if (saveBtn) {
+          const rank = Number(saveBtn.dataset.rank);
+          const input = top3Container.querySelector(`.top3-reason-input[data-rank="${rank}"]`);
+          const value = input ? input.value.trim() : '';
+          if (currentTop3[rank - 1]) currentTop3[rank - 1].reason = value || null;
+          top3EditingRank = null;
+          await saveTop3();
+          init();
+          return;
+        }
+
+        const clearBtn = e.target.closest('.top3-clear-btn');
+        if (clearBtn) {
+          const rank = Number(clearBtn.dataset.rank);
+          currentTop3[rank - 1] = null;
+          await saveTop3();
+          init();
+        }
+      });
+
+      bestReviewContainer.addEventListener('click', (e) => {
+        const btn = e.target.closest('#clear-best-review-btn');
+        if (!btn) return;
+        e.preventDefault();
+        toggleBestReview(currentBestReviewProductId);
+      });
+
+      oshiMakerContainer.addEventListener('click', async (e) => {
+        if (e.target.closest('#edit-oshi-maker-btn')) {
+          oshiMakerEditing = true;
+          await renderOshiMakerSection();
+          return;
+        }
+        if (e.target.closest('#cancel-oshi-maker-btn')) {
+          oshiMakerEditing = false;
+          renderOshiMakerSection();
+          return;
+        }
+        if (e.target.closest('#save-oshi-maker-btn')) {
+          const maker = document.getElementById('oshi-maker-input').value.trim();
+          const reason = document.getElementById('oshi-maker-reason-input').value.trim();
+          await saveOshiMaker(maker, reason);
+        }
+      });
+
+      profileDetailsContainer.addEventListener('click', async (e) => {
+        if (e.target.closest('#edit-profile-details-btn')) {
+          profileDetailsEditing = true;
+          renderProfileDetailsSection();
+          return;
+        }
+        if (e.target.closest('#cancel-profile-details-btn')) {
+          profileDetailsEditing = false;
+          renderProfileDetailsSection();
+          return;
+        }
+        if (e.target.closest('#profile-sns-add-btn')) {
+          const rows = [...document.querySelectorAll('#profile-sns-list .profile-sns-row')];
+          editingSnsLinks = rows.map((row) => ({
+            label: row.querySelector('.profile-sns-label').value,
+            url: row.querySelector('.profile-sns-url').value,
+          }));
+          editingSnsLinks.push({ label: '', url: '' });
+          document.getElementById('profile-sns-list').innerHTML = editingSnsLinks
+            .map((l, i) => snsRowHtml(l, i))
+            .join('');
+          return;
+        }
+        const removeBtn = e.target.closest('.profile-sns-remove-btn');
+        if (removeBtn) {
+          const rows = [...document.querySelectorAll('#profile-sns-list .profile-sns-row')];
+          editingSnsLinks = rows
+            .map((row) => ({
+              label: row.querySelector('.profile-sns-label').value,
+              url: row.querySelector('.profile-sns-url').value,
+            }))
+            .filter((_, i) => i !== Number(removeBtn.dataset.idx));
+          if (editingSnsLinks.length === 0) editingSnsLinks.push({ label: '', url: '' });
+          document.getElementById('profile-sns-list').innerHTML = editingSnsLinks
+            .map((l, i) => snsRowHtml(l, i))
+            .join('');
+          return;
+        }
+        if (e.target.closest('#save-profile-details-btn')) {
+          await saveProfileDetails();
+        }
+      });
+
+      init();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,34 @@
+---
+import '../styles/global.css';
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>ログイン | オナホめも</title>
+  </head>
+  <body>
+    <header>
+      <a href="/">← 一覧に戻る</a>
+    </header>
+    <main class="login-main">
+      <h1>ログイン</h1>
+      <p>Googleアカウントでログインすると、使ったオナホールをチェックできます。</p>
+      <button id="google-login">Googleでログイン</button>
+    </main>
+
+    <script>
+      import { supabase } from '../lib/supabase.js';
+
+      document.getElementById('google-login').addEventListener('click', async () => {
+        await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin,
+          },
+        });
+      });
+    </script>
+  </body>
+</html>
