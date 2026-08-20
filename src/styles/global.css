@@ -26,6 +26,37 @@ a {
   text-decoration: none;
 }
 
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.site-header .site-logo {
+  font-family: 'Shippori Mincho', serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.site-header .site-logo:hover {
+  color: var(--accent);
+}
+
+.site-header .site-header-link {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.site-header .site-header-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .hero {
   padding: 4rem 1.5rem 3rem;
   border-bottom: 1px solid var(--border);
@@ -2328,6 +2359,16 @@ main {
 .new-info-link-text {
   color: var(--text-muted);
   cursor: default;
+}
+
+.new-info-sale-trigger {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .manual-badge {
