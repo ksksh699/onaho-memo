@@ -2,33 +2,21 @@
 import { supabase } from '../../lib/supabase.js';
 import '../../styles/global.css';
 
-export const prerender = true;
+// 商品数が非常に多い(4000件超)ため、ビルド時に全ページを事前生成すると
+// デプロイに膨大な時間がかかる。そのため事前生成はせず、リクエストごとに
+// その場でSupabaseから該当商品を取得する(SSR)方式にしている。
+const { id } = Astro.params;
+const { data: product } = await supabase
+  .from('products')
+  .select('*')
+  .eq('dmm_content_id', id)
+  .eq('is_onahole', true)
+  .maybeSingle();
 
-export async function getStaticPaths() {
-  let allProducts = [];
-  let from = 0;
-  const pageSize = 1000;
-
-  while (true) {
-    const { data: products } = await supabase
-      .from('products')
-      .select('*')
-      .eq('is_onahole', true)
-      .range(from, from + pageSize - 1);
-
-    if (!products || products.length === 0) break;
-    allProducts = allProducts.concat(products);
-    if (products.length < pageSize) break;
-    from += pageSize;
-  }
-
-  return allProducts.map((p) => ({
-    params: { id: p.dmm_content_id },
-    props: { product: p },
-  }));
+if (!product) {
+  return Astro.redirect('/');
 }
 
-const { product } = Astro.props;
 const rawData = product.raw_data ?? {};
 const directories = rawData.directory ?? [];
 const stockLabels = {
