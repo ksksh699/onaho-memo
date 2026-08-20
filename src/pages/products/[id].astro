@@ -150,11 +150,7 @@ const onakingUrl = onakingLinkData?.onaking_url ?? null;
           {product.genre_tags?.length > 0 && (
             <ul class="tags">
               {product.genre_tags.map((tag) => (
-                <li>
-                  <a href={`/?tag=${encodeURIComponent(tag)}`} class="tag-link">
-                    {tag}
-                  </a>
-                </li>
+                <li>{tag}</li>
               ))}
             </ul>
           )}
