@@ -131,8 +131,6 @@ const campaignTags = (allTagsData ?? [])
   .filter((row) => CAMPAIGN_KEYWORDS.some((k) => row.tag.includes(k)))
   .map((row) => row.tag);
 
-const topTags = (allTagsData ?? []).slice(0, 40).map((row) => row.tag);
-
 const minYear = minDateRow?.[0]?.release_date
   ? new Date(minDateRow[0].release_date).getFullYear()
   : null;
@@ -329,16 +327,6 @@ const RANKINGS = [
           </select>
         </label>
 
-        <label>
-          ジャンル
-          <select id="tag-select">
-            <option value="">すべて</option>
-            {topTags.map((t) => (
-              <option value={t}>{t}</option>
-            ))}
-          </select>
-        </label>
-
         <label class="range-filter-label">
           発売年
           <select id="year-from-select">
@@ -414,7 +402,6 @@ const RANKINGS = [
         return campaignTags.includes(tag);
       }
       const makerSelect = document.getElementById('maker-select');
-      const tagSelect = document.getElementById('tag-select');
       const yearFromSelect = document.getElementById('year-from-select');
       const yearToSelect = document.getElementById('year-to-select');
       const priceMinInput = document.getElementById('price-min-input');
@@ -538,9 +525,8 @@ const RANKINGS = [
         return map;
       }
 
-      function applyFilters(q, { maker, tag, searchTerm, yearFrom, yearTo, priceMin, priceMax }) {
+      function applyFilters(q, { maker, searchTerm, yearFrom, yearTo, priceMin, priceMax }) {
         if (maker) q = q.eq('maker', maker);
-        if (tag) q = q.contains('genre_tags', [tag]);
         if (searchTerm) q = q.ilike('name', `%${searchTerm}%`);
         if (saleFilter.checked) q = q.overlaps('genre_tags', campaignTags);
         if (yearFrom) q = q.gte('release_date', `${yearFrom}-01-01`);
@@ -555,7 +541,6 @@ const RANKINGS = [
 
         const filters = {
           maker: makerSelect.value,
-          tag: tagSelect.value,
           searchTerm: searchInput.value.trim(),
           yearFrom: yearFromSelect.value,
           yearTo: yearToSelect.value,
@@ -756,7 +741,6 @@ const RANKINGS = [
 
       makerSelect.addEventListener('change', () => reload({ resetPage: true }));
       saleFilter.addEventListener('change', () => reload({ resetPage: true }));
-      tagSelect.addEventListener('change', () => reload({ resetPage: true }));
       yearFromSelect.addEventListener('change', () => reload({ resetPage: true }));
       yearToSelect.addEventListener('change', () => reload({ resetPage: true }));
 
@@ -896,11 +880,10 @@ const RANKINGS = [
         const ids = initialProducts.map((p) => p.id);
         userChecksMap = await loadUserChecksMap(ids);
 
-        // 商品詳細ページのメーカー名/タグのリンクから来た場合、
+        // 商品詳細ページのメーカー名リンクから来た場合、
         // 絞り込みを引き継いで検索結果を絞り込んだ状態にする
         const urlParams = new URLSearchParams(window.location.search);
         const urlMaker = urlParams.get('maker');
-        const urlTag = urlParams.get('tag');
         let needsReload = false;
 
         if (urlMaker) {
@@ -911,17 +894,6 @@ const RANKINGS = [
             makerSelect.appendChild(opt);
           }
           makerSelect.value = urlMaker;
-          needsReload = true;
-        }
-
-        if (urlTag) {
-          if (![...tagSelect.options].some((o) => o.value === urlTag)) {
-            const opt = document.createElement('option');
-            opt.value = urlTag;
-            opt.textContent = urlTag;
-            tagSelect.appendChild(opt);
-          }
-          tagSelect.value = urlTag;
           needsReload = true;
         }
 
