@@ -125,7 +125,7 @@ const newlyOnSaleData = newlyOnSaleResult.data;
 // SQL関数(GROUP BY)側で行っており、ここではすでに集計済み・件数降順の
 // データが返ってくる。以前は商品を最大5000件取得してJS側で数えていたが、
 // 集計をDB側に寄せることでネットワーク転送量と処理時間を大幅に削減している。
-const topMakers = (makerRows ?? []).slice(0, 40).map((row) => row.maker);
+const topMakers = (makerRows ?? []).slice(0, 40);
 
 const campaignTags = (allTagsData ?? [])
   .filter((row) => CAMPAIGN_KEYWORDS.some((k) => row.tag.includes(k)))
@@ -324,7 +324,7 @@ const RANKINGS = [
           <select id="maker-select">
             <option value="">すべて</option>
             {topMakers.map((m) => (
-              <option value={m}>{m}</option>
+              <option value={m.maker}>{m.maker} ({m.cnt})</option>
             ))}
           </select>
         </label>
