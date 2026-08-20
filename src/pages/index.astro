@@ -42,8 +42,8 @@ const [
     .range(0, PAGE_SIZE - 1),
   supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_onahole', true),
   supabase.rpc('get_member_count'),
-  supabase.from('products').select('maker').eq('is_onahole', true).not('maker', 'is', null).range(0, 4999),
-  supabase.from('products').select('genre_tags').eq('is_onahole', true).range(0, 4999),
+  supabase.rpc('get_maker_counts'),
+  supabase.rpc('get_genre_tag_stats'),
   supabase
     .from('products')
     .select('release_date')
@@ -103,7 +103,7 @@ const [
     .gt('monthly_view_count', 0)
     .order('monthly_view_count', { ascending: false })
     .limit(10),
-  supabase.rpc('refresh_sale_watch', { new_arrival_days: NEW_ARRIVAL_DAYS }),
+  supabase.rpc('get_newly_on_sale', { new_arrival_days: NEW_ARRIVAL_DAYS }),
 ]);
 
 const { data: products, error } = productsResult;
@@ -121,35 +121,17 @@ const fanzaRankingData = fanzaRankingResult.data;
 const monthlyViewRankingData = monthlyViewRankingResult.data;
 const newlyOnSaleData = newlyOnSaleResult.data;
 
-const makerCounts = {};
-for (const row of makerRows ?? []) {
-  makerCounts[row.maker] = (makerCounts[row.maker] ?? 0) + 1;
-}
-const topMakers = Object.entries(makerCounts)
-  .sort((a, b) => b[1] - a[1])
-  .slice(0, 40)
-  .map(([name]) => name);
+// メーカー/タグの集計は get_maker_counts / get_genre_tag_stats という
+// SQL関数(GROUP BY)側で行っており、ここではすでに集計済み・件数降順の
+// データが返ってくる。以前は商品を最大5000件取得してJS側で数えていたが、
+// 集計をDB側に寄せることでネットワーク転送量と処理時間を大幅に削減している。
+const topMakers = (makerRows ?? []).slice(0, 40).map((row) => row.maker);
 
-const allTagsSet = new Set();
-for (const row of allTagsData ?? []) {
-  for (const tag of row.genre_tags ?? []) {
-    allTagsSet.add(tag);
-  }
-}
-const campaignTags = [...allTagsSet].filter((tag) =>
-  CAMPAIGN_KEYWORDS.some((k) => tag.includes(k))
-);
+const campaignTags = (allTagsData ?? [])
+  .filter((row) => CAMPAIGN_KEYWORDS.some((k) => row.tag.includes(k)))
+  .map((row) => row.tag);
 
-const tagCounts = {};
-for (const row of allTagsData ?? []) {
-  for (const tag of row.genre_tags ?? []) {
-    tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
-  }
-}
-const topTags = Object.entries(tagCounts)
-  .sort((a, b) => b[1] - a[1])
-  .slice(0, 40)
-  .map(([name]) => name);
+const topTags = (allTagsData ?? []).slice(0, 40).map((row) => row.tag);
 
 const minYear = minDateRow?.[0]?.release_date
   ? new Date(minDateRow[0].release_date).getFullYear()
