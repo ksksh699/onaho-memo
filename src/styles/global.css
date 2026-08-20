@@ -128,7 +128,7 @@ main {
   text-transform: uppercase;
 }
 
-.card h2 {
+.card h3 {
   font-family: 'Shippori Mincho', serif;
   font-size: 0.95rem;
   font-weight: 500;
@@ -224,6 +224,28 @@ main {
 @media (max-width: 640px) {
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* スマホでは商品カードの画像が大きくなりすぎるため、1画面に2列表示する */
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.7rem;
+  }
+
+  .card .body {
+    padding: 0.6rem;
+  }
+
+  .card .maker {
+    font-size: 0.62rem;
+  }
+
+  .card h3 {
+    font-size: 0.78rem;
+  }
+
+  .card .price {
+    font-size: 0.75rem;
   }
 }
 .toolbar {
