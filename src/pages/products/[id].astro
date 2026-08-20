@@ -31,17 +31,29 @@ const stockLabel = stockLabels[stock] ?? stock;
 const imageUrl = rawData.imageURL?.list ?? product.image_url;
 const listPrice = rawData.prices?.list_price ? Number(rawData.prices.list_price) : null;
 const hasDiscount = listPrice && product.price && listPrice > product.price;
-const { data: publicReviews } = await supabase
-  .from('checks')
-  .select(
-    'rating, review_title, review_text, tier, updated_at, item_ratings, detail_review_title, detail_review_text, review_images, retirement_reason, similar_products'
-  )
-  .eq('product_id', product.id)
-  .eq('is_public', true)
-  .or(
-    'review_text.not.is.null,detail_review_text.not.is.null,item_ratings.not.is.null,review_images.not.is.null,similar_products.not.is.null'
-  )
-  .order('updated_at', { ascending: false });
+
+// 以下3つはお互いに依存しない問い合わせなので、Promise.allでまとめて並列実行する
+const [publicReviewsResult, ratingResult, onakingLinkResult] = await Promise.all([
+  supabase
+    .from('checks')
+    .select(
+      'rating, review_title, review_text, tier, updated_at, item_ratings, detail_review_title, detail_review_text, review_images, retirement_reason, similar_products'
+    )
+    .eq('product_id', product.id)
+    .eq('is_public', true)
+    .or(
+      'review_text.not.is.null,detail_review_text.not.is.null,item_ratings.not.is.null,review_images.not.is.null,similar_products.not.is.null'
+    )
+    .order('updated_at', { ascending: false }),
+  supabase.rpc('get_product_ratings', { product_ids: [product.id] }),
+  supabase
+    .from('onaking_links')
+    .select('onaking_url')
+    .eq('product_id', product.id)
+    .maybeSingle(),
+]);
+
+const { data: publicReviews } = publicReviewsResult;
 
 const TIER_LABELS_DISPLAY = { first: '一軍', second: '二軍', retired: '引退' };
 const ITEM_LABELS_DISPLAY = {
@@ -52,9 +64,7 @@ const ITEM_LABELS_DISPLAY = {
   fidelity: 'メーカー説明一致度',
   durability: '耐久性',
 };
-const { data: ratingData } = await supabase.rpc('get_product_ratings', {
-  product_ids: [product.id],
-});
+const ratingData = ratingResult.data;
 const productRating = ratingData?.[0];
 const ratingText = productRating
   ? `オナホめも評価: ${'★'.repeat(Math.round(productRating.avg_rating))}${'☆'.repeat(5 - Math.round(productRating.avg_rating))} ${productRating.avg_rating}点(${productRating.rating_count}件)`
@@ -62,11 +72,7 @@ const ratingText = productRating
 
 const releaseDateDisplay = product.release_date_text || product.release_date;
 
-const { data: onakingLinkData } = await supabase
-  .from('onaking_links')
-  .select('onaking_url')
-  .eq('product_id', product.id)
-  .maybeSingle();
+const onakingLinkData = onakingLinkResult.data;
 const onakingUrl = onakingLinkData?.onaking_url ?? null;
 ---
 

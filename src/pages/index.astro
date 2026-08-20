@@ -3,31 +3,123 @@ import { supabase } from '../lib/supabase.js';
 import '../styles/global.css';
 
 const PAGE_SIZE = 60;
+const CAMPAIGN_KEYWORDS = ['セール', '特価', '祭', 'キャンペーン', 'OFF', '割引'];
+const RANKING_SELECT =
+  'id, dmm_content_id, name, maker, price, image_url, dmm_review_average, dmm_review_count, site_rating_avg, site_rating_count, want_count, used_count, monthly_view_count';
 
-const { data: products, error } = await supabase
-  .from('products_with_stats')
-  .select(
-    'id, dmm_content_id, name, maker, price, image_url, dmm_review_average, dmm_review_count, raw_data, genre_tags, site_rating_avg, site_rating_count, want_count, release_date'
-  )
-  .eq('is_onahole', true)
-  .order('release_date', { ascending: false, nullsFirst: false })
-  .range(0, PAGE_SIZE - 1);
+const NEW_ARRIVAL_DAYS = 14;
+const newArrivalCutoff = new Date();
+newArrivalCutoff.setDate(newArrivalCutoff.getDate() - NEW_ARRIVAL_DAYS);
+const newArrivalCutoffStr = newArrivalCutoff.toISOString().slice(0, 10);
+const todayStr = new Date().toISOString().slice(0, 10);
 
-const { count } = await supabase
-  .from('products')
-  .select('*', { count: 'exact', head: true })
-  .eq('is_onahole', true);
+// 以下はお互いに依存しない問い合わせなので、1つずつ直列で待つのではなく
+// Promise.allでまとめて並列実行することで、体感速度を大きく改善している。
+// (直列だと「全部の合計時間」、並列だと「一番遅い1つ分の時間」で済む)
+const [
+  productsResult,
+  countResult,
+  memberCountResult,
+  makerRowsResult,
+  allTagsResult,
+  minDateResult,
+  maxDateResult,
+  newArrivalRankingResult,
+  wantRankingResult,
+  usedRankingResult,
+  siteRatingRankingResult,
+  fanzaRankingResult,
+  monthlyViewRankingResult,
+  newlyOnSaleResult,
+] = await Promise.all([
+  supabase
+    .from('products_with_stats')
+    .select(
+      'id, dmm_content_id, name, maker, price, image_url, dmm_review_average, dmm_review_count, raw_data, genre_tags, site_rating_avg, site_rating_count, want_count, release_date'
+    )
+    .eq('is_onahole', true)
+    .order('release_date', { ascending: false, nullsFirst: false })
+    .range(0, PAGE_SIZE - 1),
+  supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_onahole', true),
+  supabase.rpc('get_member_count'),
+  supabase.from('products').select('maker').eq('is_onahole', true).not('maker', 'is', null).range(0, 4999),
+  supabase.from('products').select('genre_tags').eq('is_onahole', true).range(0, 4999),
+  supabase
+    .from('products')
+    .select('release_date')
+    .eq('is_onahole', true)
+    .not('release_date', 'is', null)
+    .order('release_date', { ascending: true })
+    .limit(1),
+  supabase
+    .from('products')
+    .select('release_date')
+    .eq('is_onahole', true)
+    .not('release_date', 'is', null)
+    .order('release_date', { ascending: false })
+    .limit(1),
+  supabase
+    .from('products_with_stats')
+    .select(`${RANKING_SELECT}, release_date`)
+    .eq('is_onahole', true)
+    .gte('release_date', newArrivalCutoffStr)
+    .lte('release_date', todayStr)
+    .order('release_date', { ascending: false })
+    .limit(10),
+  supabase
+    .from('products_with_stats')
+    .select(RANKING_SELECT)
+    .eq('is_onahole', true)
+    .gt('want_count', 0)
+    .order('want_count', { ascending: false })
+    .limit(10),
+  supabase
+    .from('products_with_stats')
+    .select(RANKING_SELECT)
+    .eq('is_onahole', true)
+    .gt('used_count', 0)
+    .order('used_count', { ascending: false })
+    .limit(10),
+  supabase
+    .from('products_with_stats')
+    .select(RANKING_SELECT)
+    .eq('is_onahole', true)
+    .gte('site_rating_count', 3)
+    .order('site_rating_avg', { ascending: false })
+    .order('site_rating_count', { ascending: false })
+    .limit(10),
+  supabase
+    .from('products_with_stats')
+    .select(RANKING_SELECT)
+    .eq('is_onahole', true)
+    .gt('dmm_review_count', 0)
+    .order('dmm_review_count', { ascending: false })
+    .order('dmm_review_average', { ascending: false })
+    .limit(10),
+  supabase
+    .from('products_with_stats')
+    .select(RANKING_SELECT)
+    .eq('is_onahole', true)
+    .gt('monthly_view_count', 0)
+    .order('monthly_view_count', { ascending: false })
+    .limit(10),
+  supabase.rpc('refresh_sale_watch', { new_arrival_days: NEW_ARRIVAL_DAYS }),
+]);
 
-const { data: memberCountData } = await supabase.rpc('get_member_count');
-const memberCount = memberCountData ?? 0;
-
-const makerRows_result = await supabase
-  .from('products')
-  .select('maker')
-  .eq('is_onahole', true)
-  .not('maker', 'is', null)
-  .range(0, 4999);
-const makerRows = makerRows_result.data;
+const { data: products, error } = productsResult;
+const { count } = countResult;
+const memberCount = memberCountResult.data ?? 0;
+const makerRows = makerRowsResult.data;
+const allTagsData = allTagsResult.data;
+const minDateRow = minDateResult.data;
+const maxDateRow = maxDateResult.data;
+const newArrivalRankingData = newArrivalRankingResult.data;
+const wantRankingData = wantRankingResult.data;
+const usedRankingData = usedRankingResult.data;
+const siteRatingRankingData = siteRatingRankingResult.data;
+const fanzaRankingData = fanzaRankingResult.data;
+const monthlyViewRankingData = monthlyViewRankingResult.data;
+const newlyOnSaleData = newlyOnSaleResult.data;
 
 const makerCounts = {};
 for (const row of makerRows ?? []) {
@@ -37,13 +129,6 @@ const topMakers = Object.entries(makerCounts)
   .sort((a, b) => b[1] - a[1])
   .slice(0, 40)
   .map(([name]) => name);
-  const CAMPAIGN_KEYWORDS = ['セール', '特価', '祭', 'キャンペーン', 'OFF', '割引'];
-
-const { data: allTagsData } = await supabase
-  .from('products')
-  .select('genre_tags')
-  .eq('is_onahole', true)
-  .range(0, 4999);
 
 const allTagsSet = new Set();
 for (const row of allTagsData ?? []) {
@@ -66,20 +151,6 @@ const topTags = Object.entries(tagCounts)
   .slice(0, 40)
   .map(([name]) => name);
 
-const { data: minDateRow } = await supabase
-  .from('products')
-  .select('release_date')
-  .eq('is_onahole', true)
-  .not('release_date', 'is', null)
-  .order('release_date', { ascending: true })
-  .limit(1);
-const { data: maxDateRow } = await supabase
-  .from('products')
-  .select('release_date')
-  .eq('is_onahole', true)
-  .not('release_date', 'is', null)
-  .order('release_date', { ascending: false })
-  .limit(1);
 const minYear = minDateRow?.[0]?.release_date
   ? new Date(minDateRow[0].release_date).getFullYear()
   : null;
@@ -91,69 +162,6 @@ if (minYear && maxYear) {
   for (let y = maxYear; y >= minYear; y--) yearOptions.push(y);
 }
 
-const RANKING_SELECT =
-  'id, dmm_content_id, name, maker, price, image_url, dmm_review_average, dmm_review_count, site_rating_avg, site_rating_count, want_count, used_count, monthly_view_count';
-
-const NEW_ARRIVAL_DAYS = 14;
-const newArrivalCutoff = new Date();
-newArrivalCutoff.setDate(newArrivalCutoff.getDate() - NEW_ARRIVAL_DAYS);
-const newArrivalCutoffStr = newArrivalCutoff.toISOString().slice(0, 10);
-const todayStr = new Date().toISOString().slice(0, 10);
-
-const { data: newArrivalRankingData } = await supabase
-  .from('products_with_stats')
-  .select(`${RANKING_SELECT}, release_date`)
-  .eq('is_onahole', true)
-  .gte('release_date', newArrivalCutoffStr)
-  .lte('release_date', todayStr)
-  .order('release_date', { ascending: false })
-  .limit(10);
-
-const { data: wantRankingData } = await supabase
-  .from('products_with_stats')
-  .select(RANKING_SELECT)
-  .eq('is_onahole', true)
-  .gt('want_count', 0)
-  .order('want_count', { ascending: false })
-  .limit(10);
-
-const { data: usedRankingData } = await supabase
-  .from('products_with_stats')
-  .select(RANKING_SELECT)
-  .eq('is_onahole', true)
-  .gt('used_count', 0)
-  .order('used_count', { ascending: false })
-  .limit(10);
-
-const { data: siteRatingRankingData } = await supabase
-  .from('products_with_stats')
-  .select(RANKING_SELECT)
-  .eq('is_onahole', true)
-  .gte('site_rating_count', 3)
-  .order('site_rating_avg', { ascending: false })
-  .order('site_rating_count', { ascending: false })
-  .limit(10);
-
-const { data: fanzaRankingData } = await supabase
-  .from('products_with_stats')
-  .select(RANKING_SELECT)
-  .eq('is_onahole', true)
-  .gt('dmm_review_count', 0)
-  .order('dmm_review_count', { ascending: false })
-  .order('dmm_review_average', { ascending: false })
-  .limit(10);
-
-const { data: monthlyViewRankingData } = await supabase
-  .from('products_with_stats')
-  .select(RANKING_SELECT)
-  .eq('is_onahole', true)
-  .gt('monthly_view_count', 0)
-  .order('monthly_view_count', { ascending: false })
-  .limit(10);
-
-const { data: newlyOnSaleData } = await supabase.rpc('refresh_sale_watch', {
-  new_arrival_days: NEW_ARRIVAL_DAYS,
-});
 const newlyOnSaleCount = (newlyOnSaleData ?? []).length;
 
 const newInfoItems = (newArrivalRankingData ?? []).map((p) => ({
