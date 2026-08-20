@@ -211,8 +211,8 @@ const RANKINGS = [
     <header class="hero">
       <p class="eyebrow">ONAHOLE CATALOG</p>
       <h1>
-        使ったオナホールを<strong>記録</strong>して、<br />
-        <strong>発見</strong>しよう。
+        使ったオナホールを<strong>メモ</strong>して<br />
+        <strong>コレクション</strong>しよう。
       </h1>
       <p class="lead">
         オナホめもは、使ったオナホールの記録ができるWebサービスです。
@@ -248,6 +248,8 @@ const RANKINGS = [
               <span class={`new-info-tag new-info-tag-${p.tag.toLowerCase()}`}>{p.tag}</span>
               {p.dmm_content_id ? (
                 <a href={`/products/${p.dmm_content_id}/`} class="new-info-link">{p.name}</a>
+              ) : p.id === 'sale-summary' ? (
+                <button type="button" class="new-info-link new-info-sale-trigger">{p.name}</button>
               ) : (
                 <span class="new-info-link new-info-link-text">{p.name}</span>
               )}
@@ -743,6 +745,16 @@ const RANKINGS = [
       saleFilter.addEventListener('change', () => reload({ resetPage: true }));
       yearFromSelect.addEventListener('change', () => reload({ resetPage: true }));
       yearToSelect.addEventListener('change', () => reload({ resetPage: true }));
+
+      // 新着情報の「〜件の商品が新しくセール対象になりました」をクリックしたら、
+      // セール対象のみのフィルターをオンにして一覧を絞り込む
+      const saleTrigger = document.querySelector('.new-info-sale-trigger');
+      if (saleTrigger) {
+        saleTrigger.addEventListener('click', () => {
+          saleFilter.checked = true;
+          reload({ resetPage: true });
+        });
+      }
 
       let priceTimeout;
       function schedulePriceReload() {
