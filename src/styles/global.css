@@ -26,6 +26,37 @@ a {
   text-decoration: none;
 }
 
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.site-header .site-logo {
+  font-family: 'Shippori Mincho', serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.site-header .site-logo:hover {
+  color: var(--accent);
+}
+
+.site-header .site-header-link {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.site-header .site-header-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .hero {
   padding: 4rem 1.5rem 3rem;
   border-bottom: 1px solid var(--border);
@@ -129,7 +160,7 @@ main {
   text-transform: uppercase;
 }
 
-.card h2 {
+.card h3 {
   font-family: 'Shippori Mincho', serif;
   font-size: 0.95rem;
   font-weight: 500;
@@ -225,6 +256,28 @@ main {
 @media (max-width: 640px) {
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* スマホでは商品カードの画像が大きくなりすぎるため、1画面に2列表示する */
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.7rem;
+  }
+
+  .card .body {
+    padding: 0.6rem;
+  }
+
+  .card .maker {
+    font-size: 0.62rem;
+  }
+
+  .card h3 {
+    font-size: 0.78rem;
+  }
+
+  .card .price {
+    font-size: 0.75rem;
   }
 
   .detail {
@@ -2632,6 +2685,16 @@ main {
 .new-info-link-text {
   color: var(--text-muted);
   cursor: default;
+}
+
+.new-info-sale-trigger {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .manual-badge {
