@@ -28,7 +28,12 @@ const stockLabels = {
 };
 const stock = rawData.stock;
 const stockLabel = stockLabels[stock] ?? stock;
-const imageUrl = rawData.imageURL?.list ?? product.image_url;
+const imageUrlSmall = rawData.imageURL?.list ?? product.image_url;
+// 一覧用サムネイル(90x120程度)は詳細ページで引き伸ばすとぼやけるため、
+// DMMの命名規則(...pt.jpg → ...pl.jpg)で高解像度版を推測して優先表示する。
+// 存在しない場合はクライアント側のonerrorで元のサムネイルに自動フォールバックする。
+const imageUrlLarge = imageUrlSmall ? imageUrlSmall.replace(/pt\.jpg(\?.*)?$/, 'pl.jpg$1') : imageUrlSmall;
+const imageUrl = imageUrlLarge;
 const listPrice = rawData.prices?.list_price ? Number(rawData.prices.list_price) : null;
 const hasDiscount = listPrice && product.price && listPrice > product.price;
 
@@ -135,7 +140,12 @@ const onakingUrl = onakingLinkData?.onaking_url ?? null;
     </header>
     <main class="detail">
       <div class="detail-grid">
-        <img src={imageUrl} alt={product.name} />
+        <img
+          src={imageUrl}
+          alt={product.name}
+          data-fallback={imageUrlSmall}
+          onerror="if(this.src!==this.dataset.fallback){this.onerror=null;this.src=this.dataset.fallback;}"
+        />
         <div>
           <p class="maker">
             {product.maker ? (
