@@ -26,37 +26,6 @@ a {
   text-decoration: none;
 }
 
-.site-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.1rem 1.5rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.site-header .site-logo {
-  font-family: 'Shippori Mincho', serif;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: 0.02em;
-}
-
-.site-header .site-logo:hover {
-  color: var(--accent);
-}
-
-.site-header .site-header-link {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-.site-header .site-header-link:hover {
-  color: var(--accent);
-  text-decoration: underline;
-}
-
 .hero {
   padding: 4rem 1.5rem 3rem;
   border-bottom: 1px solid var(--border);
@@ -73,10 +42,11 @@ a {
 
 .hero h1 {
   font-family: 'Shippori Mincho', serif;
-  font-size: clamp(2rem, 5vw, 3rem);
+  font-size: clamp(1.5rem, 7vw, 3rem);
   font-weight: 700;
   margin: 0 0 1rem;
   letter-spacing: 0.03em;
+  overflow-wrap: break-word;
 }
 
 .hero .lead {
@@ -159,7 +129,7 @@ main {
   text-transform: uppercase;
 }
 
-.card h3 {
+.card h2 {
   font-family: 'Shippori Mincho', serif;
   font-size: 0.95rem;
   font-weight: 500;
@@ -257,26 +227,35 @@ main {
     grid-template-columns: 1fr;
   }
 
-  /* スマホでは商品カードの画像が大きくなりすぎるため、1画面に2列表示する */
-  .grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.7rem;
+  .detail {
+    padding-top: 0.5rem;
   }
 
-  .card .body {
-    padding: 0.6rem;
+  .detail-grid img {
+    max-width: 200px;
+    margin: 0 auto;
   }
 
-  .card .maker {
-    font-size: 0.62rem;
+  .detail-grid h1 {
+    font-size: 1.25rem;
+    margin: 0.2rem 0 0.6rem;
   }
 
-  .card h3 {
-    font-size: 0.78rem;
+  .check-widget {
+    margin-top: 1rem;
+    padding: 0.8rem;
   }
 
-  .card .price {
-    font-size: 0.75rem;
+  .hero {
+    padding: 3rem 1rem 2.5rem;
+  }
+
+  .hero-stats {
+    gap: 1rem 1.8rem;
+  }
+
+  .hero .stat-number {
+    font-size: 1.7rem;
   }
 }
 .toolbar {
@@ -424,6 +403,7 @@ main {
 .hero-stats {
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 3rem;
   margin-bottom: 0.5rem;
 }
@@ -577,6 +557,139 @@ main {
   align-items: center;
   gap: 0.6rem;
   margin-bottom: 0.5rem;
+}
+
+.review-author {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.review-author:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.review-like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.8rem;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.review-like-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.review-like-btn.liked {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.review-like-icon {
+  font-size: 0.95rem;
+}
+
+.review-comments {
+  margin-top: 0.9rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.review-comment-list {
+  list-style: none;
+  margin: 0 0 0.7rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.review-comment-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+}
+
+.review-comment-author {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.review-comment-body {
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.review-comment-delete-btn {
+  margin-top: 0.4rem;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.review-comment-delete-btn:hover {
+  color: var(--accent);
+}
+
+.review-comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.review-comment-input {
+  width: 100%;
+  min-height: 2.4rem;
+  resize: vertical;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  font-family: inherit;
+}
+
+.review-comment-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.review-comment-submit-btn {
+  align-self: flex-end;
+  background: var(--accent);
+  border: none;
+  border-radius: 999px;
+  padding: 0.4rem 1.1rem;
+  font-size: 0.8rem;
+  color: #fff;
+  cursor: pointer;
+}
+
+.review-comment-submit-btn:hover {
+  opacity: 0.88;
 }
 
 .review-stars {
@@ -969,6 +1082,166 @@ main {
   color: var(--text-muted);
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 公開ページの「棚に並んでいる」風レイアウト */
+.shelf-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1.6rem 1rem;
+}
+
+.shelf-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding-bottom: 0.9rem;
+  background: linear-gradient(to bottom, transparent calc(100% - 0.9rem), #5a4632 calc(100% - 0.9rem));
+  border-radius: 4px;
+}
+
+.shelf-cover img {
+  width: 100%;
+  max-width: 140px;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+  background: #000;
+}
+
+.shelf-stars {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+.shelf-stars-empty {
+  margin-top: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.shelf-name {
+  margin: 0.3rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .shelf-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* マイページの表示切り替え(グリッド/リスト) */
+.mp-view-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.mp-view-btn {
+  background: var(--bg-card);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.mp-view-btn:hover {
+  border-color: var(--accent);
+}
+
+.mp-view-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.mp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.mp-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem;
+}
+
+.mp-row.mp-row-best {
+  border-color: var(--accent);
+}
+
+.mp-row-link {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.mp-row-link img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #000;
+  flex-shrink: 0;
+}
+
+.mp-row-body {
+  min-width: 0;
+}
+
+.mp-row-body h3 {
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin: 0 0 0.3rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mp-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.mp-row-actions .top3-set-btn,
+.mp-row-actions .best-review-set-btn {
+  display: inline-block;
+  width: auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.68rem;
+}
+
+.mp-stat-wide .mp-stat-num {
+  font-size: 1.35rem;
 }
 
 .mp-memo {
@@ -2359,16 +2632,6 @@ main {
 .new-info-link-text {
   color: var(--text-muted);
   cursor: default;
-}
-
-.new-info-sale-trigger {
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
 }
 
 .manual-badge {
