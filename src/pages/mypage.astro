@@ -9,8 +9,8 @@ import '../styles/global.css';
     <title>マイページ | オナホめも</title>
   </head>
   <body>
-    <header>
-      <a href="/">← 一覧に戻る</a>
+    <header class="site-header">
+      <a href="/" class="site-logo">オナホめも</a>
     </header>
     <main class="mypage-main">
       <h1 class="mypage-title">マイページ</h1>
@@ -1671,9 +1671,7 @@ import '../styles/global.css';
           currentViewMode = viewBtn.dataset.view;
           try {
             localStorage.setItem('onahole_view_mode', currentViewMode);
-          } catch (err) {
-            // localStorageが使えない環境は無視
-          }
+          } catch (err) {}
           renderProductLists();
         }
       });

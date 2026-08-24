@@ -136,13 +136,11 @@ const newlyOnSaleData = newlyOnSaleResult.data;
 // SQL関数(GROUP BY)側で行っており、ここではすでに集計済み・件数降順の
 // データが返ってくる。以前は商品を最大5000件取得してJS側で数えていたが、
 // 集計をDB側に寄せることでネットワーク転送量と処理時間を大幅に削減している。
-const topMakers = (makerRows ?? []).slice(0, 40).map((row) => row.maker);
+const topMakers = (makerRows ?? []).slice(0, 40);
 
 const campaignTags = (allTagsData ?? [])
   .filter((row) => CAMPAIGN_KEYWORDS.some((k) => row.tag.includes(k)))
   .map((row) => row.tag);
-
-const topTags = (allTagsData ?? []).slice(0, 40).map((row) => row.tag);
 
 const minYear = minDateRow?.[0]?.release_date
   ? new Date(minDateRow[0].release_date).getFullYear()
@@ -224,8 +222,8 @@ const RANKINGS = [
     <header class="hero">
       <p class="eyebrow">ONAHOLE CATALOG</p>
       <h1>
-        使ったオナホールを<strong>記録</strong>して、<br />
-        <strong>発見</strong>しよう。
+        使ったオナホールを<strong>メモ</strong>して<br />
+        <strong>コレクション</strong>しよう。
       </h1>
       <p class="lead">
         オナホめもは、使ったオナホールの記録ができるWebサービスです。
@@ -265,6 +263,8 @@ const RANKINGS = [
               <span class={`new-info-tag new-info-tag-${p.tag.toLowerCase()}`}>{p.tag}</span>
               {p.dmm_content_id ? (
                 <a href={`/products/${p.dmm_content_id}/`} class="new-info-link">{p.name}</a>
+              ) : p.id === 'sale-summary' ? (
+                <button type="button" class="new-info-link new-info-sale-trigger">{p.name}</button>
               ) : (
                 <span class="new-info-link new-info-link-text">{p.name}</span>
               )}
@@ -345,17 +345,7 @@ const RANKINGS = [
           <select id="maker-select">
             <option value="">すべて</option>
             {topMakers.map((m) => (
-              <option value={m}>{m}</option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          ジャンル
-          <select id="tag-select">
-            <option value="">すべて</option>
-            {topTags.map((t) => (
-              <option value={t}>{t}</option>
+              <option value={m.maker}>{m.maker} ({m.cnt})</option>
             ))}
           </select>
         </label>
@@ -438,7 +428,6 @@ const RANKINGS = [
         return campaignTags.includes(tag);
       }
       const makerSelect = document.getElementById('maker-select');
-      const tagSelect = document.getElementById('tag-select');
       const yearFromSelect = document.getElementById('year-from-select');
       const yearToSelect = document.getElementById('year-to-select');
       const priceMinInput = document.getElementById('price-min-input');
@@ -562,9 +551,8 @@ const RANKINGS = [
         return map;
       }
 
-      function applyFilters(q, { maker, tag, searchTerm, yearFrom, yearTo, priceMin, priceMax }) {
+      function applyFilters(q, { maker, searchTerm, yearFrom, yearTo, priceMin, priceMax }) {
         if (maker) q = q.eq('maker', maker);
-        if (tag) q = q.contains('genre_tags', [tag]);
         if (searchTerm) q = q.ilike('name', `%${searchTerm}%`);
         if (saleFilter.checked) q = q.overlaps('genre_tags', campaignTags);
         if (onakingFilter.checked) q = q.in('id', onakingProductIds);
@@ -580,7 +568,6 @@ const RANKINGS = [
 
         const filters = {
           maker: makerSelect.value,
-          tag: tagSelect.value,
           searchTerm: searchInput.value.trim(),
           yearFrom: yearFromSelect.value,
           yearTo: yearToSelect.value,
@@ -782,9 +769,18 @@ const RANKINGS = [
       makerSelect.addEventListener('change', () => reload({ resetPage: true }));
       saleFilter.addEventListener('change', () => reload({ resetPage: true }));
       onakingFilter.addEventListener('change', () => reload({ resetPage: true }));
-      tagSelect.addEventListener('change', () => reload({ resetPage: true }));
       yearFromSelect.addEventListener('change', () => reload({ resetPage: true }));
       yearToSelect.addEventListener('change', () => reload({ resetPage: true }));
+
+      // 新着情報の「〜件の商品が新しくセール対象になりました」をクリックしたら、
+      // セール対象のみのフィルターをオンにして一覧を絞り込む
+      const saleTrigger = document.querySelector('.new-info-sale-trigger');
+      if (saleTrigger) {
+        saleTrigger.addEventListener('click', () => {
+          saleFilter.checked = true;
+          reload({ resetPage: true });
+        });
+      }
 
       let priceTimeout;
       function schedulePriceReload() {
@@ -985,11 +981,10 @@ const RANKINGS = [
         const ids = initialProducts.map((p) => p.id);
         userChecksMap = await loadUserChecksMap(ids);
 
-        // 商品詳細ページのメーカー名/タグのリンクから来た場合、
+        // 商品詳細ページのメーカー名リンクから来た場合、
         // 絞り込みを引き継いで検索結果を絞り込んだ状態にする
         const urlParams = new URLSearchParams(window.location.search);
         const urlMaker = urlParams.get('maker');
-        const urlTag = urlParams.get('tag');
         let needsReload = false;
 
         if (urlMaker) {
@@ -1000,17 +995,6 @@ const RANKINGS = [
             makerSelect.appendChild(opt);
           }
           makerSelect.value = urlMaker;
-          needsReload = true;
-        }
-
-        if (urlTag) {
-          if (![...tagSelect.options].some((o) => o.value === urlTag)) {
-            const opt = document.createElement('option');
-            opt.value = urlTag;
-            opt.textContent = urlTag;
-            tagSelect.appendChild(opt);
-          }
-          tagSelect.value = urlTag;
           needsReload = true;
         }
 
