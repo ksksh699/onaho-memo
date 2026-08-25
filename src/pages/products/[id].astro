@@ -126,6 +126,19 @@ const releaseDateDisplay = product.release_date_text || product.release_date;
 
 const onakingLinkData = onakingLinkResult.data;
 const onakingUrl = onakingLinkData?.onaking_url ?? null;
+
+// 他ショップの購入リンク・価格比較(小規模パイロット導入中。対象商品のみ登録済み)
+const shopLinks = [];
+if (product.affiliate_url) {
+  shopLinks.push({ name: 'DMM', price: product.price, url: product.affiliate_url });
+}
+if (product.nls_url) {
+  shopLinks.push({ name: 'NLS', price: product.nls_price, url: product.nls_url });
+}
+if (product.daimaoh_url) {
+  shopLinks.push({ name: '大魔王', price: product.daimaoh_price, url: product.daimaoh_url });
+}
+shopLinks.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
 ---
 
 <html lang="ja">
@@ -206,10 +219,29 @@ const onakingUrl = onakingLinkData?.onaking_url ?? null;
 
           {product.manual_note && <p class="manual-note">{product.manual_note}</p>}
 
-          {product.affiliate_url && (
-            <a class="buy-link" href={product.affiliate_url} target="_blank" rel="noopener nofollow">
-              {product.is_manual ? '購入ページを見る' : 'DMMで詳細を見る'}
-            </a>
+          {shopLinks.length > 0 ? (
+            <div class="shop-links">
+              <p class="shop-links-title">購入サイトを比較{shopLinks.length > 1 ? '(価格は税込)' : ''}</p>
+              <ul class="shop-links-list">
+                {shopLinks.map((s, i) => (
+                  <li class={`shop-link-item ${i === 0 && shopLinks.length > 1 ? 'cheapest' : ''}`}>
+                    <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link">
+                      <span class="shop-link-name">{s.name}</span>
+                      <span class="shop-link-price">
+                        {s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし'}
+                      </span>
+                      {i === 0 && shopLinks.length > 1 && <span class="shop-link-badge">最安</span>}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            product.affiliate_url && (
+              <a class="buy-link" href={product.affiliate_url} target="_blank" rel="noopener nofollow">
+                {product.is_manual ? '購入ページを見る' : 'DMMで詳細を見る'}
+              </a>
+            )
           )}
 
           <div id="check-widget" class="check-widget" data-product-id={product.id}>
