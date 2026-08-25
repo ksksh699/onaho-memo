@@ -253,6 +253,74 @@ main {
   font-weight: 500;
 }
 
+.shop-links {
+  margin-top: 1rem;
+}
+
+.shop-links-title {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0 0 0.4rem;
+}
+
+.shop-links-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.shop-link-item {
+  margin: 0;
+}
+
+.shop-link {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 1rem;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 500;
+  transition: border-color 0.15s;
+}
+
+.shop-link:hover {
+  border-color: var(--accent);
+}
+
+.shop-link-item.cheapest .shop-link {
+  border-color: var(--accent);
+  background: var(--bg-card);
+}
+
+.shop-link-name {
+  min-width: 4.5em;
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 0.85rem;
+}
+
+.shop-link-price {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.shop-link-badge {
+  margin-left: auto;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
 @media (max-width: 640px) {
   .detail-grid {
     grid-template-columns: 1fr;
