@@ -128,22 +128,55 @@ const onakingLinkData = onakingLinkResult.data;
 const onakingUrl = onakingLinkData?.onaking_url ?? null;
 
 // 他ショップの購入リンク・価格比較(小規模パイロット導入中。対象商品のみ登録済み)
+// ぴゅあらばショップはバナーブリッジのASP審査待ちのため、承認後にpyuarabu_url/
+// pyuarabu_priceを登録すれば自動的に表示順に組み込まれる(現時点では未登録なので出ない)
 const shopLinks = [];
 if (product.affiliate_url) {
-  shopLinks.push({ name: 'FANZA', price: product.price, url: product.affiliate_url });
+  shopLinks.push({ key: 'fanza', name: 'FANZA', price: product.price, url: product.affiliate_url });
+}
+if (product.pyuarabu_url) {
+  shopLinks.push({ key: 'pyuarabu', name: 'ぴゅあらばショップ', price: product.pyuarabu_price, url: product.pyuarabu_url });
 }
 if (product.nls_url) {
-  shopLinks.push({ name: 'NLS', price: product.nls_price, url: product.nls_url });
+  shopLinks.push({ key: 'nls', name: 'NLS', price: product.nls_price, url: product.nls_url });
 }
 if (product.daimaoh_url) {
-  shopLinks.push({ name: '大魔王', price: product.daimaoh_price, url: product.daimaoh_url });
+  shopLinks.push({ key: 'daimaoh', name: '大魔王', price: product.daimaoh_price, url: product.daimaoh_url });
 }
-shopLinks.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
-// 登録サイト数が増えても縦に間延びしないよう、安い順に上位のみ初期表示し、
+
+// 表示順は「安い順」ではなく固定の優先順位:
+// 1) FANZA 2) ぴゅあらばショップ 3) 残りの中で一番安いサイト(同額ならNLSを優先)
+// FANZA/ぴゅあらばが未登録の場合はその枠を詰めて表示する
+const FIXED_ORDER = { fanza: 0, pyuarabu: 1 };
+const fixedShopLinks = shopLinks
+  .filter((s) => s.key in FIXED_ORDER)
+  .sort((a, b) => FIXED_ORDER[a.key] - FIXED_ORDER[b.key]);
+const restShopLinks = shopLinks
+  .filter((s) => !(s.key in FIXED_ORDER))
+  .sort((a, b) => {
+    const diff = (a.price ?? Infinity) - (b.price ?? Infinity);
+    if (diff !== 0) return diff;
+    if (a.key === 'nls') return -1;
+    if (b.key === 'nls') return 1;
+    return 0;
+  });
+const orderedShopLinks = [...fixedShopLinks, ...restShopLinks];
+
+// 「最安」バッジは表示順にかかわらず、実際に一番安いサイトにだけ付ける
+const cheapestPrice = shopLinks.reduce(
+  (min, s) => (s.price != null && s.price < min ? s.price : min),
+  Infinity
+);
+const showCheapestBadge = shopLinks.length > 1 && Number.isFinite(cheapestPrice);
+const cheapestIndex = showCheapestBadge
+  ? orderedShopLinks.findIndex((s) => s.price === cheapestPrice)
+  : -1;
+
+// 登録サイト数が増えても縦に間延びしないよう、上位のみ初期表示し、
 // 残りは<details>で折りたたんでおく
 const SHOP_LINKS_VISIBLE = 3;
-const visibleShopLinks = shopLinks.slice(0, SHOP_LINKS_VISIBLE);
-const moreShopLinks = shopLinks.slice(SHOP_LINKS_VISIBLE);
+const visibleShopLinks = orderedShopLinks.slice(0, SHOP_LINKS_VISIBLE);
+const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
 ---
 
 <html lang="ja">
@@ -229,13 +262,13 @@ const moreShopLinks = shopLinks.slice(SHOP_LINKS_VISIBLE);
               <p class="shop-links-title">購入サイトを比較{shopLinks.length > 1 ? '(価格は税込)' : ''}</p>
               <ul class="shop-links-list">
                 {visibleShopLinks.map((s, i) => (
-                  <li class={`shop-link-item ${i === 0 && shopLinks.length > 1 ? 'cheapest' : ''}`}>
+                  <li class={`shop-link-item ${i === cheapestIndex ? 'cheapest' : ''}`}>
                     <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link">
                       <span class="shop-link-name">{s.name}</span>
                       <span class="shop-link-price">
                         {s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし'}
                       </span>
-                      {i === 0 && shopLinks.length > 1 && <span class="shop-link-badge">最安</span>}
+                      {i === cheapestIndex && <span class="shop-link-badge">最安</span>}
                     </a>
                   </li>
                 ))}
