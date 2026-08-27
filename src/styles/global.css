@@ -1477,29 +1477,41 @@ main {
 }
 
 .mp-stats {
-  display: flex;
-  gap: 2rem;
-  margin-bottom: 2.5rem;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 2rem;
 }
 
-.mp-stat {
+.mp-stat-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
+  justify-content: center;
+  gap: 0.3rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 1rem 0.6rem;
+  text-align: center;
 }
 
 .mp-stat-num {
   font-family: 'Noto Sans JP', sans-serif;
-  font-size: 1.8rem;
+  font-size: 1.6rem;
   color: var(--accent);
   font-weight: 700;
+  line-height: 1;
 }
 
-.mp-stat span:last-child {
-  font-size: 0.75rem;
+.mp-stat-label {
+  font-size: 0.72rem;
   color: var(--text-muted);
+}
+
+.mp-stat-card-wide {
+  grid-column: span 2;
 }
 
 .mp-section-title {
@@ -1691,11 +1703,24 @@ main {
   }
 }
 
-/* マイページの表示切り替え(グリッド/リスト) */
+/* マイページのステータスタブ + 表示切り替え(グリッド/リスト) */
+.mp-tabs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.mp-status-tabs {
+  flex: 1 1 auto;
+}
+
 .mp-view-toggle {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  gap: 0.4rem;
+  flex-shrink: 0;
 }
 
 .mp-view-btn {
@@ -1703,8 +1728,12 @@ main {
   color: var(--text-muted);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 0.4rem 0.9rem;
-  font-size: 0.8rem;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
   cursor: pointer;
 }
 
@@ -1715,6 +1744,12 @@ main {
 .mp-view-btn.active {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+.mp-empty-tab {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 1.5rem 0;
 }
 
 .mp-list {
@@ -1791,7 +1826,7 @@ main {
   font-size: 0.68rem;
 }
 
-.mp-stat-wide .mp-stat-num {
+.mp-stat-card-wide .mp-stat-num {
   font-size: 1.35rem;
 }
 
@@ -1801,21 +1836,17 @@ main {
   margin: 0;
   line-height: 1.5;
 }
-.profile-section {
+.profile-header-card-bootstrap {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 1.2rem;
   margin-bottom: 2rem;
   display: flex;
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
-}
-
-.profile-nickname {
-  margin: 0;
-  font-size: 0.9rem;
+  box-shadow: var(--shadow-card);
 }
 
 .profile-hint {
@@ -2791,16 +2822,58 @@ main {
   margin-bottom: 0;
 }
 
-.badge-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 1rem 1.2rem;
+.badge-chips-section {
   margin-bottom: 1.5rem;
+}
+
+.badge-chips-title {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 500;
+  margin: 0 0 0.8rem;
+  color: var(--accent);
+}
+
+.badge-chips-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.8rem;
+}
+
+.badge-chip-card {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
-  flex-wrap: wrap;
+  gap: 0.7rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 0.7rem 0.9rem;
+}
+
+.badge-chip-icon {
+  flex-shrink: 0;
+  width: 2.2rem;
+  height: 2.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  background: var(--bg);
+  border-radius: 50%;
+}
+
+.badge-chip-name {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-weight: 700;
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+.badge-chip-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin: 0.15rem 0 0;
 }
 
 .badge-chip {
@@ -2826,41 +2899,6 @@ main {
   margin: 0;
 }
 
-.maker-badge-section {
-  margin-bottom: 1.5rem;
-}
-
-.maker-badge-title {
-  font-family: 'Noto Sans JP', sans-serif;
-  font-size: 0.95rem;
-  font-weight: 500;
-  margin: 0 0 0.6rem;
-}
-
-.maker-badge-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.maker-badge-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  background: var(--bg-card);
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  border-radius: 999px;
-  padding: 0.3rem 0.8rem;
-  font-size: 0.78rem;
-  font-weight: 500;
-}
-
-.maker-badge-count {
-  color: var(--text-muted);
-  font-weight: 400;
-  font-size: 0.7rem;
-}
 
 .titles-section {
   margin-bottom: 2rem;
@@ -3065,6 +3103,28 @@ main {
   font-size: 0.72rem;
   color: var(--text-muted);
   flex-shrink: 0;
+}
+
+.folder-card-preview {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.7rem;
+}
+
+.folder-card-preview img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #ececeb, #e2e1de);
+}
+
+.folder-card-preview-empty {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1px dashed var(--border);
 }
 
 .folder-card-actions {
@@ -3535,35 +3595,45 @@ main {
   color: var(--text-muted);
 }
 
-.profile-details-section {
+.profile-header-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  margin-bottom: 2rem;
+  border-radius: var(--radius-lg);
+  margin-bottom: 1.5rem;
   overflow: hidden;
+  box-shadow: var(--shadow-card);
 }
 
-.profile-details-header {
-  height: 140px;
+.profile-header-cover {
+  height: 120px;
   background-size: cover;
   background-position: center;
   background-color: var(--bg);
-  position: relative;
 }
 
-.profile-details-header-empty {
-  background: linear-gradient(120deg, var(--bg), var(--border));
+.profile-header-cover-empty {
+  background: linear-gradient(120deg, #dbe9fb, #f3f7fc);
 }
 
-.profile-avatar-wrap {
-  position: absolute;
-  left: 1.2rem;
-  bottom: -34px;
+.profile-header-body {
+  padding: 0 1.4rem 1.4rem;
 }
 
-.profile-avatar {
-  width: 84px;
-  height: 84px;
+.profile-header-top {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: -34px;
+}
+
+.profile-header-avatar-wrap {
+  flex-shrink: 0;
+}
+
+.profile-header-avatar {
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
   object-fit: cover;
   border: 3px solid var(--bg-card);
@@ -3571,30 +3641,94 @@ main {
   background: var(--bg);
 }
 
-.profile-avatar-empty {
-  width: 84px;
-  height: 84px;
-  border-radius: 50%;
-  border: 3px solid var(--bg-card);
+.profile-header-avatar-empty {
   background: var(--border);
 }
 
-.profile-details-body {
-  padding: 2.6rem 1.2rem 1.2rem;
+.profile-header-meta {
+  flex: 1 1 auto;
+  min-width: 160px;
+  padding-bottom: 0.2rem;
+}
+
+.profile-header-name {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.profile-header-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0.25rem 0 0;
+}
+
+.profile-header-sub a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.profile-header-sub a:hover {
+  color: var(--accent);
+}
+
+.profile-header-dot {
+  margin: 0 0.3rem;
+}
+
+.profile-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  padding-bottom: 0.2rem;
+}
+
+.profile-header-btn {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 500;
+  border-radius: var(--radius-pill);
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.profile-header-btn-outline {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.profile-header-btn-outline:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.profile-header-btn-solid {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+}
+
+.profile-header-btn-solid.profile-header-btn-muted {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--text-muted);
 }
 
 .profile-bio {
   font-size: 0.85rem;
   line-height: 1.7;
   white-space: pre-wrap;
-  margin: 0 0 0.8rem;
+  margin: 0.9rem 0 0.8rem;
 }
 
 .profile-sns-links {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin: 0 0 0.8rem;
+  margin: 0 0 0.4rem;
   padding: 0;
   list-style: none;
 }
@@ -3613,12 +3747,6 @@ main {
 .profile-sns-link:hover {
   color: var(--accent);
   border-color: var(--accent);
-}
-
-.profile-visibility {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  margin: 0 0 0.8rem;
 }
 
 .profile-details-edit {

@@ -17,11 +17,9 @@ import SiteFooter from '../components/SiteFooter.astro';
   <body>
     <SiteHeader />
     <main class="mypage-main">
-      <h1 class="mypage-title">マイページ</h1>
-
-      <div id="profile-section" class="profile-section"></div>
-
       <div id="profile-details-container"></div>
+
+      <div id="mp-stats-container"></div>
 
       <div id="top3-container"></div>
 
@@ -29,15 +27,13 @@ import SiteFooter from '../components/SiteFooter.astro';
 
       <div id="oshi-maker-container"></div>
 
+      <div id="badge-section-container"></div>
+
       <div id="folders-container"></div>
 
       <div id="onaking-links-container"></div>
 
       <div id="manual-product-container"></div>
-
-      <div id="badge-section-container"></div>
-
-      <div id="maker-badge-section-container"></div>
 
       <div id="titles-section-container"></div>
 
@@ -51,7 +47,7 @@ import SiteFooter from '../components/SiteFooter.astro';
       import { compressImage } from '../lib/imageCompress.js';
 
       const content = document.getElementById('mypage-content');
-      const profileSection = document.getElementById('profile-section');
+      const statsContainer = document.getElementById('mp-stats-container');
       const top3Container = document.getElementById('top3-container');
       const bestReviewContainer = document.getElementById('best-review-container');
       const oshiMakerContainer = document.getElementById('oshi-maker-container');
@@ -74,6 +70,8 @@ import SiteFooter from '../components/SiteFooter.astro';
       let makerOptionsCache = null;
       let currentFolders = [];
       let editingFolderId = null;
+      let currentNickname = null;
+      let currentFollowingCount = 0;
       let currentAvatarUrl = null;
       let currentHeaderUrl = null;
       let currentBio = null;
@@ -87,6 +85,11 @@ import SiteFooter from '../components/SiteFooter.astro';
       } catch (e) {
         currentViewMode = 'grid';
       }
+      let currentStatusTab = 'used';
+      try {
+        const savedTab = localStorage.getItem('onahole_status_tab');
+        if (savedTab === 'used' || savedTab === 'interested') currentStatusTab = savedTab;
+      } catch (e) {}
       const ADMIN_USER_ID = '278377ee-a457-41bc-ab79-c1be9f4b768e';
 
       const STATUS_LABELS = {
@@ -99,6 +102,7 @@ import SiteFooter from '../components/SiteFooter.astro';
         retired: '引退',
       };
       const STATUS_ORDER = ['used', 'interested'];
+      const STATUS_TAB_ORDER = ['interested', 'used'];
 
       function isOnSale(check) {
         const p = check.products;
@@ -122,25 +126,58 @@ import SiteFooter from '../components/SiteFooter.astro';
         return { current, next };
       }
 
-      function badgeSectionHtml(usedCount) {
+      function badgeSectionHtml(usedCount, checks) {
         const { current, next } = getBadgeInfo(usedCount);
 
-        if (!current) {
-          return `
-            <div class="badge-section">
-              <p class="badge-empty">まだバッジがありません。1本使うと「はじめての一本」バッジがもらえます。</p>
+        const makerCounts = {};
+        for (const c of checks) {
+          const maker = c.products?.maker;
+          if (c.status === 'used' && maker) {
+            makerCounts[maker] = (makerCounts[maker] ?? 0) + 1;
+          }
+        }
+        const makerBadges = Object.entries(makerCounts)
+          .map(([maker, count]) => ({ maker, count, badge: getMakerBadge(count) }))
+          .filter((b) => b.badge)
+          .sort((a, b) => b.count - a.count);
+
+        const chips = [];
+
+        if (current) {
+          const nextText = next
+            ? `次の「${next.name}」まであと${next.threshold - usedCount}本`
+            : `使用本数${current.threshold}本以上`;
+          chips.push(`
+            <div class="badge-chip-card">
+              <span class="badge-chip-icon">🏆</span>
+              <div class="badge-chip-body">
+                <p class="badge-chip-name">${current.name}</p>
+                <p class="badge-chip-sub">${nextText}</p>
+              </div>
             </div>
-          `;
+          `);
         }
 
-        const nextText = next
-          ? `次の「${next.name}」まであと${next.threshold - usedCount}本`
-          : '最高ランクに到達しました';
+        for (const b of makerBadges) {
+          chips.push(`
+            <div class="badge-chip-card">
+              <span class="badge-chip-icon">🏭</span>
+              <div class="badge-chip-body">
+                <p class="badge-chip-name">${b.maker}${b.badge.name}</p>
+                <p class="badge-chip-sub">同メーカー${b.badge.threshold}本以上使用</p>
+              </div>
+            </div>
+          `);
+        }
 
         return `
-          <div class="badge-section">
-            <span class="badge-chip">${current.name}</span>
-            <p class="badge-detail">使った本数: ${usedCount}本 ・ ${nextText}</p>
+          <div class="badge-chips-section">
+            <h2 class="badge-chips-title">バッジ・称号</h2>
+            ${
+              chips.length
+                ? `<div class="badge-chips-row">${chips.join('')}</div>`
+                : `<p class="badge-empty">まだバッジがありません。1本使うと「はじめての一本」バッジがもらえます。</p>`
+            }
           </div>
         `;
       }
@@ -154,38 +191,6 @@ import SiteFooter from '../components/SiteFooter.astro';
 
       function getMakerBadge(count) {
         return MAKER_BADGE_TIERS.find((t) => count >= t.threshold) ?? null;
-      }
-
-      function makerBadgeSectionHtml(checks) {
-        const makerCounts = {};
-        for (const c of checks) {
-          const maker = c.products?.maker;
-          if (c.status === 'used' && maker) {
-            makerCounts[maker] = (makerCounts[maker] ?? 0) + 1;
-          }
-        }
-
-        const badges = Object.entries(makerCounts)
-          .map(([maker, count]) => ({ maker, count, badge: getMakerBadge(count) }))
-          .filter((b) => b.badge)
-          .sort((a, b) => b.count - a.count);
-
-        if (badges.length === 0) return '';
-
-        return `
-          <div class="maker-badge-section">
-            <h2 class="maker-badge-title">メーカーバッジ</h2>
-            <div class="maker-badge-list">
-              ${badges
-                .map(
-                  (b) => `
-                <span class="maker-badge-chip">${b.maker} ${b.badge.name}<span class="maker-badge-count">(${b.count}本)</span></span>
-              `
-                )
-                .join('')}
-            </div>
-          </div>
-        `;
       }
 
       const TITLES = [
@@ -649,6 +654,7 @@ import SiteFooter from '../components/SiteFooter.astro';
       function folderCardHtml(folder, idx, total) {
         const items = (folder.folder_items ?? []).filter((fi) => fi.products);
         const isEditing = editingFolderId === folder.id;
+        const previewItems = items.slice(0, 3);
 
         return `
           <div class="folder-card" data-folder-id="${folder.id}">
@@ -658,7 +664,14 @@ import SiteFooter from '../components/SiteFooter.astro';
                   ? `<input type="text" class="folder-name-input nickname-input" id="folder-name-edit-${folder.id}" value="${folder.name}" maxlength="30" />`
                   : `<h3 class="folder-name">${folder.name}</h3>`
               }
-              <span class="folder-count">${items.length}件</span>
+              <span class="folder-count">${items.length}件を${folder.is_public ? '公開中' : '非公開で保存'}</span>
+            </div>
+            <div class="folder-card-preview">
+              ${
+                previewItems.length
+                  ? previewItems.map((fi) => `<img src="${fi.products.image_url}" alt="" loading="lazy" />`).join('')
+                  : `<div class="folder-card-preview-empty"></div>`
+              }
             </div>
             <div class="folder-card-actions">
               <button type="button" class="folder-move-btn" data-folder-id="${folder.id}" data-dir="up" ${idx === 0 ? 'disabled' : ''}>↑</button>
@@ -1195,7 +1208,7 @@ import SiteFooter from '../components/SiteFooter.astro';
           <a href="/login" class="auth-btn">ログインする</a>
         `;
       }
-      async function renderProfileSection(userId) {
+      async function fetchProfile(userId) {
         const { data: profile } = await supabase
           .from('profiles')
           .select(
@@ -1203,29 +1216,17 @@ import SiteFooter from '../components/SiteFooter.astro';
           )
           .eq('id', userId)
           .maybeSingle();
-
-        if (profile) {
-          profileSection.innerHTML = `
-            <p class="profile-nickname">ニックネーム: <strong>${profile.nickname}</strong></p>
-            <a href="/users/${encodeURIComponent(profile.nickname)}" class="auth-btn">公開ページを見る</a>
-            <a href="/following" class="auth-btn">フォロー中を見る</a>
-            <button id="edit-nickname-btn" class="auth-btn">変更する</button>
-          `;
-          document.getElementById('edit-nickname-btn').addEventListener('click', () => {
-            showNicknameForm(userId, profile.nickname);
-          });
-        } else {
-          showNicknameForm(userId, '');
-        }
         return profile;
       }
 
       function showNicknameForm(userId, current) {
-        profileSection.innerHTML = `
-          <p class="profile-hint">公開プロフィールで使うニックネームを設定してください(他の人と重複はできません)。</p>
-          <input type="text" id="nickname-input" class="nickname-input" value="${current}" maxlength="20" placeholder="例: じょい" />
-          <button id="save-nickname-btn" class="btn-primary">保存する</button>
-          <p id="nickname-status" class="nickname-status"></p>
+        profileDetailsContainer.innerHTML = `
+          <div class="profile-header-card profile-header-card-bootstrap">
+            <p class="profile-hint">公開プロフィールで使うニックネームを設定してください(他の人と重複はできません)。</p>
+            <input type="text" id="nickname-input" class="nickname-input" value="${current}" maxlength="20" placeholder="例: じょい" />
+            <button id="save-nickname-btn" class="btn-primary">保存する</button>
+            <p id="nickname-status" class="nickname-status"></p>
+          </div>
         `;
 
         document.getElementById('save-nickname-btn').addEventListener('click', async () => {
@@ -1251,7 +1252,7 @@ import SiteFooter from '../components/SiteFooter.astro';
             return;
           }
 
-          renderProfileSection(userId);
+          init();
         });
       }
 
@@ -1265,7 +1266,7 @@ import SiteFooter from '../components/SiteFooter.astro';
         `;
       }
 
-      function profileDetailsSectionHtml() {
+      function profileHeaderDisplayHtml() {
         const headerStyle = currentHeaderUrl ? `background-image:url('${currentHeaderUrl}')` : '';
         const linksHtml = currentSnsLinks.length
           ? `
@@ -1281,69 +1282,80 @@ import SiteFooter from '../components/SiteFooter.astro';
           : '';
 
         return `
-          <div class="profile-details-section">
-            <div class="profile-details-header ${currentHeaderUrl ? '' : 'profile-details-header-empty'}" style="${headerStyle}">
-              <div class="profile-avatar-wrap">
-                ${
-                  currentAvatarUrl
-                    ? `<img class="profile-avatar" src="${currentAvatarUrl}" alt="アイコン" />`
-                    : `<div class="profile-avatar-empty"></div>`
-                }
+          <div class="profile-header-card">
+            <div class="profile-header-cover ${currentHeaderUrl ? '' : 'profile-header-cover-empty'}" style="${headerStyle}"></div>
+            <div class="profile-header-body">
+              <div class="profile-header-top">
+                <div class="profile-header-avatar-wrap">
+                  ${
+                    currentAvatarUrl
+                      ? `<img class="profile-header-avatar" src="${currentAvatarUrl}" alt="アイコン" />`
+                      : `<div class="profile-header-avatar profile-header-avatar-empty"></div>`
+                  }
+                </div>
+                <div class="profile-header-meta">
+                  <p class="profile-header-name">${currentNickname}</p>
+                  <p class="profile-header-sub">
+                    <a href="/users/${encodeURIComponent(currentNickname)}">公開プロフィールを見る →</a>
+                    <span class="profile-header-dot">・</span>
+                    <a href="/following">フォロー中${currentFollowingCount}人</a>
+                  </p>
+                </div>
+                <div class="profile-header-actions">
+                  <button id="edit-profile-details-btn" class="profile-header-btn profile-header-btn-outline">プロフィール編集</button>
+                  <button id="toggle-profile-public-btn" class="profile-header-btn profile-header-btn-solid ${currentIsPublic ? '' : 'profile-header-btn-muted'}">${currentIsPublic ? '公開中' : '非公開中'}</button>
+                </div>
               </div>
-            </div>
-            <div class="profile-details-body">
-              ${currentBio ? `<p class="profile-bio">${currentBio}</p>` : `<p class="badge-empty">自己紹介はまだ設定されていません。</p>`}
+              ${currentBio ? `<p class="profile-bio">${currentBio}</p>` : ''}
               ${linksHtml}
-              <p class="profile-visibility">公開設定: <strong>${currentIsPublic ? '公開中' : '非公開'}</strong></p>
-              <button id="edit-profile-details-btn" class="best-one-clear-btn">プロフィールを編集する</button>
             </div>
           </div>
         `;
       }
 
-      function profileDetailsEditHtml() {
+      function profileHeaderEditHtml() {
         const snsRows = editingSnsLinks.map((l, i) => snsRowHtml(l, i)).join('');
 
         return `
-          <div class="profile-details-edit">
-            <label class="profile-edit-label">アイコン画像(トプ画)</label>
-            ${currentAvatarUrl ? `<img class="profile-details-preview" src="${currentAvatarUrl}" alt="現在のアイコン" />` : ''}
-            <input type="file" id="profile-avatar-input" accept="image/*" />
+          <div class="profile-header-card">
+            <div class="profile-details-edit">
+              <label class="profile-edit-label">ニックネーム</label>
+              <input type="text" id="nickname-edit-input" class="nickname-input" value="${currentNickname ?? ''}" maxlength="20" placeholder="例: じょい" />
 
-            <label class="profile-edit-label">ヘッダー画像(壁紙)</label>
-            ${currentHeaderUrl ? `<img class="profile-details-preview profile-details-preview-header" src="${currentHeaderUrl}" alt="現在のヘッダー" />` : ''}
-            <input type="file" id="profile-header-input" accept="image/*" />
+              <label class="profile-edit-label">アイコン画像(トプ画)</label>
+              ${currentAvatarUrl ? `<img class="profile-details-preview" src="${currentAvatarUrl}" alt="現在のアイコン" />` : ''}
+              <input type="file" id="profile-avatar-input" accept="image/*" />
 
-            <label class="profile-edit-label">自己紹介</label>
-            <textarea id="profile-bio-input" class="nickname-input" maxlength="300" rows="4" placeholder="自己紹介を書きましょう">${currentBio ?? ''}</textarea>
+              <label class="profile-edit-label">ヘッダー画像(壁紙)</label>
+              ${currentHeaderUrl ? `<img class="profile-details-preview profile-details-preview-header" src="${currentHeaderUrl}" alt="現在のヘッダー" />` : ''}
+              <input type="file" id="profile-header-input" accept="image/*" />
 
-            <label class="profile-edit-label">SNS・ブログリンク</label>
-            <div id="profile-sns-list">${snsRows}</div>
-            <button type="button" id="profile-sns-add-btn" class="best-one-clear-btn">+ リンクを追加</button>
+              <label class="profile-edit-label">自己紹介</label>
+              <textarea id="profile-bio-input" class="nickname-input" maxlength="300" rows="4" placeholder="自己紹介を書きましょう">${currentBio ?? ''}</textarea>
 
-            <label class="profile-edit-label">
-              <input type="checkbox" id="profile-public-input" ${currentIsPublic ? 'checked' : ''} />
-              プロフィールを公開する(オフにすると公開ページが完全に非表示になります)
-            </label>
+              <label class="profile-edit-label">SNS・ブログリンク</label>
+              <div id="profile-sns-list">${snsRows}</div>
+              <button type="button" id="profile-sns-add-btn" class="best-one-clear-btn">+ リンクを追加</button>
 
-            <div class="profile-details-actions">
-              <button id="save-profile-details-btn" class="btn-primary">保存する</button>
-              <button id="cancel-profile-details-btn" class="best-one-clear-btn">キャンセル</button>
+              <div class="profile-details-actions">
+                <button id="save-profile-details-btn" class="btn-primary">保存する</button>
+                <button id="cancel-profile-details-btn" class="best-one-clear-btn">キャンセル</button>
+              </div>
+              <p id="profile-details-status" class="nickname-status"></p>
             </div>
-            <p id="profile-details-status" class="nickname-status"></p>
           </div>
         `;
       }
 
-      function renderProfileDetailsSection() {
+      function renderProfileHeaderSection() {
         if (!profileDetailsEditing) {
-          profileDetailsContainer.innerHTML = profileDetailsSectionHtml();
+          profileDetailsContainer.innerHTML = profileHeaderDisplayHtml();
           return;
         }
         editingSnsLinks = currentSnsLinks.length
           ? currentSnsLinks.map((l) => ({ ...l }))
           : [{ label: '', url: '' }];
-        profileDetailsContainer.innerHTML = profileDetailsEditHtml();
+        profileDetailsContainer.innerHTML = profileHeaderEditHtml();
       }
 
       async function uploadProfileImage(file, prefix, userId, compressOptions) {
@@ -1370,10 +1382,15 @@ import SiteFooter from '../components/SiteFooter.astro';
         const statusEl = document.getElementById('profile-details-status');
         statusEl.textContent = '保存中...';
 
+        const nickname = document.getElementById('nickname-edit-input').value.trim();
+        if (!nickname) {
+          statusEl.textContent = 'ニックネームを入力してください';
+          return;
+        }
+
         const avatarFile = document.getElementById('profile-avatar-input').files[0];
         const headerFile = document.getElementById('profile-header-input').files[0];
         const bio = document.getElementById('profile-bio-input').value.trim();
-        const isPublic = document.getElementById('profile-public-input').checked;
 
         const rows = [...document.querySelectorAll('#profile-sns-list .profile-sns-row')];
         const snsLinks = rows
@@ -1414,27 +1431,52 @@ import SiteFooter from '../components/SiteFooter.astro';
         const { error } = await supabase
           .from('profiles')
           .update({
+            nickname,
             avatar_url: avatarUrl,
             header_url: headerUrl,
             bio: bio || null,
             sns_links: snsLinks,
-            is_public: isPublic,
           })
           .eq('id', session.user.id);
 
         if (error) {
-          console.error(error);
-          statusEl.textContent = '保存に失敗しました';
+          if (error.code === '23505') {
+            statusEl.textContent = 'そのニックネームは既に使われています';
+          } else {
+            console.error(error);
+            statusEl.textContent = '保存に失敗しました';
+          }
           return;
         }
 
+        currentNickname = nickname;
         currentAvatarUrl = avatarUrl;
         currentHeaderUrl = headerUrl;
         currentBio = bio || null;
         currentSnsLinks = snsLinks;
-        currentIsPublic = isPublic;
         profileDetailsEditing = false;
-        renderProfileDetailsSection();
+        renderProfileHeaderSection();
+      }
+
+      async function toggleProfilePublic() {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const newVal = !currentIsPublic;
+        const { error } = await supabase
+          .from('profiles')
+          .update({ is_public: newVal })
+          .eq('id', session.user.id);
+
+        if (error) {
+          console.error(error);
+          return;
+        }
+
+        currentIsPublic = newVal;
+        renderProfileHeaderSection();
       }
 
       function buildCardMeta(check) {
@@ -1548,32 +1590,43 @@ import SiteFooter from '../components/SiteFooter.astro';
         const saleInterestedCount = grouped.interested.filter(isOnSale).length;
         const totalSpent = grouped.used.reduce((sum, c) => sum + (c.products?.price ?? 0), 0);
 
-        let html = `
+        statsContainer.innerHTML = `
           <div class="mp-stats">
-            <div class="mp-stat"><span class="mp-stat-num">${grouped.used.length}</span><span>使った</span></div>
-            <div class="mp-stat"><span class="mp-stat-num">${usedByTier.first.length}</span><span>一軍</span></div>
-            <div class="mp-stat"><span class="mp-stat-num">${grouped.interested.length}</span><span>気になる</span></div>
-            <div class="mp-stat"><span class="mp-stat-num">${saleInterestedCount}</span><span>気になるでセール中</span></div>
-            <div class="mp-stat mp-stat-wide"><span class="mp-stat-num">¥${totalSpent.toLocaleString()}</span><span>使った商品の合計金額</span></div>
+            <div class="mp-stat-card"><span class="mp-stat-num">${grouped.used.length}</span><span class="mp-stat-label">使った本数</span></div>
+            <div class="mp-stat-card"><span class="mp-stat-num">${usedByTier.first.length}</span><span class="mp-stat-label">一軍</span></div>
+            <div class="mp-stat-card"><span class="mp-stat-num">${grouped.interested.length}</span><span class="mp-stat-label">気になる</span></div>
+            <div class="mp-stat-card"><span class="mp-stat-num">${saleInterestedCount}</span><span class="mp-stat-label">気になるでセール中</span></div>
+            <div class="mp-stat-card mp-stat-card-wide"><span class="mp-stat-num">¥${totalSpent.toLocaleString()}</span><span class="mp-stat-label">合計使用金額</span></div>
           </div>
-          <div class="mp-view-toggle">
-            <button type="button" class="mp-view-btn ${currentViewMode === 'grid' ? 'active' : ''}" data-view="grid">▦ グリッド表示</button>
-            <button type="button" class="mp-view-btn ${currentViewMode === 'list' ? 'active' : ''}" data-view="list">☰ リスト表示</button>
+        `;
+
+        if (!STATUS_LABELS[currentStatusTab]) currentStatusTab = 'used';
+
+        const tabsHtml = `
+          <div class="mp-tabs-row">
+            <div class="ranking-tabs mp-status-tabs">
+              ${STATUS_TAB_ORDER.map(
+                (status) => `
+                <button type="button" class="ranking-tab mp-status-tab ${currentStatusTab === status ? 'ranking-tab-active' : ''}" data-status="${status}">${STATUS_LABELS[status]}(${grouped[status].length})</button>
+              `
+              ).join('')}
+            </div>
+            <div class="mp-view-toggle">
+              <button type="button" class="mp-view-btn ${currentViewMode === 'grid' ? 'active' : ''}" data-view="grid" title="グリッド表示" aria-label="グリッド表示">▦</button>
+              <button type="button" class="mp-view-btn ${currentViewMode === 'list' ? 'active' : ''}" data-view="list" title="リスト表示" aria-label="リスト表示">☰</button>
+            </div>
           </div>
         `;
 
         const renderItem = currentViewMode === 'list' ? productRowHtml : productCardHtml;
         const listTag = currentViewMode === 'list' ? 'mp-list' : 'mp-grid';
+        const activeList = grouped[currentStatusTab] ?? [];
 
-        for (const status of STATUS_ORDER) {
-          const list = grouped[status];
-          if (list.length === 0) continue;
+        const listHtml = activeList.length
+          ? `<ul class="${listTag}">${activeList.map(renderItem).join('')}</ul>`
+          : `<p class="mp-empty-tab">まだ${STATUS_LABELS[currentStatusTab]}の商品がありません。</p>`;
 
-          html += `<h2 class="mp-section-title">${STATUS_LABELS[status]}(${list.length})</h2>`;
-          html += `<ul class="${listTag}">${list.map(renderItem).join('')}</ul>`;
-        }
-
-        content.innerHTML = html;
+        content.innerHTML = tabsHtml + listHtml;
       }
 
       async function init() {
@@ -1584,7 +1637,7 @@ import SiteFooter from '../components/SiteFooter.astro';
           return;
         }
 
-        const profile = await renderProfileSection(session.user.id);
+        const profile = await fetchProfile(session.user.id);
         const hasNickname = Boolean(profile?.nickname);
 
         currentTop3 = [
@@ -1601,13 +1654,24 @@ import SiteFooter from '../components/SiteFooter.astro';
         currentBestReviewProductId = profile?.best_review_product_id ?? null;
         currentOshiMaker = profile?.oshi_maker ?? null;
         currentOshiMakerReason = profile?.oshi_maker_reason ?? null;
+        currentNickname = profile?.nickname ?? null;
         currentAvatarUrl = profile?.avatar_url ?? null;
         currentHeaderUrl = profile?.header_url ?? null;
         currentBio = profile?.bio ?? null;
         currentSnsLinks = Array.isArray(profile?.sns_links) ? profile.sns_links : [];
         currentIsPublic = profile?.is_public ?? true;
         profileDetailsEditing = false;
-        renderProfileDetailsSection();
+
+        if (hasNickname) {
+          const { count: followingCount } = await supabase
+            .from('follows')
+            .select('*', { count: 'exact', head: true })
+            .eq('follower_id', session.user.id);
+          currentFollowingCount = followingCount ?? 0;
+          renderProfileHeaderSection();
+        } else {
+          showNicknameForm(session.user.id, '');
+        }
 
         const { data: checks, error } = await supabase
           .from('checks')
@@ -1638,8 +1702,8 @@ import SiteFooter from '../components/SiteFooter.astro';
         await renderManualProductSection();
 
         const usedCountForBadge = lastChecks.filter((c) => c.status === 'used').length;
-        document.getElementById('badge-section-container').innerHTML = badgeSectionHtml(usedCountForBadge);
-        document.getElementById('maker-badge-section-container').innerHTML = makerBadgeSectionHtml(
+        document.getElementById('badge-section-container').innerHTML = badgeSectionHtml(
+          usedCountForBadge,
           lastChecks
         );
         document.getElementById('titles-section-container').innerHTML = titlesSectionHtml(
@@ -1648,6 +1712,7 @@ import SiteFooter from '../components/SiteFooter.astro';
         );
 
         if (lastChecks.length === 0) {
+          statsContainer.innerHTML = '';
           content.innerHTML = `<p class="mp-empty">まだ記録がありません。気になる商品を見つけたら「☰ 記録」から登録してみましょう。</p>`;
           return;
         }
@@ -1675,6 +1740,16 @@ import SiteFooter from '../components/SiteFooter.astro';
           currentViewMode = viewBtn.dataset.view;
           try {
             localStorage.setItem('onahole_view_mode', currentViewMode);
+          } catch (err) {}
+          renderProductLists();
+          return;
+        }
+
+        const statusTabBtn = e.target.closest('.mp-status-tab');
+        if (statusTabBtn) {
+          currentStatusTab = statusTabBtn.dataset.status;
+          try {
+            localStorage.setItem('onahole_status_tab', currentStatusTab);
           } catch (err) {}
           renderProductLists();
         }
@@ -1737,12 +1812,16 @@ import SiteFooter from '../components/SiteFooter.astro';
       profileDetailsContainer.addEventListener('click', async (e) => {
         if (e.target.closest('#edit-profile-details-btn')) {
           profileDetailsEditing = true;
-          renderProfileDetailsSection();
+          renderProfileHeaderSection();
+          return;
+        }
+        if (e.target.closest('#toggle-profile-public-btn')) {
+          await toggleProfilePublic();
           return;
         }
         if (e.target.closest('#cancel-profile-details-btn')) {
           profileDetailsEditing = false;
-          renderProfileDetailsSection();
+          renderProfileHeaderSection();
           return;
         }
         if (e.target.closest('#profile-sns-add-btn')) {

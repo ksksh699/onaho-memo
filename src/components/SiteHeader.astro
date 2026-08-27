@@ -16,7 +16,7 @@
     <a href="/">ホーム</a>
     <a href="/#rankings">ランキング</a>
     <a href="/?sale=1">セール中</a>
-    <a href="/mypage">マイページ</a>
+    <a href="/mypage" class="js-mypage-link">マイページ</a>
     <a href="/following">フォロー中</a>
   </nav>
   <div id="site-auth-area" class="site-auth-area"></div>
@@ -31,7 +31,7 @@
     <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12.6 21.4a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1 0-2.8l8-8H18a2 2 0 0 1 2 2v6a2 2 0 0 1-.6 1.4Z" /><circle cx="14.5" cy="7.5" r="1.1" fill="currentColor" stroke="none" /></svg>
     <span>セール中</span>
   </a>
-  <a href="/mypage" class="site-bottom-nav-item">
+  <a href="/mypage" class="site-bottom-nav-item js-mypage-link">
     <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4" /><path d="M4.7 20c1.4-3.9 4.8-5.4 7.3-5.4s5.9 1.5 7.3 5.4" /></svg>
     <span>マイページ</span>
   </a>
@@ -42,9 +42,15 @@
 </nav>
 
 <script>
-  import { mountAuthArea } from '../lib/authHeader.js';
+  import { mountAuthArea, getMypageHref } from '../lib/authHeader.js';
 
   mountAuthArea(document.getElementById('site-auth-area'));
+
+  getMypageHref().then((href) => {
+    document.querySelectorAll('.js-mypage-link').forEach((el) => {
+      el.setAttribute('href', href);
+    });
+  });
 
   const header = document.querySelector('.site-header');
   if (header) {
