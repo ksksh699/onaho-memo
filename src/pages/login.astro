@@ -1,5 +1,7 @@
 ---
 import '../styles/global.css';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
 ---
 
 <html lang="ja">
@@ -9,9 +11,7 @@ import '../styles/global.css';
     <title>ログイン | オナホめも</title>
   </head>
   <body>
-    <header>
-      <a href="/">← 一覧に戻る</a>
-    </header>
+    <SiteHeader />
     <main class="login-main">
       <h1>ログイン</h1>
       <p>Googleアカウントでログインすると、使ったオナホールをチェックできます。</p>
@@ -30,5 +30,6 @@ import '../styles/global.css';
         });
       });
     </script>
+    <SiteFooter />
   </body>
 </html>

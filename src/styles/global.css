@@ -1,12 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg: #1c1b1f;
-  --bg-card: #26242a;
-  --text: #ece8e2;
-  --text-muted: #9a9591;
-  --accent: #a8455a;
-  --border: #38353b;
+  --bg: #f6f6f5;
+  --bg-card: #ffffff;
+  --bg-elevated: #ffffff;
+  --text: #1f1f22;
+  --text-muted: #6b6b70;
+  --accent: #2b5fad;
+  --accent-hover: #3f74c4;
+  --sale: #d84f39;
+  --danger: #b3413f;
+  --gold: #b8863c;
+  --border: #e2e1de;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --shadow-card: 0 2px 10px rgba(20, 20, 20, 0.06);
 }
 
 * {
@@ -26,6 +36,131 @@ a {
   text-decoration: none;
 }
 
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.site-header .site-logo {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.site-header .site-logo:hover {
+  color: var(--accent);
+}
+
+.site-header .site-header-link {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.site-header .site-header-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+
+.site-nav a {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.site-nav a:hover {
+  color: var(--accent);
+}
+
+.site-auth-area {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.site-auth-login,
+.site-auth-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.site-auth-login:hover,
+.site-auth-name:hover {
+  color: var(--accent);
+}
+
+.site-auth-logout {
+  background: var(--bg-card);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.8rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.site-auth-logout:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .site-header {
+    flex-wrap: wrap;
+    row-gap: 0.6rem;
+  }
+
+  .site-nav {
+    gap: 0.9rem;
+    order: 3;
+    width: 100%;
+  }
+
+  .site-auth-area {
+    margin-left: auto;
+  }
+}
+
+.site-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1.5rem;
+  margin-top: 3rem;
+  border-top: 1px solid var(--border);
+}
+
+.site-footer-logo {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.site-footer-copy {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
 .hero {
   padding: 4rem 1.5rem 3rem;
   border-bottom: 1px solid var(--border);
@@ -41,11 +176,12 @@ a {
 }
 
 .hero h1 {
-  font-family: 'Shippori Mincho', serif;
-  font-size: clamp(2rem, 5vw, 3rem);
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: clamp(1.5rem, 7vw, 3rem);
   font-weight: 700;
   margin: 0 0 1rem;
   letter-spacing: 0.03em;
+  overflow-wrap: break-word;
 }
 
 .hero .lead {
@@ -60,7 +196,7 @@ a {
 }
 
 .hero .stat-number {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 2.2rem;
   color: var(--accent);
   font-weight: 700;
@@ -73,7 +209,7 @@ a {
 }
 
 .section-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.1rem;
   font-weight: 500;
   margin: 0 0 1.2rem;
@@ -99,8 +235,9 @@ main {
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
+  box-shadow: var(--shadow-card);
   transition: border-color 0.15s ease;
 }
 
@@ -113,27 +250,29 @@ main {
   aspect-ratio: 1 / 1;
   object-fit: cover;
   display: block;
-  background: #000;
+  background: linear-gradient(135deg, #ececeb, #e2e1de);
 }
 
 .card .body {
   padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 .card .maker {
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
+  font-size: 0.68rem;
   color: var(--text-muted);
-  margin: 0 0 0.3rem;
-  text-transform: uppercase;
+  margin: 0;
 }
 
-.card h2 {
-  font-family: 'Shippori Mincho', serif;
-  font-size: 0.95rem;
+.card h3 {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.82rem;
   font-weight: 500;
-  margin: 0 0 0.5rem;
+  margin: 0;
   line-height: 1.4;
+  min-height: 2.8em;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -141,10 +280,10 @@ main {
 }
 
 .card .price {
-  font-size: 0.85rem;
-  color: var(--accent);
+  font-size: 0.94rem;
+  color: var(--text);
   margin: 0;
-  font-weight: 500;
+  font-weight: 700;
 }
 .detail {
   padding-top: 1rem;
@@ -163,15 +302,15 @@ main {
 }
 
 .detail-grid h1 {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.5rem;
   margin: 0.3rem 0 0.8rem;
 }
 
 .detail-grid .price {
-  font-size: 1.2rem;
-  color: var(--accent);
-  font-weight: 500;
+  font-size: 1.3rem;
+  color: var(--text);
+  font-weight: 700;
 }
 
 .tags {
@@ -217,13 +356,178 @@ main {
   background: var(--accent);
   color: #fff;
   padding: 0.7rem 1.5rem;
-  border-radius: 6px;
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+}
+
+.buy-link:hover {
+  background: var(--accent-hover);
+}
+
+.shop-links {
+  margin-top: 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.1rem;
+  box-shadow: var(--shadow-card);
+}
+
+.shop-links-title {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.shop-links-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.shop-link-item {
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.shop-link-item:last-child {
+  border-bottom: none;
+}
+
+.shop-link {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.4rem;
+  color: var(--text);
+  text-decoration: none;
   font-weight: 500;
+  transition: background-color 0.15s;
+}
+
+.shop-link:hover {
+  background: rgba(43, 95, 173, 0.05);
+}
+
+.shop-link-item.cheapest .shop-link {
+  background: rgba(43, 95, 173, 0.07);
+}
+
+.shop-link-name {
+  min-width: 4.5em;
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 0.85rem;
+}
+
+.shop-link-price {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.shop-link-badge {
+  margin-left: auto;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-pill);
+}
+
+.shop-links-more {
+  margin-top: 0.4rem;
+}
+
+.shop-links-more summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  padding: 0.3rem 0.2rem;
+  list-style: none;
+}
+
+.shop-links-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.shop-links-more summary::before {
+  content: '▼ ';
+  font-size: 0.65rem;
+}
+
+.shop-links-more[open] summary::before {
+  content: '▲ ';
+}
+
+.shop-links-more summary:hover {
+  color: var(--accent);
+}
+
+.shop-links-more .shop-links-list {
+  margin-top: 0.4rem;
 }
 
 @media (max-width: 640px) {
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* スマホでは商品カードの画像が大きくなりすぎるため、1画面に2列表示する */
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.7rem;
+  }
+
+  .card .body {
+    padding: 0.6rem;
+  }
+
+  .card .maker {
+    font-size: 0.62rem;
+  }
+
+  .card h3 {
+    font-size: 0.78rem;
+  }
+
+  .card .price {
+    font-size: 0.75rem;
+  }
+
+  .detail {
+    padding-top: 0.5rem;
+  }
+
+  .detail-grid img {
+    max-width: 200px;
+    margin: 0 auto;
+  }
+
+  .detail-grid h1 {
+    font-size: 1.25rem;
+    margin: 0.2rem 0 0.6rem;
+  }
+
+  .check-widget {
+    margin-top: 1rem;
+    padding: 0.8rem;
+  }
+
+  .hero {
+    padding: 3rem 1rem 2.5rem;
+  }
+
+  .hero-stats {
+    gap: 1rem 1.8rem;
+  }
+
+  .hero .stat-number {
+    font-size: 1.7rem;
   }
 }
 .toolbar {
@@ -287,7 +591,7 @@ main {
 }
 
 .login-main h1 {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
 }
 
 .login-main p {
@@ -371,6 +675,7 @@ main {
 .hero-stats {
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 3rem;
   margin-bottom: 0.5rem;
 }
@@ -406,7 +711,7 @@ main {
 }
 
 .check-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1rem;
   margin: 0 0 0.8rem;
 }
@@ -454,7 +759,7 @@ main {
 }
 
 .star.filled {
-  color: var(--accent);
+  color: var(--gold);
 }
 
 .review-textarea {
@@ -526,8 +831,141 @@ main {
   margin-bottom: 0.5rem;
 }
 
-.review-stars {
+.review-author {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.review-author:hover {
   color: var(--accent);
+  text-decoration: underline;
+}
+
+.review-like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.8rem;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.review-like-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.review-like-btn.liked {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.review-like-icon {
+  font-size: 0.95rem;
+}
+
+.review-comments {
+  margin-top: 0.9rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.review-comment-list {
+  list-style: none;
+  margin: 0 0 0.7rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.review-comment-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+}
+
+.review-comment-author {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.review-comment-body {
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.review-comment-delete-btn {
+  margin-top: 0.4rem;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.review-comment-delete-btn:hover {
+  color: var(--accent);
+}
+
+.review-comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.review-comment-input {
+  width: 100%;
+  min-height: 2.4rem;
+  resize: vertical;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  font-family: inherit;
+}
+
+.review-comment-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.review-comment-submit-btn {
+  align-self: flex-end;
+  background: var(--accent);
+  border: none;
+  border-radius: 999px;
+  padding: 0.4rem 1.1rem;
+  font-size: 0.8rem;
+  color: #fff;
+  cursor: pointer;
+}
+
+.review-comment-submit-btn:hover {
+  opacity: 0.88;
+}
+
+.review-stars {
+  color: var(--gold);
   font-size: 0.9rem;
 }
 
@@ -571,11 +1009,11 @@ main {
 }
 
 .card-rating.dmm {
-  color: var(--text-muted);
+  color: var(--gold);
 }
 
 .card-rating.site {
-  color: var(--accent);
+  color: var(--gold);
 }
 .search-input {
   background: var(--bg-card);
@@ -692,8 +1130,8 @@ main {
 }
 
 .qc-reset:hover {
-  border-color: #c0392b;
-  color: #c0392b;
+  border-color: var(--sale);
+  color: var(--sale);
 }
 .price-block {
   margin: 0.3rem 0;
@@ -708,7 +1146,7 @@ main {
 
 .discount-badge {
   display: inline-block;
-  background: var(--accent);
+  background: var(--sale);
   color: #fff;
   font-size: 0.7rem;
   font-weight: 600;
@@ -725,7 +1163,7 @@ main {
   position: absolute;
   top: 0.6rem;
   left: 0.6rem;
-  background: #c0392b;
+  background: var(--sale);
   color: #fff;
   font-size: 0.65rem;
   font-weight: 700;
@@ -737,7 +1175,7 @@ main {
 
 .discount-badge-small {
   display: inline-block;
-  background: var(--accent);
+  background: var(--sale);
   color: #fff;
   font-size: 0.65rem;
   font-weight: 600;
@@ -761,7 +1199,7 @@ main {
 }
 
 .mypage-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.6rem;
   margin: 0 0 1.5rem;
 }
@@ -786,7 +1224,7 @@ main {
 }
 
 .mp-stat-num {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.8rem;
   color: var(--accent);
   font-weight: 700;
@@ -798,7 +1236,7 @@ main {
 }
 
 .mp-section-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.1rem;
   margin: 2rem 0 1rem;
   padding-bottom: 0.5rem;
@@ -818,8 +1256,9 @@ main {
   position: relative;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
+  box-shadow: var(--shadow-card);
 }
 
 .mp-card.mp-card-best {
@@ -831,24 +1270,28 @@ main {
   aspect-ratio: 1 / 1;
   object-fit: cover;
   display: block;
-  background: #000;
+  background: linear-gradient(135deg, #ececeb, #e2e1de);
 }
 
 .mp-card-body {
   padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 .mp-maker {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--text-muted);
-  margin: 0 0 0.3rem;
+  margin: 0;
 }
 
 .mp-card h3 {
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 500;
-  margin: 0 0 0.4rem;
+  margin: 0;
   line-height: 1.4;
+  min-height: 2.8em;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -856,24 +1299,26 @@ main {
 }
 
 .mp-price {
-  font-size: 0.8rem;
-  color: var(--accent);
-  margin: 0 0 0.4rem;
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
 }
 
 .mp-tags {
   display: flex;
   gap: 0.3rem;
   flex-wrap: wrap;
-  margin-bottom: 0.4rem;
+  margin: 0;
 }
 
 .mp-tag {
-  font-size: 0.65rem;
+  font-size: 0.68rem;
+  font-weight: 700;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-pill);
+  padding: 0.15rem 0.55rem;
   color: var(--text-muted);
 }
 
@@ -916,6 +1361,171 @@ main {
   color: var(--text-muted);
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 公開ページの「棚に並んでいる」風レイアウト */
+.shelf-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1.6rem 1rem;
+}
+
+.shelf-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0.9rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.shelf-cover img {
+  width: 100%;
+  max-width: 140px;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: linear-gradient(135deg, #ececeb, #e2e1de);
+}
+
+.shelf-stars {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--gold);
+}
+
+.shelf-stars-empty {
+  margin-top: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.shelf-name {
+  margin: 0.3rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .shelf-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* マイページの表示切り替え(グリッド/リスト) */
+.mp-view-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.mp-view-btn {
+  background: var(--bg-card);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.mp-view-btn:hover {
+  border-color: var(--accent);
+}
+
+.mp-view-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.mp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.mp-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.6rem;
+  box-shadow: var(--shadow-card);
+}
+
+.mp-row.mp-row-best {
+  border-color: var(--accent);
+}
+
+.mp-row-link {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.mp-row-link img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #ececeb, #e2e1de);
+  flex-shrink: 0;
+}
+
+.mp-row-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.mp-row-body h3 {
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin: 0 0 0.3rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mp-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.mp-row-actions .top3-set-btn,
+.mp-row-actions .best-review-set-btn {
+  display: inline-block;
+  width: auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.68rem;
+}
+
+.mp-stat-wide .mp-stat-num {
+  font-size: 1.35rem;
 }
 
 .mp-memo {
@@ -970,7 +1580,7 @@ main {
 }
 
 .profile-page-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.8rem;
   margin: 0 0 0.5rem;
 }
@@ -1071,7 +1681,7 @@ main {
   margin-bottom: 0.6rem;
   font-size: 0.95rem;
   font-weight: 600;
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
 }
 
 .review-title-input:focus {
@@ -1102,7 +1712,7 @@ main {
 }
 
 .rich-btn-red {
-  color: #e53935;
+  color: var(--danger);
   font-weight: 700;
 }
 
@@ -1123,7 +1733,7 @@ main {
 }
 
 .rich-btn-red.active {
-  background: #e53935;
+  background: var(--danger);
   color: #fff;
 }
 
@@ -1149,7 +1759,7 @@ main {
 }
 
 .review-body-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-weight: 600;
   font-size: 0.92rem;
   margin: 0 0 0.3rem;
@@ -1160,7 +1770,7 @@ main {
 }
 
 .best-review-quote-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-weight: 600;
   font-size: 0.9rem;
   margin: 0.6rem 0 0.2rem;
@@ -1300,7 +1910,7 @@ main {
 }
 
 .ranking-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.1rem;
   font-weight: 500;
   margin: 0 0 0.8rem;
@@ -1332,8 +1942,9 @@ main {
   flex: 0 0 140px;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
+  box-shadow: var(--shadow-card);
   scroll-snap-align: start;
 }
 
@@ -1342,7 +1953,7 @@ main {
   aspect-ratio: 1 / 1;
   object-fit: cover;
   display: block;
-  background: #000;
+  background: linear-gradient(135deg, #ececeb, #e2e1de);
 }
 
 .ranking-rank {
@@ -1351,7 +1962,7 @@ main {
   left: 0;
   background: var(--accent);
   color: #fff;
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-weight: 700;
   font-size: 0.85rem;
   padding: 0.15rem 0.5rem;
@@ -1360,7 +1971,7 @@ main {
 }
 
 .ranking-rank.ranking-rank-sale {
-  background: #c0392b;
+  background: var(--sale);
 }
 
 .ranking-list-price {
@@ -1385,6 +1996,7 @@ main {
   font-weight: 500;
   margin: 0 0 0.4rem;
   line-height: 1.35;
+  min-height: 2.1em;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1393,9 +2005,104 @@ main {
 
 .ranking-metric {
   font-size: 0.72rem;
-  color: var(--accent);
+  color: var(--gold);
   margin: 0;
+  font-weight: 700;
+}
+
+.latest-reviews {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.5rem 1.5rem 2rem;
+}
+
+.latest-reviews-title {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 1.1rem;
   font-weight: 500;
+  margin: 0 0 0.8rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.latest-reviews-scroll {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0.5rem;
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+}
+
+.latest-review-card {
+  flex: 0 0 200px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  scroll-snap-align: start;
+}
+
+.latest-review-card-link {
+  display: block;
+  color: inherit;
+}
+
+.latest-review-card img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+  background: #000;
+}
+
+.latest-review-card-body {
+  padding: 0.7rem;
+}
+
+.latest-review-product-name {
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin: 0 0 0.35rem;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.latest-review-stars {
+  font-size: 0.8rem;
+  color: var(--gold);
+  margin: 0 0 0.3rem;
+  letter-spacing: 0.05em;
+}
+
+.latest-review-review-title {
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin: 0 0 0.2rem;
+  line-height: 1.35;
+}
+
+.latest-review-excerpt {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin: 0 0 0.4rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.latest-review-author {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin: 0;
 }
 
 .best-one-section {
@@ -1407,7 +2114,7 @@ main {
 }
 
 .best-one-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.05rem;
   font-weight: 500;
   margin: 0 0 0.8rem;
@@ -1461,7 +2168,7 @@ main {
 .top3-title,
 .best-review-title,
 .oshi-maker-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.05rem;
   font-weight: 500;
   margin: 0 0 0.8rem;
@@ -1477,8 +2184,9 @@ main {
 .top3-slot {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 1rem;
+  box-shadow: var(--shadow-card);
 }
 
 .top3-slot.filled {
@@ -1487,7 +2195,7 @@ main {
 
 .top3-rank {
   display: inline-block;
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-weight: 700;
   font-size: 0.85rem;
   color: var(--accent);
@@ -1506,9 +2214,9 @@ main {
   width: 60px;
   height: 60px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
-  background: #000;
+  background: linear-gradient(135deg, #ececeb, #e2e1de);
 }
 
 .top3-card-body h3 {
@@ -1516,6 +2224,11 @@ main {
   font-weight: 500;
   margin: 0.15rem 0 0;
   line-height: 1.4;
+  min-height: 2.4em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .top3-reason-area {
@@ -1684,7 +2397,7 @@ main {
 }
 
 .following-nickname {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.05rem;
   font-weight: 500;
   color: var(--text);
@@ -1766,7 +2479,7 @@ main {
   display: inline-block;
   background: var(--accent);
   color: #fff;
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-weight: 700;
   font-size: 0.95rem;
   padding: 0.35rem 1rem;
@@ -1790,7 +2503,7 @@ main {
 }
 
 .maker-badge-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 0.95rem;
   font-weight: 500;
   margin: 0 0 0.6rem;
@@ -1826,7 +2539,7 @@ main {
 }
 
 .titles-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.1rem;
   font-weight: 500;
   margin: 0 0 0.8rem;
@@ -1841,7 +2554,7 @@ main {
 }
 
 .title-rank-chip {
-  background: linear-gradient(135deg, var(--accent), #c96b7d);
+  background: linear-gradient(135deg, var(--accent), #6f97cc);
 }
 
 .title-grid {
@@ -1895,7 +2608,7 @@ main {
   position: absolute;
   top: -0.4rem;
   right: -0.4rem;
-  background: #c0392b;
+  background: var(--sale);
   color: #fff;
   font-size: 0.6rem;
   font-weight: 700;
@@ -1970,7 +2683,7 @@ main {
 }
 
 .folders-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.05rem;
   font-weight: 500;
   margin: 0 0 0.8rem;
@@ -2062,8 +2775,8 @@ main {
 }
 
 .folder-delete-btn:hover {
-  border-color: #e53935;
-  color: #e53935;
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .folder-public-toggle {
@@ -2195,7 +2908,7 @@ main {
 }
 
 .onaking-links-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.05rem;
   font-weight: 500;
   margin: 0 0 0.6rem;
@@ -2271,7 +2984,7 @@ main {
 }
 
 .new-info-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.05rem;
   font-weight: 500;
   margin: 0 0 0.6rem;
@@ -2308,6 +3021,16 @@ main {
   cursor: default;
 }
 
+.new-info-sale-trigger {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .manual-badge {
   display: inline-block;
   background: #607d8b;
@@ -2331,7 +3054,7 @@ main {
 }
 
 .manual-product-title {
-  font-family: 'Shippori Mincho', serif;
+  font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.05rem;
   font-weight: 500;
   margin: 0 0 0.6rem;
@@ -2417,8 +3140,8 @@ main {
 }
 
 .manual-product-delete-btn:hover {
-  border-color: #e53935;
-  color: #e53935;
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .manual-product-form-title {
@@ -2459,7 +3182,7 @@ main {
 }
 
 .new-info-tag-sale {
-  background: #c0392b;
+  background: var(--sale);
 }
 
 .new-info-link {
@@ -2631,8 +3354,8 @@ main {
 }
 
 .profile-sns-remove-btn:hover {
-  border-color: #e53935;
-  color: #e53935;
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .profile-details-actions {

@@ -1,0 +1,22 @@
+---
+// 全ページ共通のナビゲーションバー。ロゴ・主要ページへのリンク・
+// ログイン状態表示(authHeader.jsのmountAuthArea)をまとめている。
+---
+
+<header class="site-header">
+  <a href="/" class="site-logo">オナホめも</a>
+  <nav class="site-nav">
+    <a href="/">ホーム</a>
+    <a href="/#rankings">ランキング</a>
+    <a href="/?sale=1">セール中</a>
+    <a href="/mypage">マイページ</a>
+    <a href="/following">フォロー中</a>
+  </nav>
+  <div id="site-auth-area" class="site-auth-area"></div>
+</header>
+
+<script>
+  import { mountAuthArea } from '../lib/authHeader.js';
+
+  mountAuthArea(document.getElementById('site-auth-area'));
+</script>

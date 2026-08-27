@@ -1,5 +1,7 @@
 ---
 import '../styles/global.css';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
 ---
 
 <html lang="ja">
@@ -9,10 +11,7 @@ import '../styles/global.css';
     <title>フォロー中 | オナホめも</title>
   </head>
   <body>
-    <header>
-      <a href="/">← 一覧に戻る</a>
-      <a href="/mypage">マイページへ</a>
-    </header>
+    <SiteHeader />
     <main class="mypage-main">
       <h1 class="mypage-title">フォロー中のユーザー</h1>
 
@@ -203,5 +202,6 @@ import '../styles/global.css';
 
       init();
     </script>
+    <SiteFooter />
   </body>
 </html>

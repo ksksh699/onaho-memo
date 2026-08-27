@@ -1,6 +1,8 @@
 ---
 import { supabase } from '../../lib/supabase.js';
 import '../../styles/global.css';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
 
 // 商品数が非常に多い(4000件超)ため、ビルド時に全ページを事前生成すると
 // デプロイに膨大な時間がかかる。そのため事前生成はせず、リクエストごとに
@@ -28,7 +30,12 @@ const stockLabels = {
 };
 const stock = rawData.stock;
 const stockLabel = stockLabels[stock] ?? stock;
-const imageUrl = rawData.imageURL?.list ?? product.image_url;
+const imageUrlSmall = rawData.imageURL?.list ?? product.image_url;
+// 一覧用サムネイル(90x120程度)は詳細ページで引き伸ばすとぼやけるため、
+// DMMの命名規則(...pt.jpg → ...pl.jpg)で高解像度版を推測して優先表示する。
+// 存在しない場合はクライアント側のonerrorで元のサムネイルに自動フォールバックする。
+const imageUrlLarge = imageUrlSmall ? imageUrlSmall.replace(/pt\.jpg(\?.*)?$/, 'pl.jpg$1') : imageUrlSmall;
+const imageUrl = imageUrlLarge;
 const listPrice = rawData.prices?.list_price ? Number(rawData.prices.list_price) : null;
 const hasDiscount = listPrice && product.price && listPrice > product.price;
 
@@ -37,12 +44,12 @@ const [publicReviewsResult, ratingResult, onakingLinkResult] = await Promise.all
   supabase
     .from('checks')
     .select(
-      'rating, review_title, review_text, tier, updated_at, item_ratings, detail_review_title, detail_review_text, review_images, retirement_reason, similar_products'
+      'id, user_id, rating, review_title, review_text, tier, updated_at, item_ratings, detail_review_title, detail_review_text, review_images, retirement_reason, similar_products'
     )
     .eq('product_id', product.id)
     .eq('is_public', true)
     .or(
-      'review_text.not.is.null,detail_review_text.not.is.null,item_ratings.not.is.null,review_images.not.is.null,similar_products.not.is.null'
+      'review_text.not.is.null,detail_review_text.not.is.null,rating.not.is.null,item_ratings.not.is.null,review_images.not.is.null,similar_products.not.is.null'
     )
     .order('updated_at', { ascending: false }),
   supabase.rpc('get_product_ratings', { product_ids: [product.id] }),
@@ -55,12 +62,59 @@ const [publicReviewsResult, ratingResult, onakingLinkResult] = await Promise.all
 
 const { data: publicReviews } = publicReviewsResult;
 
+// レビューへの「いいね」数(誰が押したかはクライアント側でセッションを見て判定する)
+const reviewIds = (publicReviews ?? []).map((r) => r.id);
+let reviewLikeCounts = {};
+if (reviewIds.length > 0) {
+  const { data: likeCountRows } = await supabase.rpc('get_review_like_counts', {
+    check_ids: reviewIds,
+  });
+  for (const row of likeCountRows ?? []) {
+    reviewLikeCounts[row.check_id] = row.like_count;
+  }
+}
+
+// レビューへのコメント(質問・回答用)。公開レビューにのみ紐づく
+let commentsByCheckId = {};
+if (reviewIds.length > 0) {
+  const { data: commentRows } = await supabase
+    .from('review_comments')
+    .select('id, check_id, user_id, body, created_at')
+    .in('check_id', reviewIds)
+    .order('created_at', { ascending: true });
+  for (const c of commentRows ?? []) {
+    if (!commentsByCheckId[c.check_id]) commentsByCheckId[c.check_id] = [];
+    commentsByCheckId[c.check_id].push(c);
+  }
+}
+
+// レビュー投稿者・コメント投稿者のニックネームは、プロフィールを公開設定にしている人の分だけ表示する
+// (checksとprofilesの間に外部キー関係がないため、埋め込みselectではなく手動で結合する)
+const reviewerIds = (publicReviews ?? []).map((r) => r.user_id);
+const commentUserIds = Object.values(commentsByCheckId)
+  .flat()
+  .map((c) => c.user_id);
+const allUserIds = [...new Set([...reviewerIds, ...commentUserIds].filter(Boolean))];
+let reviewerNicknames = {};
+if (allUserIds.length > 0) {
+  const { data: reviewerProfiles } = await supabase
+    .from('profiles')
+    .select('id, nickname')
+    .in('id', allUserIds)
+    .eq('is_public', true)
+    .not('nickname', 'is', null);
+  for (const p of reviewerProfiles ?? []) {
+    reviewerNicknames[p.id] = p.nickname;
+  }
+}
+
 const TIER_LABELS_DISPLAY = { first: '一軍', second: '二軍', retired: '引退' };
 const ITEM_LABELS_DISPLAY = {
   overall: '総合評価',
   cost_performance: 'コスパ',
   tightness: '締めつけ',
   pleasure: '気持ちよさ',
+  stimulation: '刺激強度',
   fidelity: 'メーカー説明一致度',
   durability: '耐久性',
 };
@@ -74,6 +128,57 @@ const releaseDateDisplay = product.release_date_text || product.release_date;
 
 const onakingLinkData = onakingLinkResult.data;
 const onakingUrl = onakingLinkData?.onaking_url ?? null;
+
+// 他ショップの購入リンク・価格比較(小規模パイロット導入中。対象商品のみ登録済み)
+// ぴゅあらばショップはバナーブリッジのASP審査待ちのため、承認後にpyuarabu_url/
+// pyuarabu_priceを登録すれば自動的に表示順に組み込まれる(現時点では未登録なので出ない)
+const shopLinks = [];
+if (product.affiliate_url) {
+  shopLinks.push({ key: 'fanza', name: 'FANZA', price: product.price, url: product.affiliate_url });
+}
+if (product.pyuarabu_url) {
+  shopLinks.push({ key: 'pyuarabu', name: 'ぴゅあらばショップ', price: product.pyuarabu_price, url: product.pyuarabu_url });
+}
+if (product.nls_url) {
+  shopLinks.push({ key: 'nls', name: 'NLS', price: product.nls_price, url: product.nls_url });
+}
+if (product.daimaoh_url) {
+  shopLinks.push({ key: 'daimaoh', name: '大魔王', price: product.daimaoh_price, url: product.daimaoh_url });
+}
+
+// 表示順は「安い順」ではなく固定の優先順位:
+// 1) FANZA 2) ぴゅあらばショップ 3) 残りの中で一番安いサイト(同額ならNLSを優先)
+// FANZA/ぴゅあらばが未登録の場合はその枠を詰めて表示する
+const FIXED_ORDER = { fanza: 0, pyuarabu: 1 };
+const fixedShopLinks = shopLinks
+  .filter((s) => s.key in FIXED_ORDER)
+  .sort((a, b) => FIXED_ORDER[a.key] - FIXED_ORDER[b.key]);
+const restShopLinks = shopLinks
+  .filter((s) => !(s.key in FIXED_ORDER))
+  .sort((a, b) => {
+    const diff = (a.price ?? Infinity) - (b.price ?? Infinity);
+    if (diff !== 0) return diff;
+    if (a.key === 'nls') return -1;
+    if (b.key === 'nls') return 1;
+    return 0;
+  });
+const orderedShopLinks = [...fixedShopLinks, ...restShopLinks];
+
+// 「最安」バッジは表示順にかかわらず、実際に一番安いサイトにだけ付ける
+const cheapestPrice = shopLinks.reduce(
+  (min, s) => (s.price != null && s.price < min ? s.price : min),
+  Infinity
+);
+const showCheapestBadge = shopLinks.length > 1 && Number.isFinite(cheapestPrice);
+const cheapestIndex = showCheapestBadge
+  ? orderedShopLinks.findIndex((s) => s.price === cheapestPrice)
+  : -1;
+
+// 登録サイト数が増えても縦に間延びしないよう、上位のみ初期表示し、
+// 残りは<details>で折りたたんでおく
+const SHOP_LINKS_VISIBLE = 3;
+const visibleShopLinks = orderedShopLinks.slice(0, SHOP_LINKS_VISIBLE);
+const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
 ---
 
 <html lang="ja">
@@ -83,12 +188,15 @@ const onakingUrl = onakingLinkData?.onaking_url ?? null;
     <title>{product.name}</title>
   </head>
   <body>
-    <header>
-      <a href="/">← 一覧に戻る</a>
-    </header>
+    <SiteHeader />
     <main class="detail">
       <div class="detail-grid">
-        <img src={imageUrl} alt={product.name} />
+        <img
+          src={imageUrl}
+          alt={product.name}
+          data-fallback={imageUrlSmall}
+          onerror="if(this.src!==this.dataset.fallback){this.onerror=null;this.src=this.dataset.fallback;}"
+        />
         <div>
           <p class="maker">
             {product.maker ? (
@@ -147,29 +255,55 @@ const onakingUrl = onakingLinkData?.onaking_url ?? null;
           )}
           <div id="onaking-admin-widget" class="onaking-admin-widget"></div>
 
-          {product.genre_tags?.length > 0 && (
-            <ul class="tags">
-              {product.genre_tags.map((tag) => (
-                <li>
-                  <a href={`/?tag=${encodeURIComponent(tag)}`} class="tag-link">
-                    {tag}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
           {product.manual_note && <p class="manual-note">{product.manual_note}</p>}
+
+          {shopLinks.length > 0 ? (
+            <div class="shop-links">
+              <p class="shop-links-title">購入サイトを比較{shopLinks.length > 1 ? '(価格は税込)' : ''}</p>
+              <ul class="shop-links-list">
+                {visibleShopLinks.map((s, i) => (
+                  <li class={`shop-link-item ${i === cheapestIndex ? 'cheapest' : ''}`}>
+                    <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link">
+                      <span class="shop-link-name">{s.name}</span>
+                      <span class="shop-link-price">
+                        {s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし'}
+                      </span>
+                      {i === cheapestIndex && <span class="shop-link-badge">最安</span>}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              {moreShopLinks.length > 0 && (
+                <details class="shop-links-more">
+                  <summary>他{moreShopLinks.length}サイトを見る</summary>
+                  <ul class="shop-links-list">
+                    {moreShopLinks.map((s) => (
+                      <li class="shop-link-item">
+                        <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link">
+                          <span class="shop-link-name">{s.name}</span>
+                          <span class="shop-link-price">
+                            {s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし'}
+                          </span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          ) : (
+            product.affiliate_url && (
+              <a class="buy-link" href={product.affiliate_url} target="_blank" rel="noopener nofollow">
+                {product.is_manual ? '購入ページを見る' : 'FANZAで詳細を見る'}
+              </a>
+            )
+          )}
+
           <div id="check-widget" class="check-widget" data-product-id={product.id}>
             <p class="check-loading">読み込み中...</p>
           </div>
 
           <div id="folder-add-widget" class="folder-add-widget"></div>
-
-          {product.affiliate_url && (
-            <a class="buy-link" href={product.affiliate_url} target="_blank" rel="noopener nofollow">
-              {product.is_manual ? '購入ページを見る' : 'DMMで詳細を見る'}
-            </a>
-          )}
         </div>
       </div>
       <section class="public-reviews">
@@ -181,6 +315,11 @@ const onakingUrl = onakingLinkData?.onaking_url ?? null;
           {publicReviews?.map((r) => (
             <li class="review-item">
               <div class="review-item-header">
+                {reviewerNicknames[r.user_id] && (
+                  <a href={`/users/${encodeURIComponent(reviewerNicknames[r.user_id])}`} class="review-author">
+                    {reviewerNicknames[r.user_id]}
+                  </a>
+                )}
                 {r.rating && (
                   <span class="review-stars">{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
                 )}
@@ -224,11 +363,36 @@ const onakingUrl = onakingLinkData?.onaking_url ?? null;
               {r.similar_products && (
                 <p class="review-similar">似てるオナホール: {r.similar_products}</p>
               )}
+              <button type="button" class="review-like-btn" data-check-id={r.id}>
+                <span class="review-like-icon">♡</span>
+                <span class="review-like-count">{reviewLikeCounts[r.id] ?? 0}</span>
+              </button>
+
+              <div class="review-comments" data-check-id={r.id} data-review-user-id={r.user_id}>
+                {(commentsByCheckId[r.id] ?? []).length > 0 && (
+                  <ul class="review-comment-list">
+                    {(commentsByCheckId[r.id] ?? []).map((c) => (
+                      <li class="review-comment-item" data-comment-id={c.id} data-comment-user-id={c.user_id}>
+                        <span class="review-comment-author">{reviewerNicknames[c.user_id] ?? '匿名ユーザー'}</span>
+                        <p class="review-comment-body">{c.body}</p>
+                        <button type="button" class="review-comment-delete-btn" data-comment-id={c.id} style="display:none;">
+                          削除
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div class="review-comment-form">
+                  <textarea class="review-comment-input" placeholder="質問や感想を書く" maxlength="300"></textarea>
+                  <button type="button" class="review-comment-submit-btn" data-check-id={r.id}>コメントする</button>
+                </div>
+              </div>
             </li>
           ))}
         </ul>
       </section>
     </main>
+    <SiteFooter />
   </body>
   <script>
       import { supabase } from '../../lib/supabase.js';
@@ -251,6 +415,7 @@ const onakingUrl = onakingLinkData?.onaking_url ?? null;
         cost_performance: 'コスパ',
         tightness: '締めつけ',
         pleasure: '気持ちよさ',
+        stimulation: '刺激強度',
         fidelity: 'メーカー説明一致度',
         durability: '耐久性',
       };
@@ -498,7 +663,7 @@ const onakingUrl = onakingLinkData?.onaking_url ?? null;
         const rating = existing?.rating ?? 0;
         const reviewTitle = existing?.review_title ?? '';
         const reviewText = existing?.review_text ?? '';
-        const isPublic = existing?.is_public ?? false;
+        const isPrivate = existing ? existing.is_public === false : false;
         const detailReviewTitle = existing?.detail_review_title ?? '';
         const detailReviewText = existing?.detail_review_text ?? '';
         const retirementReason = existing?.retirement_reason ?? '';
@@ -625,8 +790,8 @@ const onakingUrl = onakingLinkData?.onaking_url ?? null;
           </div>
 
           <label class="public-toggle">
-            <input type="checkbox" id="is-public" ${isPublic ? 'checked' : ''} />
-            このレビューを公開する
+            <input type="checkbox" id="is-private" ${isPrivate ? 'checked' : ''} />
+            このレビューを非公開にする(チェックしない場合、公開されます)
           </label>
 
           <div class="check-actions">
@@ -916,7 +1081,7 @@ const onakingUrl = onakingLinkData?.onaking_url ?? null;
 
           const reviewTitleValue = document.getElementById('review-title').value;
           const reviewTextValue = document.getElementById('review-text').value;
-          const isPublicValue = document.getElementById('is-public').checked;
+          const isPrivateValue = document.getElementById('is-private').checked;
           const detailReviewTitleValue = document.getElementById('detail-review-title').value;
           const detailReviewTextValue = document.getElementById('detail-review-text').innerHTML.trim();
           const retirementReasonEl = document.getElementById('retirement-reason');
@@ -956,7 +1121,7 @@ const onakingUrl = onakingLinkData?.onaking_url ?? null;
               rating: currentRating || null,
               review_title: reviewTitleValue || null,
               review_text: reviewTextValue || null,
-              is_public: isPublicValue,
+              is_public: !isPrivateValue,
               updated_at: new Date().toISOString(),
               item_ratings: hasItemRatings ? currentItemRatings : null,
               detail_review_title: detailReviewTitleValue || null,
@@ -1034,9 +1199,167 @@ const onakingUrl = onakingLinkData?.onaking_url ?? null;
         }
       }
 
+      async function initReviewLikes() {
+        const likeButtons = [...document.querySelectorAll('.review-like-btn')];
+        if (likeButtons.length === 0) return;
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        let likedCheckIds = new Set();
+        if (session) {
+          const checkIds = likeButtons.map((b) => b.dataset.checkId);
+          const { data: myLikes } = await supabase
+            .from('review_likes')
+            .select('check_id')
+            .eq('user_id', session.user.id)
+            .in('check_id', checkIds);
+          likedCheckIds = new Set((myLikes ?? []).map((l) => l.check_id));
+        }
+
+        for (const btn of likeButtons) {
+          const checkId = btn.dataset.checkId;
+          if (likedCheckIds.has(checkId)) btn.classList.add('liked');
+
+          btn.addEventListener('click', async () => {
+            const {
+              data: { session: currentSession },
+            } = await supabase.auth.getSession();
+            if (!currentSession) {
+              alert('いいねするにはログインが必要です');
+              return;
+            }
+
+            btn.disabled = true;
+            const countEl = btn.querySelector('.review-like-count');
+            const isLiked = btn.classList.contains('liked');
+
+            if (isLiked) {
+              const { error } = await supabase
+                .from('review_likes')
+                .delete()
+                .eq('check_id', checkId)
+                .eq('user_id', currentSession.user.id);
+              if (!error) {
+                btn.classList.remove('liked');
+                countEl.textContent = Math.max(0, Number(countEl.textContent) - 1);
+              }
+            } else {
+              const { error } = await supabase
+                .from('review_likes')
+                .insert({ check_id: checkId, user_id: currentSession.user.id });
+              if (!error) {
+                btn.classList.add('liked');
+                countEl.textContent = Number(countEl.textContent) + 1;
+              }
+            }
+
+            btn.disabled = false;
+          });
+        }
+      }
+
+      function reviewCommentItemHtml(comment, authorLabel, canDelete) {
+        const li = document.createElement('li');
+        li.className = 'review-comment-item';
+        li.dataset.commentId = comment.id;
+        li.dataset.commentUserId = comment.user_id;
+        li.innerHTML = `
+          <span class="review-comment-author">${authorLabel}</span>
+          <p class="review-comment-body"></p>
+          <button type="button" class="review-comment-delete-btn" data-comment-id="${comment.id}" style="display:${canDelete ? 'inline-block' : 'none'};">削除</button>
+        `;
+        li.querySelector('.review-comment-body').textContent = comment.body;
+        return li;
+      }
+
+      async function initReviewComments() {
+        const commentSections = [...document.querySelectorAll('.review-comments')];
+        if (commentSections.length === 0) return;
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        // 自分のコメント、または自分のレビューについたコメントには削除ボタンを出す
+        if (session) {
+          for (const section of commentSections) {
+            const reviewUserId = section.dataset.reviewUserId;
+            const isOwnReview = reviewUserId === session.user.id;
+            section.querySelectorAll('.review-comment-item').forEach((item) => {
+              const isOwnComment = item.dataset.commentUserId === session.user.id;
+              if (isOwnComment || isOwnReview) {
+                const delBtn = item.querySelector('.review-comment-delete-btn');
+                if (delBtn) delBtn.style.display = 'inline-block';
+              }
+            });
+          }
+        }
+
+        for (const section of commentSections) {
+          const checkId = section.dataset.checkId;
+          const list = section.querySelector('.review-comment-list');
+          const textarea = section.querySelector('.review-comment-input');
+          const submitBtn = section.querySelector('.review-comment-submit-btn');
+
+          submitBtn.addEventListener('click', async () => {
+            const {
+              data: { session: currentSession },
+            } = await supabase.auth.getSession();
+            if (!currentSession) {
+              alert('コメントするにはログインが必要です');
+              return;
+            }
+
+            const body = textarea.value.trim();
+            if (!body) return;
+
+            submitBtn.disabled = true;
+            const { data, error } = await supabase
+              .from('review_comments')
+              .insert({ check_id: checkId, user_id: currentSession.user.id, body })
+              .select('id, check_id, user_id, body, created_at')
+              .single();
+            submitBtn.disabled = false;
+
+            if (error) {
+              alert('コメントの投稿に失敗しました');
+              return;
+            }
+
+            let listEl = list;
+            if (!listEl) {
+              listEl = document.createElement('ul');
+              listEl.className = 'review-comment-list';
+              section.insertBefore(listEl, section.querySelector('.review-comment-form'));
+            }
+            listEl.appendChild(reviewCommentItemHtml(data, '自分', true));
+            textarea.value = '';
+          });
+        }
+
+        document.addEventListener('click', async (e) => {
+          const delBtn = e.target.closest('.review-comment-delete-btn');
+          if (!delBtn) return;
+
+          if (!confirm('このコメントを削除しますか？')) return;
+
+          const commentId = delBtn.dataset.commentId;
+          const { error } = await supabase.from('review_comments').delete().eq('id', commentId);
+          if (error) {
+            alert('削除に失敗しました');
+            return;
+          }
+          delBtn.closest('.review-comment-item').remove();
+        });
+      }
+
       init();
       logView();
       initFolderWidget();
       initOnakingAdminWidget();
+      initReviewLikes();
+      initReviewComments();
     </script>
 </html>

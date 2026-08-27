@@ -1,23 +1,22 @@
 ---
 import { supabase } from '../../lib/supabase.js';
 import '../../styles/global.css';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
 
-export const prerender = true;
-
-export async function getStaticPaths() {
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select(
-      'id, nickname, best_product_id_1, best_product_id_2, best_product_id_3, best_product_reason_1, best_product_reason_2, best_product_reason_3, best_review_product_id, oshi_maker, oshi_maker_reason, avatar_url, header_url, bio, sns_links, is_public'
-    );
-
-  return (profiles ?? []).map((p) => ({
-    params: { nickname: p.nickname },
-    props: { profile: p },
-  }));
-}
-
-let { profile } = Astro.props;
+// 商品ページと同様、ビルド時の事前生成(prerender)はせず、リクエストごとに
+// その場でSupabaseから該当プロフィールを取得する(SSR)方式にしている。
+// (以前はgetStaticPathsでビルド時に全ページ生成していたため、ニックネーム変更や
+// 新規登録が次回デプロイまで反映されないというバグがあった)
+const { nickname } = Astro.params;
+const profileResult = await supabase
+  .from('profiles')
+  .select(
+    'id, nickname, best_product_id_1, best_product_id_2, best_product_id_3, best_product_reason_1, best_product_reason_2, best_product_reason_3, best_review_product_id, oshi_maker, oshi_maker_reason, avatar_url, header_url, bio, sns_links, is_public'
+  )
+  .eq('nickname', nickname)
+  .maybeSingle();
+let profile = profileResult.data;
 
 // 非公開プロフィールは、存在しないページと同じ扱いにして完全に非表示にする
 if (profile && profile.is_public === false) {
@@ -152,9 +151,7 @@ const TIER_LABELS = { first: '一軍', second: '二軍', retired: '引退' };
     <title>{profile ? `${profile.nickname}さんのプロフィール` : 'ユーザーが見つかりません'} | オナホめも</title>
   </head>
   <body>
-    <header>
-      <a href="/">← 一覧に戻る</a>
-    </header>
+    <SiteHeader />
     <main class="profile-page">
       {!profile && <p>そのニックネームのユーザーは見つかりませんでした。</p>}
 
@@ -174,6 +171,8 @@ const TIER_LABELS = { first: '一軍', second: '二軍', retired: '引退' };
             )}
             <h1 class="profile-page-title">{profile.nickname}</h1>
           </div>
+
+          <a href="/mypage" id="edit-profile-btn" class="auth-btn" style="display:none;">編集する</a>
 
           {profile.bio && <p class="profile-bio">{profile.bio}</p>}
 
@@ -303,25 +302,20 @@ const TIER_LABELS = { first: '一軍', second: '二軍', retired: '引退' };
 
           {checks.length === 0 && <p class="mp-empty">まだ公開されている記録がありません。</p>}
 
-          <ul class="mp-grid">
+          <ul class="shelf-grid">
             {checks.map((c) => {
               const p = c.products;
               return (
-                <li class="mp-card">
-                  <a href={`/products/${p.dmm_content_id}/`}>
+                <li class="shelf-card">
+                  <a href={`/products/${p.dmm_content_id}/`} class="shelf-cover">
                     <img src={p.image_url} alt={p.name} loading="lazy" />
-                    <div class="mp-card-body">
-                      <p class="mp-maker">{p.maker ?? ''}</p>
-                      <h3>{p.name}</h3>
-                      <p class="mp-price">{p.price ? `¥${p.price.toLocaleString()}` : ''}</p>
-                      <div class="mp-tags">
-                        <span class="mp-tag">{STATUS_LABELS[c.status]}</span>
-                        {c.tier && <span class="mp-tag">{TIER_LABELS[c.tier]}</span>}
-                        {c.rating && <span class="mp-tag">★{c.rating}</span>}
-                      </div>
-                      {c.review_text && <p class="mp-memo">{c.review_text}</p>}
-                    </div>
                   </a>
+                  {c.rating ? (
+                    <p class="shelf-stars">{'★'.repeat(c.rating)}{'☆'.repeat(5 - c.rating)}</p>
+                  ) : (
+                    <p class="shelf-stars-empty">{STATUS_LABELS[c.status]}{c.tier ? `・${TIER_LABELS[c.tier]}` : ''}</p>
+                  )}
+                  <p class="shelf-name">{p.name}</p>
                 </li>
               );
             })}
@@ -342,7 +336,13 @@ const TIER_LABELS = { first: '一軍', second: '二軍', retired: '引退' };
           data: { session },
         } = await supabase.auth.getSession();
 
-        if (!session || session.user.id === profileId) return;
+        if (session && session.user.id === profileId) {
+          const editBtn = document.getElementById('edit-profile-btn');
+          if (editBtn) editBtn.style.display = 'inline-block';
+          return;
+        }
+
+        if (!session) return;
 
         const btn = document.getElementById('follow-btn');
         btn.style.display = 'inline-block';
@@ -390,5 +390,6 @@ const TIER_LABELS = { first: '一軍', second: '二軍', retired: '引退' };
 
       initFollow();
     </script>
+    <SiteFooter />
   </body>
 </html>

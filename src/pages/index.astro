@@ -1,6 +1,8 @@
 ---
 import { supabase } from '../lib/supabase.js';
 import '../styles/global.css';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
 
 const PAGE_SIZE = 60;
 const CAMPAIGN_KEYWORDS = ['セール', '特価', '祭', 'キャンペーン', 'OFF', '割引'];
@@ -20,6 +22,7 @@ const [
   productsResult,
   countResult,
   memberCountResult,
+  reviewCountResult,
   makerRowsResult,
   allTagsResult,
   minDateResult,
@@ -31,6 +34,7 @@ const [
   fanzaRankingResult,
   monthlyViewRankingResult,
   newlyOnSaleResult,
+  latestReviewsResult,
 ] = await Promise.all([
   supabase
     .from('products_with_stats')
@@ -42,8 +46,14 @@ const [
     .range(0, PAGE_SIZE - 1),
   supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_onahole', true),
   supabase.rpc('get_member_count'),
-  supabase.from('products').select('maker').eq('is_onahole', true).not('maker', 'is', null).range(0, 4999),
-  supabase.from('products').select('genre_tags').eq('is_onahole', true).range(0, 4999),
+  supabase
+    .from('checks')
+    .select('*', { count: 'exact', head: true })
+    .or(
+      'review_text.not.is.null,detail_review_text.not.is.null,rating.not.is.null,item_ratings.not.is.null,review_images.not.is.null,similar_products.not.is.null'
+    ),
+  supabase.rpc('get_maker_counts'),
+  supabase.rpc('get_genre_tag_stats'),
   supabase
     .from('products')
     .select('release_date')
@@ -103,12 +113,22 @@ const [
     .gt('monthly_view_count', 0)
     .order('monthly_view_count', { ascending: false })
     .limit(10),
-  supabase.rpc('refresh_sale_watch', { new_arrival_days: NEW_ARRIVAL_DAYS }),
+  supabase.rpc('get_newly_on_sale', { new_arrival_days: NEW_ARRIVAL_DAYS }),
+  supabase
+    .from('checks')
+    .select(
+      'id, user_id, rating, review_title, review_text, detail_review_title, detail_review_text, updated_at, products(id, dmm_content_id, name, image_url)'
+    )
+    .eq('is_public', true)
+    .or('review_text.not.is.null,detail_review_text.not.is.null,rating.not.is.null')
+    .order('updated_at', { ascending: false })
+    .limit(10),
 ]);
 
 const { data: products, error } = productsResult;
 const { count } = countResult;
 const memberCount = memberCountResult.data ?? 0;
+const reviewCount = reviewCountResult.count ?? 0;
 const makerRows = makerRowsResult.data;
 const allTagsData = allTagsResult.data;
 const minDateRow = minDateResult.data;
@@ -120,36 +140,42 @@ const siteRatingRankingData = siteRatingRankingResult.data;
 const fanzaRankingData = fanzaRankingResult.data;
 const monthlyViewRankingData = monthlyViewRankingResult.data;
 const newlyOnSaleData = newlyOnSaleResult.data;
+const latestReviews = (latestReviewsResult.data ?? []).filter((r) => r.products);
 
-const makerCounts = {};
-for (const row of makerRows ?? []) {
-  makerCounts[row.maker] = (makerCounts[row.maker] ?? 0) + 1;
-}
-const topMakers = Object.entries(makerCounts)
-  .sort((a, b) => b[1] - a[1])
-  .slice(0, 40)
-  .map(([name]) => name);
-
-const allTagsSet = new Set();
-for (const row of allTagsData ?? []) {
-  for (const tag of row.genre_tags ?? []) {
-    allTagsSet.add(tag);
+// レビュー投稿者のニックネームは、プロフィールを公開設定にしている人の分だけ表示する
+// (checksとprofilesの間に外部キー関係がないため、埋め込みselectではなく手動で結合する)
+const latestReviewUserIds = [...new Set(latestReviews.map((r) => r.user_id).filter(Boolean))];
+let latestReviewerNicknames = {};
+if (latestReviewUserIds.length > 0) {
+  const { data: latestReviewerProfiles } = await supabase
+    .from('profiles')
+    .select('id, nickname')
+    .in('id', latestReviewUserIds)
+    .eq('is_public', true)
+    .not('nickname', 'is', null);
+  for (const p of latestReviewerProfiles ?? []) {
+    latestReviewerNicknames[p.id] = p.nickname;
   }
 }
-const campaignTags = [...allTagsSet].filter((tag) =>
-  CAMPAIGN_KEYWORDS.some((k) => tag.includes(k))
-);
 
-const tagCounts = {};
-for (const row of allTagsData ?? []) {
-  for (const tag of row.genre_tags ?? []) {
-    tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
-  }
+function latestReviewTitle(r) {
+  return r.detail_review_title || r.review_title || '';
 }
-const topTags = Object.entries(tagCounts)
-  .sort((a, b) => b[1] - a[1])
-  .slice(0, 40)
-  .map(([name]) => name);
+function latestReviewExcerpt(r) {
+  const text = r.detail_review_text || r.review_text || '';
+  if (!text) return '';
+  return text.length > 50 ? `${text.slice(0, 50)}…` : text;
+}
+
+// メーカー/タグの集計は get_maker_counts / get_genre_tag_stats という
+// SQL関数(GROUP BY)側で行っており、ここではすでに集計済み・件数降順の
+// データが返ってくる。以前は商品を最大5000件取得してJS側で数えていたが、
+// 集計をDB側に寄せることでネットワーク転送量と処理時間を大幅に削減している。
+const topMakers = (makerRows ?? []).slice(0, 40);
+
+const campaignTags = (allTagsData ?? [])
+  .filter((row) => CAMPAIGN_KEYWORDS.some((k) => row.tag.includes(k)))
+  .map((row) => row.tag);
 
 const minYear = minDateRow?.[0]?.release_date
   ? new Date(minDateRow[0].release_date).getFullYear()
@@ -228,11 +254,12 @@ const RANKINGS = [
     <title>オナホめも</title>
   </head>
   <body>
+    <SiteHeader />
     <header class="hero">
       <p class="eyebrow">ONAHOLE CATALOG</p>
       <h1>
-        使ったオナホールを<strong>記録</strong>して、<br />
-        <strong>発見</strong>しよう。
+        使ったオナホールを<strong>メモ</strong>して<br />
+        <strong>コレクション</strong>しよう。
       </h1>
       <p class="lead">
         オナホめもは、使ったオナホールの記録ができるWebサービスです。
@@ -254,6 +281,10 @@ const RANKINGS = [
           <span class="stat-number">{memberCount?.toLocaleString() ?? '-'}</span>
           <span class="stat-label">人が利用中</span>
         </p>
+        <p class="stat">
+          <span class="stat-number">{reviewCount?.toLocaleString() ?? '-'}</span>
+          <span class="stat-label">件のレビュー</span>
+        </p>
       </div>
 
       <div id="auth-area" class="auth-area"></div>
@@ -268,6 +299,8 @@ const RANKINGS = [
               <span class={`new-info-tag new-info-tag-${p.tag.toLowerCase()}`}>{p.tag}</span>
               {p.dmm_content_id ? (
                 <a href={`/products/${p.dmm_content_id}/`} class="new-info-link">{p.name}</a>
+              ) : p.id === 'sale-summary' ? (
+                <button type="button" class="new-info-link new-info-sale-trigger">{p.name}</button>
               ) : (
                 <span class="new-info-link new-info-link-text">{p.name}</span>
               )}
@@ -279,7 +312,7 @@ const RANKINGS = [
     )}
 
     {RANKINGS.length > 0 && (
-      <section class="rankings">
+      <section class="rankings" id="rankings">
         {RANKINGS.map((r) => (
           <div class="ranking-block">
             <h2 class="ranking-title">
@@ -306,6 +339,38 @@ const RANKINGS = [
       </section>
     )}
 
+    {latestReviews.length > 0 && (
+      <section class="latest-reviews">
+        <h2 class="latest-reviews-title">
+          最新のレビュー
+          <span class="ranking-subtitle">みんなが投稿したレビュー</span>
+        </h2>
+        <ul class="latest-reviews-scroll">
+          {latestReviews.map((r) => (
+            <li class="latest-review-card">
+              <a href={`/products/${r.products.dmm_content_id}/`} class="latest-review-card-link">
+                <img src={r.products.image_url} alt={r.products.name} loading="lazy" />
+                <div class="latest-review-card-body">
+                  <p class="latest-review-product-name">{r.products.name}</p>
+                  {r.rating && (
+                    <p class="latest-review-stars">
+                      {'★'.repeat(r.rating)}
+                      {'☆'.repeat(5 - r.rating)}
+                    </p>
+                  )}
+                  {latestReviewTitle(r) && <p class="latest-review-review-title">{latestReviewTitle(r)}</p>}
+                  {latestReviewExcerpt(r) && <p class="latest-review-excerpt">{latestReviewExcerpt(r)}</p>}
+                  <p class="latest-review-author">{latestReviewerNicknames[r.user_id] ?? '匿名ユーザー'}</p>
+                </div>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    <div id="my-recommend-section"></div>
+
     <div id="my-sale-section"></div>
 
     <main>
@@ -322,6 +387,10 @@ const RANKINGS = [
 <label class="sale-filter-label">
           <input type="checkbox" id="sale-filter" />
           セール対象のみ
+        </label>
+        <label class="sale-filter-label">
+          <input type="checkbox" id="onaking-filter" />
+          オナ王レビュー済み
         </label>
         <label>
           並び替え
@@ -342,17 +411,7 @@ const RANKINGS = [
           <select id="maker-select">
             <option value="">すべて</option>
             {topMakers.map((m) => (
-              <option value={m}>{m}</option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          ジャンル
-          <select id="tag-select">
-            <option value="">すべて</option>
-            {topTags.map((t) => (
-              <option value={t}>{t}</option>
+              <option value={m.maker}>{m.maker} ({m.cnt})</option>
             ))}
           </select>
         </label>
@@ -427,12 +486,12 @@ const RANKINGS = [
       const sortSelect = document.getElementById('sort-select');
       const searchInput = document.getElementById('search-input');
       const saleFilter = document.getElementById('sale-filter');
+      const onakingFilter = document.getElementById('onaking-filter');
       let campaignTags = [];
       function isCampaignTag(tag) {
         return campaignTags.includes(tag);
       }
       const makerSelect = document.getElementById('maker-select');
-      const tagSelect = document.getElementById('tag-select');
       const yearFromSelect = document.getElementById('year-from-select');
       const yearToSelect = document.getElementById('year-to-select');
       const priceMinInput = document.getElementById('price-min-input');
@@ -556,11 +615,11 @@ const RANKINGS = [
         return map;
       }
 
-      function applyFilters(q, { maker, tag, searchTerm, yearFrom, yearTo, priceMin, priceMax }) {
+      function applyFilters(q, { maker, searchTerm, yearFrom, yearTo, priceMin, priceMax }) {
         if (maker) q = q.eq('maker', maker);
-        if (tag) q = q.contains('genre_tags', [tag]);
         if (searchTerm) q = q.ilike('name', `%${searchTerm}%`);
         if (saleFilter.checked) q = q.overlaps('genre_tags', campaignTags);
+        if (onakingFilter.checked) q = q.eq('is_onaking_reviewed', true);
         if (yearFrom) q = q.gte('release_date', `${yearFrom}-01-01`);
         if (yearTo) q = q.lte('release_date', `${yearTo}-12-31`);
         if (priceMin) q = q.gte('price', Number(priceMin));
@@ -573,7 +632,6 @@ const RANKINGS = [
 
         const filters = {
           maker: makerSelect.value,
-          tag: tagSelect.value,
           searchTerm: searchInput.value.trim(),
           yearFrom: yearFromSelect.value,
           yearTo: yearToSelect.value,
@@ -774,9 +832,19 @@ const RANKINGS = [
 
       makerSelect.addEventListener('change', () => reload({ resetPage: true }));
       saleFilter.addEventListener('change', () => reload({ resetPage: true }));
-      tagSelect.addEventListener('change', () => reload({ resetPage: true }));
+      onakingFilter.addEventListener('change', () => reload({ resetPage: true }));
       yearFromSelect.addEventListener('change', () => reload({ resetPage: true }));
       yearToSelect.addEventListener('change', () => reload({ resetPage: true }));
+
+      // 新着情報の「〜件の商品が新しくセール対象になりました」をクリックしたら、
+      // セール対象のみのフィルターをオンにして一覧を絞り込む
+      const saleTrigger = document.querySelector('.new-info-sale-trigger');
+      if (saleTrigger) {
+        saleTrigger.addEventListener('click', () => {
+          saleFilter.checked = true;
+          reload({ resetPage: true });
+        });
+      }
 
       let priceTimeout;
       function schedulePriceReload() {
@@ -805,9 +873,20 @@ const RANKINGS = [
         if (session) {
           const email = session.user.email;
           heroActions.style.display = 'none';
+
+          let mypageHref = '/mypage';
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('nickname')
+            .eq('id', session.user.id)
+            .maybeSingle();
+          if (profile?.nickname) {
+            mypageHref = `/users/${encodeURIComponent(profile.nickname)}`;
+          }
+
           authArea.innerHTML = `
             <span class="auth-email">${email}</span>
-            <a href="/mypage" class="auth-btn">マイページ</a>
+            <a href="${mypageHref}" class="auth-btn">マイページ</a>
             <button id="logout-btn" class="auth-btn">ログアウト</button>
           `;
           document.getElementById('logout-btn').addEventListener('click', async () => {
@@ -904,9 +983,60 @@ const RANKINGS = [
         `;
       }
 
+      async function loadMyRecommendSection() {
+        const container = document.getElementById('my-recommend-section');
+        if (!container) return;
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          container.innerHTML = '';
+          return;
+        }
+
+        const { data: recommendItems, error: recError } = await supabase.rpc('get_recommendations', {
+          limit_count: 10,
+        });
+
+        if (recError || !recommendItems || recommendItems.length === 0) {
+          container.innerHTML = '';
+          return;
+        }
+
+        container.innerHTML = `
+          <section class="rankings">
+            <div class="ranking-block">
+              <h2 class="ranking-title">
+                あなたへのおすすめ
+                <span class="ranking-subtitle">記録したメーカー・ジャンルから近い、まだ記録していない商品</span>
+              </h2>
+              <ul class="ranking-scroll">
+                ${recommendItems
+                  .map(
+                    (p, idx) => `
+                  <li class="ranking-card">
+                    <span class="ranking-rank">${idx + 1}</span>
+                    <a href="/products/${p.dmm_content_id}/">
+                      <img src="${p.image_url}" alt="${p.name}" loading="lazy" />
+                      <div class="ranking-card-body">
+                        <p class="ranking-maker">${p.maker ?? ''}</p>
+                        <h3>${p.name}</h3>
+                        <p class="ranking-metric">${p.site_rating_avg ? `★${p.site_rating_avg}(${p.site_rating_count}件)` : ''}</p>
+                      </div>
+                    </a>
+                  </li>
+                `
+                  )
+                  .join('')}
+              </ul>
+            </div>
+          </section>
+        `;
+      }
+
       async function init() {
         renderAuthArea();
         loadMySaleSection();
+        loadMyRecommendSection();
         campaignTags = JSON.parse(document.getElementById('campaign-tags-data').textContent);
 
         const initialProducts = JSON.parse(document.getElementById('initial-products-data').textContent);
@@ -914,11 +1044,10 @@ const RANKINGS = [
         const ids = initialProducts.map((p) => p.id);
         userChecksMap = await loadUserChecksMap(ids);
 
-        // 商品詳細ページのメーカー名/タグのリンクから来た場合、
+        // 商品詳細ページのメーカー名リンクから来た場合、
         // 絞り込みを引き継いで検索結果を絞り込んだ状態にする
         const urlParams = new URLSearchParams(window.location.search);
         const urlMaker = urlParams.get('maker');
-        const urlTag = urlParams.get('tag');
         let needsReload = false;
 
         if (urlMaker) {
@@ -932,14 +1061,10 @@ const RANKINGS = [
           needsReload = true;
         }
 
-        if (urlTag) {
-          if (![...tagSelect.options].some((o) => o.value === urlTag)) {
-            const opt = document.createElement('option');
-            opt.value = urlTag;
-            opt.textContent = urlTag;
-            tagSelect.appendChild(opt);
-          }
-          tagSelect.value = urlTag;
+        // ヘッダーの「セール中」リンク(/?sale=1)から来た場合、
+        // セール対象のみのフィルターをオンにして一覧を絞り込む
+        if (urlParams.get('sale') === '1') {
+          saleFilter.checked = true;
           needsReload = true;
         }
 
@@ -953,5 +1078,6 @@ const RANKINGS = [
 
       init();
     </script>
+    <SiteFooter />
   </body>
 </html>

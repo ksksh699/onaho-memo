@@ -1,5 +1,7 @@
 ---
 import '../styles/global.css';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
 ---
 
 <html lang="ja">
@@ -9,9 +11,7 @@ import '../styles/global.css';
     <title>マイページ | オナホめも</title>
   </head>
   <body>
-    <header>
-      <a href="/">← 一覧に戻る</a>
-    </header>
+    <SiteHeader />
     <main class="mypage-main">
       <h1 class="mypage-title">マイページ</h1>
 
@@ -77,6 +77,12 @@ import '../styles/global.css';
       let currentIsPublic = true;
       let profileDetailsEditing = false;
       let editingSnsLinks = [];
+      let currentViewMode = 'grid';
+      try {
+        currentViewMode = localStorage.getItem('onahole_view_mode') || 'grid';
+      } catch (e) {
+        currentViewMode = 'grid';
+      }
       const ADMIN_USER_ID = '278377ee-a457-41bc-ab79-c1be9f4b768e';
 
       const STATUS_LABELS = {
@@ -1427,9 +1433,9 @@ import '../styles/global.css';
         renderProfileDetailsSection();
       }
 
-      function productCardHtml(check) {
+      function buildCardMeta(check) {
         const p = check.products;
-        if (!p) return '';
+        if (!p) return null;
 
         const top3Idx = currentTop3.findIndex((s) => s && s.productId === p.id);
         const isTop3 = check.status === 'used' && top3Idx >= 0;
@@ -1471,6 +1477,14 @@ import '../styles/global.css';
           actions += `<button class="best-review-set-btn" data-product-id="${p.id}">${isBestReview ? 'ベスト口コミを解除' : 'ベスト口コミに設定'}</button>`;
         }
 
+        return { p, isTop3, onSale, discountPercent, subInfo, actions };
+      }
+
+      function productCardHtml(check) {
+        const meta = buildCardMeta(check);
+        if (!meta) return '';
+        const { p, isTop3, onSale, discountPercent, subInfo, actions } = meta;
+
         return `
           <li class="mp-card ${isTop3 ? 'mp-card-best' : ''}">
             ${onSale ? '<span class="sale-ribbon">SALE</span>' : ''}
@@ -1490,6 +1504,72 @@ import '../styles/global.css';
             ${actions ? `<div class="mp-card-actions">${actions}</div>` : ''}
           </li>
         `;
+      }
+
+      function productRowHtml(check) {
+        const meta = buildCardMeta(check);
+        if (!meta) return '';
+        const { p, isTop3, onSale, discountPercent, subInfo, actions } = meta;
+
+        return `
+          <li class="mp-row ${isTop3 ? 'mp-row-best' : ''}">
+            <a href="/products/${p.dmm_content_id}/" class="mp-row-link">
+              <img src="${p.image_url}" alt="${p.name}" loading="lazy" />
+              <div class="mp-row-body">
+                <h3>${p.name}</h3>
+                <p class="mp-price">
+                  ${p.price ? `¥${p.price.toLocaleString()}` : ''}
+                  ${onSale ? `<span class="discount-badge-small">${discountPercent}%OFF</span>` : ''}
+                </p>
+                <div class="mp-tags">${subInfo}</div>
+                ${check.memo ? `<p class="mp-memo">${check.memo}</p>` : ''}
+              </div>
+            </a>
+            ${actions ? `<div class="mp-row-actions">${actions}</div>` : ''}
+          </li>
+        `;
+      }
+
+      function renderProductLists() {
+        const grouped = { used: [], interested: [] };
+        for (const c of lastChecks) {
+          if (grouped[c.status]) grouped[c.status].push(c);
+        }
+
+        const usedByTier = { first: [], second: [], retired: [] };
+        for (const c of grouped.used) {
+          if (c.tier && usedByTier[c.tier]) usedByTier[c.tier].push(c);
+        }
+
+        const saleInterestedCount = grouped.interested.filter(isOnSale).length;
+        const totalSpent = grouped.used.reduce((sum, c) => sum + (c.products?.price ?? 0), 0);
+
+        let html = `
+          <div class="mp-stats">
+            <div class="mp-stat"><span class="mp-stat-num">${grouped.used.length}</span><span>使った</span></div>
+            <div class="mp-stat"><span class="mp-stat-num">${usedByTier.first.length}</span><span>一軍</span></div>
+            <div class="mp-stat"><span class="mp-stat-num">${grouped.interested.length}</span><span>気になる</span></div>
+            <div class="mp-stat"><span class="mp-stat-num">${saleInterestedCount}</span><span>気になるでセール中</span></div>
+            <div class="mp-stat mp-stat-wide"><span class="mp-stat-num">¥${totalSpent.toLocaleString()}</span><span>使った商品の合計金額</span></div>
+          </div>
+          <div class="mp-view-toggle">
+            <button type="button" class="mp-view-btn ${currentViewMode === 'grid' ? 'active' : ''}" data-view="grid">▦ グリッド表示</button>
+            <button type="button" class="mp-view-btn ${currentViewMode === 'list' ? 'active' : ''}" data-view="list">☰ リスト表示</button>
+          </div>
+        `;
+
+        const renderItem = currentViewMode === 'list' ? productRowHtml : productCardHtml;
+        const listTag = currentViewMode === 'list' ? 'mp-list' : 'mp-grid';
+
+        for (const status of STATUS_ORDER) {
+          const list = grouped[status];
+          if (list.length === 0) continue;
+
+          html += `<h2 class="mp-section-title">${STATUS_LABELS[status]}(${list.length})</h2>`;
+          html += `<ul class="${listTag}">${list.map(renderItem).join('')}</ul>`;
+        }
+
+        content.innerHTML = html;
       }
 
       async function init() {
@@ -1568,36 +1648,7 @@ import '../styles/global.css';
           return;
         }
 
-        const grouped = { used: [], interested: [] };
-        for (const c of lastChecks) {
-          if (grouped[c.status]) grouped[c.status].push(c);
-        }
-
-        const usedByTier = { first: [], second: [], retired: [] };
-        for (const c of grouped.used) {
-          if (c.tier && usedByTier[c.tier]) usedByTier[c.tier].push(c);
-        }
-
-        const saleInterestedCount = grouped.interested.filter(isOnSale).length;
-
-        let html = `
-          <div class="mp-stats">
-            <div class="mp-stat"><span class="mp-stat-num">${grouped.used.length}</span><span>使った</span></div>
-            <div class="mp-stat"><span class="mp-stat-num">${usedByTier.first.length}</span><span>一軍</span></div>
-            <div class="mp-stat"><span class="mp-stat-num">${grouped.interested.length}</span><span>気になる</span></div>
-            <div class="mp-stat"><span class="mp-stat-num">${saleInterestedCount}</span><span>気になるでセール中</span></div>
-          </div>
-        `;
-
-        for (const status of STATUS_ORDER) {
-          const list = grouped[status];
-          if (list.length === 0) continue;
-
-          html += `<h2 class="mp-section-title">${STATUS_LABELS[status]}(${list.length})</h2>`;
-          html += `<ul class="mp-grid">${list.map(productCardHtml).join('')}</ul>`;
-        }
-
-        content.innerHTML = html;
+        renderProductLists();
       }
 
       content.addEventListener('click', (e) => {
@@ -1612,6 +1663,16 @@ import '../styles/global.css';
         if (reviewBtn) {
           e.preventDefault();
           toggleBestReview(reviewBtn.dataset.productId);
+          return;
+        }
+
+        const viewBtn = e.target.closest('.mp-view-btn');
+        if (viewBtn) {
+          currentViewMode = viewBtn.dataset.view;
+          try {
+            localStorage.setItem('onahole_view_mode', currentViewMode);
+          } catch (err) {}
+          renderProductLists();
         }
       });
 
@@ -1714,5 +1775,6 @@ import '../styles/global.css';
 
       init();
     </script>
+    <SiteFooter />
   </body>
 </html>
