@@ -306,6 +306,13 @@ main {
   border-color: var(--accent);
 }
 
+/* クイックチェックのメニューを開いている間は、カードの外にはみ出す分を
+   隠さないようにする(スマホ幅でメニューがカードの高さより大きくなり、
+   上側の「気になる」ボタンが見切れてしまう問題への対応) */
+.card.qc-open {
+  overflow: visible;
+}
+
 .card img {
   width: 100%;
   aspect-ratio: 1 / 1;

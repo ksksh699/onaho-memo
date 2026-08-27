@@ -767,6 +767,15 @@ const RANKINGS = [
       }
 
       // --- クイックチェック(トップページからの記録)の操作 ---
+      // メニューを開いている間だけ、親の.cardのoverflow:hiddenを解除する
+      // (スマホ幅ではカードの縦幅がメニューの高さより小さく、上に向かって
+      // 開くメニューの上側=「気になる」ボタンがカードの外にはみ出て見切れてしまうため)
+      function setQuickCheckMenuOpen(qc, menu, isOpen) {
+        menu.hidden = !isOpen;
+        const card = qc.closest('.card');
+        if (card) card.classList.toggle('qc-open', isOpen);
+      }
+
       grid.addEventListener('click', async (e) => {
         const qc = e.target.closest('.quick-check');
         if (!qc) return;
@@ -775,10 +784,13 @@ const RANKINGS = [
         const menu = qc.querySelector('.quick-check-menu');
 
         if (e.target.classList.contains('quick-check-btn')) {
-          document.querySelectorAll('.quick-check-menu').forEach((m) => {
-            if (m !== menu) m.hidden = true;
+          const willOpen = menu.hidden;
+          document.querySelectorAll('.quick-check').forEach((otherQc) => {
+            if (otherQc !== qc) {
+              setQuickCheckMenuOpen(otherQc, otherQc.querySelector('.quick-check-menu'), false);
+            }
           });
-          menu.hidden = !menu.hidden;
+          setQuickCheckMenuOpen(qc, menu, willOpen);
           return;
         }
 
@@ -791,14 +803,14 @@ const RANKINGS = [
           }
 
           await saveQuickCheck(productId, status, null);
-          menu.hidden = true;
+          setQuickCheckMenuOpen(qc, menu, false);
           return;
         }
 
         if (e.target.classList.contains('qc-tier')) {
           const tier = e.target.dataset.tier;
           await saveQuickCheck(productId, 'used', tier);
-          menu.hidden = true;
+          setQuickCheckMenuOpen(qc, menu, false);
           return;
         }
 
@@ -815,14 +827,16 @@ const RANKINGS = [
 
         if (e.target.classList.contains('qc-reset')) {
           await resetQuickCheck(productId);
-          menu.hidden = true;
+          setQuickCheckMenuOpen(qc, menu, false);
           return;
         }
       });
 
       document.addEventListener('click', (e) => {
         if (!e.target.closest('.quick-check')) {
-          document.querySelectorAll('.quick-check-menu').forEach((m) => (m.hidden = true));
+          document.querySelectorAll('.quick-check').forEach((qc) => {
+            setQuickCheckMenuOpen(qc, qc.querySelector('.quick-check-menu'), false);
+          });
         }
       });
 
