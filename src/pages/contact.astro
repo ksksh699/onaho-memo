@@ -2,8 +2,6 @@
 import '../styles/global.css';
 import SiteHeader from '../components/SiteHeader.astro';
 import SiteFooter from '../components/SiteFooter.astro';
-
-const CONTACT_EMAIL = 'ksksh699@gmail.com';
 ---
 
 <html lang="ja">
@@ -19,20 +17,98 @@ const CONTACT_EMAIL = 'ksksh699@gmail.com';
 
       <div class="legal-content">
         <p>
-          オナホめもに関するご意見・ご要望・不具合のご報告などは、以下のメールアドレスまでご連絡ください。
+          オナホめもに関するご意見・ご要望・不具合のご報告などは、以下のフォームからお気軽にご連絡ください。
         </p>
 
-        <div class="legal-contact-box">
-          <p style="margin:0;">
-            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
-          </p>
-        </div>
-
-        <p>
-          お問い合わせの内容によっては、返信までお時間をいただく場合や、返信できない場合がございます。あらかじめご了承ください。
-        </p>
+        <form id="contact-form" class="contact-form">
+          <label class="contact-form-field">
+            お名前(任意)
+            <input type="text" id="contact-name" maxlength="60" autocomplete="name" />
+          </label>
+          <label class="contact-form-field">
+            メールアドレス(任意・返信が必要な場合のみ)
+            <input type="email" id="contact-email" maxlength="200" autocomplete="email" />
+          </label>
+          <label class="contact-form-field">
+            お問い合わせ内容<span class="contact-required">必須</span>
+            <textarea id="contact-message" rows="6" maxlength="2000" required></textarea>
+          </label>
+          <button type="submit" id="contact-submit" class="btn-primary contact-form-submit">送信する</button>
+          <p id="contact-status" class="contact-status" hidden></p>
+        </form>
       </div>
     </main>
+
+    <script>
+      import { supabase } from '../lib/supabase.js';
+
+      const form = document.getElementById('contact-form');
+      const statusEl = document.getElementById('contact-status');
+      const submitBtn = document.getElementById('contact-submit');
+      const nameInput = document.getElementById('contact-name');
+      const emailInput = document.getElementById('contact-email');
+      const messageInput = document.getElementById('contact-message');
+
+      function showStatus(text, isError) {
+        statusEl.textContent = text;
+        statusEl.hidden = false;
+        statusEl.classList.toggle('contact-status-error', isError);
+        statusEl.classList.toggle('contact-status-success', !isError);
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const name = nameInput.value.trim();
+        const email = emailInput.value.trim();
+        const message = messageInput.value.trim();
+
+        if (!message) {
+          showStatus('お問い合わせ内容を入力してください。', true);
+          return;
+        }
+
+        submitBtn.disabled = true;
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const { error } = await supabase.from('contact_messages').insert({
+          name: name || null,
+          email: email || null,
+          message,
+          user_id: session?.user?.id ?? null,
+        });
+
+        submitBtn.disabled = false;
+
+        if (error) {
+          console.error(error);
+          showStatus('送信に失敗しました。時間をおいて再度お試しください。', true);
+          return;
+        }
+
+        showStatus('お問い合わせを受け付けました。ありがとうございます。', false);
+        form.reset();
+
+        // 管理者へのメール通知(失敗しても問い合わせ自体はDBに保存済みなので、
+        // ここでエラーが出てもユーザーへの表示には影響させない)
+        try {
+          await fetch(`${import.meta.env.PUBLIC_SUPABASE_URL}/functions/v1/notify-contact`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${import.meta.env.PUBLIC_SUPABASE_ANON_KEY}`,
+              apikey: import.meta.env.PUBLIC_SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify({ name, email, message }),
+          });
+        } catch (notifyError) {
+          console.error(notifyError);
+        }
+      });
+    </script>
     <SiteFooter />
   </body>
 </html>
