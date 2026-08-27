@@ -1,0 +1,38 @@
+---
+import '../styles/global.css';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+
+const CONTACT_EMAIL = 'ksksh699@gmail.com';
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>お問い合わせ | オナホめも</title>
+  </head>
+  <body>
+    <SiteHeader />
+    <main class="legal-main">
+      <h1 class="legal-title">お問い合わせ</h1>
+
+      <div class="legal-content">
+        <p>
+          オナホめもに関するご意見・ご要望・不具合のご報告などは、以下のメールアドレスまでご連絡ください。
+        </p>
+
+        <div class="legal-contact-box">
+          <p style="margin:0;">
+            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+          </p>
+        </div>
+
+        <p>
+          お問い合わせの内容によっては、返信までお時間をいただく場合や、返信できない場合がございます。あらかじめご了承ください。
+        </p>
+      </div>
+    </main>
+    <SiteFooter />
+  </body>
+</html>

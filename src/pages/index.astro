@@ -15,6 +15,12 @@ newArrivalCutoff.setDate(newArrivalCutoff.getDate() - NEW_ARRIVAL_DAYS);
 const newArrivalCutoffStr = newArrivalCutoff.toISOString().slice(0, 10);
 const todayStr = new Date().toISOString().slice(0, 10);
 
+// 「今週の新着」欄用: 直近7日以内に発売された商品件数
+const WEEKLY_NEW_DAYS = 7;
+const weeklyNewCutoff = new Date();
+weeklyNewCutoff.setDate(weeklyNewCutoff.getDate() - WEEKLY_NEW_DAYS);
+const weeklyNewCutoffStr = weeklyNewCutoff.toISOString().slice(0, 10);
+
 // 以下はお互いに依存しない問い合わせなので、1つずつ直列で待つのではなく
 // Promise.allでまとめて並列実行することで、体感速度を大きく改善している。
 // (直列だと「全部の合計時間」、並列だと「一番遅い1つ分の時間」で済む)
@@ -35,6 +41,7 @@ const [
   monthlyViewRankingResult,
   newlyOnSaleResult,
   latestReviewsResult,
+  weeklyNewCountResult,
 ] = await Promise.all([
   supabase
     .from('products_with_stats')
@@ -123,6 +130,12 @@ const [
     .or('review_text.not.is.null,detail_review_text.not.is.null,rating.not.is.null')
     .order('updated_at', { ascending: false })
     .limit(10),
+  supabase
+    .from('products')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_onahole', true)
+    .gte('release_date', weeklyNewCutoffStr)
+    .lte('release_date', todayStr),
 ]);
 
 const { data: products, error } = productsResult;
@@ -176,6 +189,20 @@ const topMakers = (makerRows ?? []).slice(0, 40);
 const campaignTags = (allTagsData ?? [])
   .filter((row) => CAMPAIGN_KEYWORDS.some((k) => row.tag.includes(k)))
   .map((row) => row.tag);
+
+const weeklyNewCount = weeklyNewCountResult.count ?? 0;
+
+// 「本日のセール対象」欄用: セール系タグが付いている商品の件数
+// (トップページの「セール対象のみ」フィルターと同じ条件)
+let saleTargetCount = 0;
+if (campaignTags.length > 0) {
+  const { count: saleTargetCountResult } = await supabase
+    .from('products')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_onahole', true)
+    .overlaps('genre_tags', campaignTags);
+  saleTargetCount = saleTargetCountResult ?? 0;
+}
 
 const minYear = minDateRow?.[0]?.release_date
   ? new Date(minDateRow[0].release_date).getFullYear()
@@ -290,6 +317,19 @@ const RANKINGS = [
       <div id="auth-area" class="auth-area"></div>
     </header>
 
+    {(saleTargetCount > 0 || weeklyNewCount > 0) && (
+      <section class="stat-chips">
+        <div class="stat-chip stat-chip-sale">
+          <span class="stat-chip-label">本日のセール対象</span>
+          <span class="stat-chip-value">{saleTargetCount.toLocaleString()}点</span>
+        </div>
+        <div class="stat-chip stat-chip-new">
+          <span class="stat-chip-label">今週の新着</span>
+          <span class="stat-chip-value">{weeklyNewCount.toLocaleString()}点</span>
+        </div>
+      </section>
+    )}
+
     {newInfoItems.length > 0 && (
       <section class="new-info-section">
         <h2 class="new-info-title">新着情報</h2>
@@ -313,16 +353,27 @@ const RANKINGS = [
 
     {RANKINGS.length > 0 && (
       <section class="rankings" id="rankings">
-        {RANKINGS.map((r) => (
-          <div class="ranking-block">
-            <h2 class="ranking-title">
+        <h2 class="section-title">ランキング</h2>
+        <div class="ranking-tabs" role="tablist">
+          {RANKINGS.map((r, idx) => (
+            <button
+              type="button"
+              class={`ranking-tab${idx === 0 ? ' ranking-tab-active' : ''}`}
+              data-ranking-tab={r.key}
+              role="tab"
+              aria-selected={idx === 0 ? 'true' : 'false'}
+            >
               {r.title}
-              <span class="ranking-subtitle">{r.subtitle}</span>
-            </h2>
+            </button>
+          ))}
+        </div>
+        {RANKINGS.map((r, idx) => (
+          <div class="ranking-block ranking-panel" data-ranking-panel={r.key} hidden={idx !== 0}>
+            <p class="ranking-panel-subtitle">{r.subtitle}</p>
             <ul class="ranking-scroll">
-              {r.items.map((p, idx) => (
+              {r.items.map((p, itemIdx) => (
                 <li class="ranking-card">
-                  <span class="ranking-rank">{idx + 1}</span>
+                  <span class="ranking-rank">{itemIdx + 1}</span>
                   <a href={`/products/${p.dmm_content_id}/`}>
                     <img src={p.image_url} alt={p.name} loading="lazy" />
                     <div class="ranking-card-body">
@@ -338,6 +389,25 @@ const RANKINGS = [
         ))}
       </section>
     )}
+
+    <script>
+      // ランキングのタブ切り替え(クリックで表示するランキングを切り替える)
+      const rankingTabs = document.querySelectorAll('.ranking-tab');
+      const rankingPanels = document.querySelectorAll('.ranking-panel');
+      rankingTabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+          const key = tab.getAttribute('data-ranking-tab');
+          rankingTabs.forEach((t) => {
+            const active = t === tab;
+            t.classList.toggle('ranking-tab-active', active);
+            t.setAttribute('aria-selected', active ? 'true' : 'false');
+          });
+          rankingPanels.forEach((p) => {
+            p.hidden = p.getAttribute('data-ranking-panel') !== key;
+          });
+        });
+      });
+    </script>
 
     {latestReviews.length > 0 && (
       <section class="latest-reviews">
@@ -870,33 +940,11 @@ const RANKINGS = [
       async function renderAuthArea() {
         const { data: { session } } = await supabase.auth.getSession();
 
-        if (session) {
-          const email = session.user.email;
-          heroActions.style.display = 'none';
-
-          let mypageHref = '/mypage';
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('nickname')
-            .eq('id', session.user.id)
-            .maybeSingle();
-          if (profile?.nickname) {
-            mypageHref = `/users/${encodeURIComponent(profile.nickname)}`;
-          }
-
-          authArea.innerHTML = `
-            <span class="auth-email">${email}</span>
-            <a href="${mypageHref}" class="auth-btn">マイページ</a>
-            <button id="logout-btn" class="auth-btn">ログアウト</button>
-          `;
-          document.getElementById('logout-btn').addEventListener('click', async () => {
-            await supabase.auth.signOut();
-            renderAuthArea();
-          });
-        } else {
-          heroActions.style.display = 'flex';
-          authArea.innerHTML = '';
-        }
+        // ヘッダー右上(#site-auth-area)に既にユーザー名・ログアウトボタンを
+        // 表示しているため、ログイン済みの場合はトップページ中央の
+        // アカウント作成/ログインCTAのみ非表示にし、#auth-areaは常に空のままにする
+        heroActions.style.display = session ? 'none' : 'flex';
+        authArea.innerHTML = '';
       }
 
       document.getElementById('signup-btn').addEventListener('click', async () => {

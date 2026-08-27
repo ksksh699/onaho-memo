@@ -206,6 +206,22 @@ a {
   color: var(--text-muted);
 }
 
+.site-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2rem;
+}
+
+.site-footer-links a {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.site-footer-links a:hover {
+  color: var(--accent);
+}
+
 .hero {
   padding: 4rem 1.5rem 3rem;
   border-bottom: 1px solid var(--border);
@@ -568,16 +584,33 @@ main {
   }
 
   .hero h1 {
-    font-size: 1.4rem;
+    font-size: clamp(1.05rem, 5.6vw, 1.4rem);
     letter-spacing: 0.01em;
   }
 
   .hero-stats {
-    gap: 1rem 1.8rem;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 0.4rem;
+  }
+
+  .hero-stats .stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1rem;
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .hero .stat-number {
-    font-size: 1.7rem;
+    font-size: clamp(0.95rem, 4.6vw, 1.4rem);
+  }
+
+  .hero .stat-label {
+    margin-left: 0;
+    font-size: 0.62rem;
+    white-space: nowrap;
   }
 }
 .toolbar {
@@ -728,6 +761,69 @@ main {
   flex-wrap: wrap;
   gap: 3rem;
   margin-bottom: 0.5rem;
+}
+
+.stat-chips {
+  max-width: 1100px;
+  margin: 0 auto 2rem;
+  padding: 0 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  justify-content: center;
+}
+
+.stat-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0.6rem 1.2rem;
+  box-shadow: var(--shadow-card);
+}
+
+.stat-chip-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.stat-chip-value {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.stat-chip-sale .stat-chip-value {
+  color: var(--sale);
+}
+
+.stat-chip-new .stat-chip-value {
+  color: var(--gold);
+}
+
+@media (max-width: 640px) {
+  .stat-chips {
+    padding: 0 1rem;
+    gap: 0.6rem;
+  }
+
+  .stat-chip {
+    padding: 0.5rem 0.9rem;
+    flex: 1 1 140px;
+    justify-content: center;
+  }
+
+  .stat-chip-label {
+    font-size: 0.66rem;
+  }
+
+  .stat-chip-value {
+    font-size: 0.88rem;
+  }
 }
 .spec-list {
   list-style: none;
@@ -1252,6 +1348,61 @@ main {
   font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.6rem;
   margin: 0 0 1.5rem;
+}
+
+.legal-main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 5rem;
+}
+
+.legal-title {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 1.5rem;
+  margin: 0 0 0.5rem;
+}
+
+.legal-updated {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0 0 2rem;
+}
+
+.legal-content h2 {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 500;
+  margin: 2rem 0 0.8rem;
+}
+
+.legal-content p,
+.legal-content li {
+  font-size: 0.88rem;
+  line-height: 1.9;
+  color: var(--text);
+}
+
+.legal-content ul,
+.legal-content ol {
+  padding-left: 1.4rem;
+  margin: 0.6rem 0;
+}
+
+.legal-content a {
+  color: var(--accent);
+}
+
+.legal-contact-box {
+  margin-top: 1rem;
+  padding: 1.2rem 1.4rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.legal-contact-box a {
+  font-weight: 600;
 }
 
 .mp-empty {
@@ -1957,6 +2108,54 @@ main {
 
 .ranking-block {
   margin-bottom: 2.5rem;
+}
+
+.ranking-tabs {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.6rem;
+  margin-bottom: 1.2rem;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.ranking-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.ranking-tab {
+  flex: 0 0 auto;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0.5rem 1.1rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.ranking-tab:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ranking-tab-active,
+.ranking-tab-active:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.ranking-panel-subtitle {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0 0 0.9rem;
 }
 
 .ranking-title {
