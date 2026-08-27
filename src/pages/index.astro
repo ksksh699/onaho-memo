@@ -299,7 +299,7 @@ const RANKINGS = [
       </p>
 
       <div class="hero-actions" id="hero-actions">
-        <button id="signup-btn" class="btn-primary">アカウント作成</button>
+        <a href="/signup" class="btn-primary">アカウント作成</a>
         <a href="/login" class="btn-outline">ログイン</a>
       </div>
 
@@ -791,6 +791,14 @@ const RANKINGS = [
             }
           });
           setQuickCheckMenuOpen(qc, menu, willOpen);
+          if (willOpen) {
+            // メニューが上に向かって開くため、画面上部に近いカードだと
+            // 「気になる」ボタンが画面の外に出てしまうことがある。
+            // メニュー全体が画面内に収まるよう、必要な分だけスクロールする。
+            requestAnimationFrame(() => {
+              menu.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            });
+          }
           return;
         }
 
@@ -964,13 +972,6 @@ const RANKINGS = [
         heroActions.style.display = session ? 'none' : 'flex';
         authArea.innerHTML = '';
       }
-
-      document.getElementById('signup-btn').addEventListener('click', async () => {
-        await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: { redirectTo: window.location.origin },
-        });
-      });
 
       async function loadMySaleSection() {
         const container = document.getElementById('my-sale-section');

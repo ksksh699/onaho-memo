@@ -690,15 +690,32 @@ main {
   margin: 1rem 0 2rem;
 }
 
-#google-login {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 0.8rem 1.8rem;
-  font-size: 0.95rem;
-  cursor: pointer;
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  text-align: left;
 }
+
+.auth-form .btn-primary {
+  margin-top: 1rem;
+  width: 100%;
+}
+
+.auth-form-links {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0.8rem 0 0;
+}
+
+.auth-form-links a {
+  color: var(--accent);
+}
+
+.auth-status-error {
+  color: var(--danger) !important;
+}
+
 .auth-area {
   margin-top: 1.5rem;
 }
@@ -745,6 +762,8 @@ main {
   font-size: 0.95rem;
   font-weight: 500;
   cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
 }
 
 .btn-outline {
