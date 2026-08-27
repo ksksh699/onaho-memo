@@ -1,6 +1,9 @@
 ---
 // 全ページ共通のナビゲーションバー。ロゴ・主要ページへのリンク・
 // ログイン状態表示(authHeader.jsのmountAuthArea)をまとめている。
+// スマホ幅では上部のナビ(.site-nav)は隠し、代わりに画面下部に
+// 追尾する.site-bottom-navを表示する(global.cssのメディアクエリで切り替え)。
+// 下部バーには「ホーム」は含めない(ロゴタップでホームに戻れるため)。
 ---
 
 <header class="site-header">
@@ -14,6 +17,13 @@
   </nav>
   <div id="site-auth-area" class="site-auth-area"></div>
 </header>
+
+<nav class="site-bottom-nav">
+  <a href="/#rankings" class="site-bottom-nav-item">ランキング</a>
+  <a href="/?sale=1" class="site-bottom-nav-item">セール中</a>
+  <a href="/mypage" class="site-bottom-nav-item">マイページ</a>
+  <a href="/following" class="site-bottom-nav-item">フォロー中</a>
+</nav>
 
 <script>
   import { mountAuthArea } from '../lib/authHeader.js';
