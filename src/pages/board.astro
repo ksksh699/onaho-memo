@@ -1,0 +1,323 @@
+---
+import { supabase } from '../lib/supabase.js';
+import '../styles/global.css';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+
+// 掲示板: 雑談・知恵袋・フォーラムの3チャンネル固定。チャンネルの追加は
+// 現時点では想定していない(増やすなら利用状況を見てからここに足す)。
+// チャンネル内はユーザーが自由にスレッドを立てられる。
+const CHANNELS = [
+  { key: 'chat', label: '雑談' },
+  { key: 'qa', label: '知恵袋' },
+  { key: 'forum', label: 'フォーラム' },
+];
+// スレッド一覧は「最後に返信があった順(あげ方式)」で表示する。
+// 立ち上げ初期で投稿数が少なくても、動きのあるスレッドが目立って賑わって見えるため。
+const { data: threads } = await supabase
+  .from('board_threads')
+  .select('id, channel, title, body, user_id, reply_count, created_at, last_reply_at')
+  .order('last_reply_at', { ascending: false });
+
+// 投稿者のニックネームは、プロフィールを公開設定にしている人の分だけ表示する
+// (非公開の場合は「非公開ユーザー」とだけ表示し、リンクもしない)
+const threadUserIds = [...new Set((threads ?? []).map((t) => t.user_id))];
+let profileMap = {};
+if (threadUserIds.length > 0) {
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, nickname, is_public')
+    .in('id', threadUserIds);
+  for (const p of profiles ?? []) {
+    profileMap[p.id] = p;
+  }
+}
+
+const threadsByChannel = { chat: [], qa: [], forum: [] };
+for (const t of threads ?? []) {
+  if (threadsByChannel[t.channel]) threadsByChannel[t.channel].push(t);
+}
+
+function excerpt(text, len) {
+  if (!text) return '';
+  const clean = text.replace(/\s+/g, ' ').trim();
+  return clean.length > len ? `${clean.slice(0, len)}…` : clean;
+}
+
+function formatDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#2b5fad" />
+    <title>掲示板 | オナホめも</title>
+  </head>
+  <body>
+    <SiteHeader />
+    <main class="mypage-main">
+      <div class="board-page-head">
+        <h1 class="mypage-title">掲示板</h1>
+        <a href="/board/reports/" id="board-admin-reports-link" class="board-admin-link" hidden>通報一覧(管理者)</a>
+      </div>
+
+      <div class="mp-main-tabs" id="board-channel-tabs" role="tablist">
+        {CHANNELS.map((c) => (
+          <button type="button" class="mp-main-tab" data-channel={c.key} role="tab">{c.label}</button>
+        ))}
+      </div>
+
+      {CHANNELS.map((c, i) => (
+        <div class="mp-main-panel board-channel-panel" data-channel-panel={c.key} hidden={i !== 0}>
+          <div class="board-channel-head">
+            <button type="button" class="btn-primary board-new-thread-btn" data-channel={c.key}>
+              + 新しいスレッドを立てる
+            </button>
+          </div>
+
+          <div class="board-new-thread-form" data-channel-form={c.key} hidden>
+            <label class="profile-edit-label" for={`board-title-${c.key}`}>タイトル</label>
+            <input
+              type="text"
+              id={`board-title-${c.key}`}
+              class="nickname-input board-thread-title-input"
+              maxlength="60"
+              placeholder="タイトル"
+            />
+            <label class="profile-edit-label" for={`board-body-${c.key}`}>本文</label>
+            <textarea
+              id={`board-body-${c.key}`}
+              class="board-thread-body-input"
+              maxlength="2000"
+              rows="5"
+              placeholder="本文"
+            ></textarea>
+
+            <div class="board-nickname-gate" hidden>
+              <p>掲示板に投稿するにはニックネームの設定が必要です。</p>
+              <input type="text" class="nickname-input board-gate-nickname-input" maxlength="20" placeholder="例: じょい" />
+              <button type="button" class="best-one-clear-btn board-gate-save-btn">設定して投稿する</button>
+              <p class="board-gate-status"></p>
+            </div>
+
+            <div class="board-form-actions">
+              <button type="button" class="btn-primary board-thread-submit-btn" data-channel={c.key}>投稿する</button>
+              <button type="button" class="board-thread-cancel-btn">キャンセル</button>
+            </div>
+            <p class="board-thread-status"></p>
+          </div>
+
+          {threadsByChannel[c.key].length === 0 && (
+            <p class="no-reviews">まだスレッドがありません。最初のスレッドを立ててみましょう。</p>
+          )}
+
+          <ul class="board-thread-list">
+            {threadsByChannel[c.key].map((t) => (
+              <li class="board-thread-card">
+                <a href={`/board/${t.id}/`} class="board-thread-title">{t.title}</a>
+                <p class="board-thread-excerpt">{excerpt(t.body, 80)}</p>
+                <div class="board-thread-meta">
+                  {profileMap[t.user_id]?.is_public && profileMap[t.user_id]?.nickname ? (
+                    <a href={`/users/${encodeURIComponent(profileMap[t.user_id].nickname)}`} class="board-author">
+                      {profileMap[t.user_id].nickname}
+                    </a>
+                  ) : (
+                    <span class="board-author board-author-private">非公開ユーザー</span>
+                  )}
+                  <span class="board-thread-date">{formatDateTime(t.last_reply_at)}</span>
+                  <span class="board-thread-replies">返信{t.reply_count}件</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </main>
+    <SiteFooter />
+
+    <script>
+      import { supabase } from '../lib/supabase.js';
+
+      const ADMIN_USER_ID = '278377ee-a457-41bc-ab79-c1be9f4b768e';
+      const CHANNEL_KEYS = ['chat', 'qa', 'forum'];
+
+      const channelTabsNav = document.getElementById('board-channel-tabs');
+      const panels = document.querySelectorAll('.board-channel-panel');
+      let currentChannel = CHANNEL_KEYS[0];
+      try {
+        const saved = localStorage.getItem('onahole_board_channel');
+        if (CHANNEL_KEYS.includes(saved)) currentChannel = saved;
+      } catch (e) {}
+
+      function applyChannel(channel) {
+        currentChannel = channel;
+        channelTabsNav.querySelectorAll('.mp-main-tab').forEach((btn) => {
+          btn.classList.toggle('mp-main-tab-active', btn.dataset.channel === channel);
+        });
+        panels.forEach((panel) => {
+          panel.hidden = panel.dataset.channelPanel !== channel;
+        });
+        try {
+          localStorage.setItem('onahole_board_channel', channel);
+        } catch (e) {}
+      }
+
+      if (channelTabsNav) {
+        channelTabsNav.addEventListener('click', (e) => {
+          const btn = e.target.closest('.mp-main-tab');
+          if (!btn) return;
+          applyChannel(btn.dataset.channel);
+        });
+        applyChannel(currentChannel);
+      }
+
+      document.querySelectorAll('.board-new-thread-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (!session) {
+            alert('スレッドを立てるにはログインが必要です');
+            return;
+          }
+          const channel = btn.dataset.channel;
+          const form = document.querySelector(`.board-new-thread-form[data-channel-form="${channel}"]`);
+          if (!form) return;
+          form.hidden = !form.hidden;
+          if (!form.hidden) form.querySelector('.board-thread-title-input').focus();
+        });
+      });
+
+      document.querySelectorAll('.board-thread-cancel-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const form = btn.closest('.board-new-thread-form');
+          form.hidden = true;
+          form.querySelector('.board-thread-status').textContent = '';
+        });
+      });
+
+      async function submitNewThread(channel, form) {
+        const titleInput = form.querySelector('.board-thread-title-input');
+        const bodyInput = form.querySelector('.board-thread-body-input');
+        const gate = form.querySelector('.board-nickname-gate');
+        const statusEl = form.querySelector('.board-thread-status');
+        const submitBtn = form.querySelector('.board-thread-submit-btn');
+
+        const title = titleInput.value.trim();
+        const body = bodyInput.value.trim();
+        if (!title || !body) {
+          statusEl.textContent = 'タイトルと本文を入力してください。';
+          return;
+        }
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) {
+          alert('スレッドを立てるにはログインが必要です');
+          return;
+        }
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('nickname')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (!profile?.nickname) {
+          gate.hidden = false;
+          gate.dataset.pendingChannel = channel;
+          return;
+        }
+
+        submitBtn.disabled = true;
+        statusEl.textContent = '投稿中...';
+
+        const { data, error } = await supabase
+          .from('board_threads')
+          .insert({ channel, user_id: session.user.id, title, body })
+          .select('id')
+          .single();
+
+        submitBtn.disabled = false;
+
+        if (error) {
+          console.error(error);
+          statusEl.textContent = '投稿に失敗しました。';
+          return;
+        }
+
+        window.location.href = `/board/${data.id}/`;
+      }
+
+      document.querySelectorAll('.board-thread-submit-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const form = btn.closest('.board-new-thread-form');
+          submitNewThread(btn.dataset.channel, form);
+        });
+      });
+
+      document.addEventListener('click', async (e) => {
+        const gateSaveBtn = e.target.closest('.board-gate-save-btn');
+        if (!gateSaveBtn) return;
+
+        const gate = gateSaveBtn.closest('.board-nickname-gate');
+        const nicknameInput = gate.querySelector('.board-gate-nickname-input');
+        const gateStatus = gate.querySelector('.board-gate-status');
+        const nickname = nicknameInput.value.trim();
+
+        if (!nickname) {
+          gateStatus.textContent = 'ニックネームを入力してください。';
+          return;
+        }
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) {
+          gateStatus.textContent = 'ログインが必要です。';
+          return;
+        }
+
+        gateSaveBtn.disabled = true;
+        const { error } = await supabase
+          .from('profiles')
+          .upsert({ id: session.user.id, nickname }, { onConflict: 'id' });
+        gateSaveBtn.disabled = false;
+
+        if (error) {
+          gateStatus.textContent = 'このニックネームは使用できない可能性があります(重複など)。';
+          return;
+        }
+
+        gate.hidden = true;
+        const form = gate.closest('.board-new-thread-form');
+        const channel = gate.dataset.pendingChannel;
+        if (form && channel) {
+          submitNewThread(channel, form);
+        }
+      });
+
+      // 管理者だけに通報一覧へのリンクを出す
+      (async () => {
+        const link = document.getElementById('board-admin-reports-link');
+        if (!link) return;
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session && session.user.id === ADMIN_USER_ID) {
+          link.hidden = false;
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -120,18 +120,14 @@ const ITEM_LABELS_DISPLAY = {
 };
 const ratingData = ratingResult.data;
 const productRating = ratingData?.[0];
-const ratingText = productRating
-  ? `オナホめも評価: ${'★'.repeat(Math.round(productRating.avg_rating))}${'☆'.repeat(5 - Math.round(productRating.avg_rating))} ${productRating.avg_rating}点(${productRating.rating_count}件)`
-  : null;
 
 const releaseDateDisplay = product.release_date_text || product.release_date;
 
 const onakingLinkData = onakingLinkResult.data;
 const onakingUrl = onakingLinkData?.onaking_url ?? null;
 
-// 他ショップの購入リンク・価格比較(小規模パイロット導入中。対象商品のみ登録済み)
-// ぴゅあらばショップはバナーブリッジのASP審査待ちのため、承認後にpyuarabu_url/
-// pyuarabu_priceを登録すれば自動的に表示順に組み込まれる(現時点では未登録なので出ない)
+// 他ショップの購入リンク・価格比較(パイロット導入中。対象商品のみ登録済み)
+// 各{shop}_urlが登録されている商品のみ自動的に表示順に組み込まれる
 const shopLinks = [];
 if (product.affiliate_url) {
   shopLinks.push({ key: 'fanza', name: 'FANZA', price: product.price, url: product.affiliate_url });
@@ -144,6 +140,18 @@ if (product.nls_url) {
 }
 if (product.daimaoh_url) {
   shopLinks.push({ key: 'daimaoh', name: '大魔王', price: product.daimaoh_price, url: product.daimaoh_url });
+}
+if (product.hotpowers_url) {
+  shopLinks.push({ key: 'hotpowers', name: 'ホットパワーズ', price: product.hotpowers_price, url: product.hotpowers_url });
+}
+if (product.ems_url) {
+  shopLinks.push({ key: 'ems', name: 'エムズ', price: product.ems_price, url: product.ems_url });
+}
+if (product.mzakka_url) {
+  shopLinks.push({ key: 'mzakka', name: 'M-ZAKKA', price: product.mzakka_price, url: product.mzakka_url });
+}
+if (product.nobunagatoys_url) {
+  shopLinks.push({ key: 'nobunagatoys', name: '信長トイズ', price: product.nobunagatoys_price, url: product.nobunagatoys_url });
 }
 
 // 表示順は「安い順」ではなく固定の優先順位:
@@ -194,6 +202,7 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
   <body>
     <SiteHeader />
     <main class="detail">
+      <h1 class="detail-title">{product.name}</h1>
       <div class="detail-grid">
         <img
           src={imageUrl}
@@ -201,7 +210,7 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
           data-fallback={imageUrlSmall}
           onerror="if(this.src!==this.dataset.fallback){this.onerror=null;this.src=this.dataset.fallback;}"
         />
-        <div>
+        <div class="detail-info">
           <p class="maker">
             {product.maker ? (
               <a href={`/?maker=${encodeURIComponent(product.maker)}`} class="maker-link">
@@ -212,22 +221,21 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
             )}
           </p>
           {product.is_manual && <p class="manual-badge">FANZA未掲載</p>}
-          <h1>{product.name}</h1>
-         <div class="price-block">
-            {hasDiscount && (
-              <p class="list-price">参考価格: ¥{listPrice.toLocaleString()}</p>
-            )}
-            <p class="price">
-              {product.price ? `¥${product.price.toLocaleString()}` : '価格情報なし'}
-              {hasDiscount && (
-                <span class="discount-badge">
-                  {Math.round((1 - product.price / listPrice) * 100)}%OFF
-                </span>
-              )}
-            </p>
-          </div>
 
-          {product.series && <p>シリーズ: {product.series}</p>}
+          <button
+            type="button"
+            class="site-rating-link"
+            id="site-rating-link"
+            aria-label="オナホめも評価を見る。タップすると自分の評価も記録できます"
+          >
+            <span class="site-rating-label">オナホめも評価</span>
+            <span class="site-rating-value">
+              {productRating
+                ? `${'★'.repeat(Math.round(productRating.avg_rating))}${'☆'.repeat(5 - Math.round(productRating.avg_rating))} ${productRating.avg_rating}点(${productRating.rating_count}件)`
+                : 'まだ評価がありません。タップして記録する'}
+            </span>
+          </button>
+
           {directories.length > 0 && (
             <ul class="spec-list">
               {directories.map((d) => (
@@ -249,21 +257,20 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
               </a>
             </p>
           )}
-          {ratingText && <p class="site-rating">{ratingText}</p>}
-          {onakingUrl && (
-            <p>
-              <a href={onakingUrl} target="_blank" rel="noopener" class="onaking-review-link">
-                📖 オナ王でレビュー済み(記事を読む)
-              </a>
-            </p>
-          )}
-          <div id="onaking-admin-widget" class="onaking-admin-widget"></div>
+        </div>
+      </div>
 
+      <div class="detail-actions">
           {product.manual_note && <p class="manual-note">{product.manual_note}</p>}
 
           {shopLinks.length > 0 ? (
             <div class="shop-links">
               <p class="shop-links-title">購入サイトを比較{shopLinks.length > 1 ? '(価格は税込)' : ''}</p>
+              {hasDiscount && (
+                <p class="shop-links-ref-price">
+                  参考価格: <span class="shop-links-ref-price-value">¥{listPrice.toLocaleString()}</span>
+                </p>
+              )}
               <ul class="shop-links-list">
                 {visibleShopLinks.map((s, i) => (
                   <li class={`shop-link-item ${i === cheapestIndex ? 'cheapest' : ''}`}>
@@ -296,11 +303,14 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
               )}
             </div>
           ) : (
-            product.affiliate_url && (
-              <a class="buy-link" href={product.affiliate_url} target="_blank" rel="noopener nofollow">
-                {product.is_manual ? '購入ページを見る' : 'FANZAで詳細を見る'}
-              </a>
-            )
+            <>
+              {product.price && <p class="detail-price-fallback">¥{product.price.toLocaleString()}</p>}
+              {product.affiliate_url && (
+                <a class="buy-link" href={product.affiliate_url} target="_blank" rel="noopener nofollow">
+                  {product.is_manual ? '購入ページを見る' : 'FANZAで詳細を見る'}
+                </a>
+              )}
+            </>
           )}
 
           <div id="check-widget" class="check-widget" data-product-id={product.id}>
@@ -308,8 +318,17 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
           </div>
 
           <div id="folder-add-widget" class="folder-add-widget"></div>
-        </div>
       </div>
+
+      {onakingUrl && (
+        <p class="onaking-link-block">
+          <a href={onakingUrl} target="_blank" rel="noopener" class="onaking-review-link">
+            📖 オナ王でレビュー済み(記事を読む)
+          </a>
+        </p>
+      )}
+      <div id="onaking-admin-widget" class="onaking-admin-widget"></div>
+
       <section class="public-reviews">
         <h2 class="section-title">みんなのレビュー</h2>
         {(!publicReviews || publicReviews.length === 0) && (
@@ -366,6 +385,9 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
               )}
               {r.similar_products && (
                 <p class="review-similar">似てるオナホール: {r.similar_products}</p>
+              )}
+              {r.updated_at && (
+                <p class="review-item-date">{new Date(r.updated_at).toLocaleDateString('ja-JP')}</p>
               )}
               <button type="button" class="review-like-btn" data-check-id={r.id}>
                 <span class="review-like-icon">♡</span>
@@ -1356,6 +1378,15 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
             return;
           }
           delBtn.closest('.review-comment-item').remove();
+        });
+      }
+
+      // 「オナホめも評価」欄をタップすると、下の記録フォームまでスクロールする
+      // (未ログインの場合はログイン案内が表示されている状態のフォームまでスクロールする)
+      const siteRatingLink = document.getElementById('site-rating-link');
+      if (siteRatingLink) {
+        siteRatingLink.addEventListener('click', () => {
+          widget.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
       }
 

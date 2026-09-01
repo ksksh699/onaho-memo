@@ -1,0 +1,385 @@
+---
+import { supabase } from '../../lib/supabase.js';
+import '../../styles/global.css';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+
+const { id } = Astro.params;
+
+const CHANNEL_LABELS = { chat: '雑談', qa: '知恵袋', forum: 'フォーラム' };
+
+const { data: thread } = await supabase
+  .from('board_threads')
+  .select('id, channel, title, body, user_id, created_at, reply_count')
+  .eq('id', id)
+  .maybeSingle();
+
+if (!thread) {
+  return Astro.redirect('/board/');
+}
+
+const { data: replies } = await supabase
+  .from('board_replies')
+  .select('id, thread_id, user_id, body, created_at')
+  .eq('thread_id', id)
+  .order('created_at', { ascending: true });
+
+// 投稿者のニックネームは、プロフィールを公開設定にしている人の分だけ表示する
+const userIds = [...new Set([thread.user_id, ...(replies ?? []).map((r) => r.user_id)])];
+let profileMap = {};
+if (userIds.length > 0) {
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, nickname, is_public')
+    .in('id', userIds);
+  for (const p of profiles ?? []) {
+    profileMap[p.id] = p;
+  }
+}
+
+function formatDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const channelLabel = CHANNEL_LABELS[thread.channel] ?? thread.channel;
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#2b5fad" />
+    <title>{thread.title} | 掲示板 | オナホめも</title>
+  </head>
+  <body>
+    <SiteHeader />
+    <main class="mypage-main board-thread-main" data-thread-id={thread.id} data-thread-owner-id={thread.user_id}>
+      <a href="/board/" class="board-back-link">← 掲示板に戻る</a>
+      <p class="board-thread-channel-label">{channelLabel}</p>
+      <h1 class="mypage-title board-thread-page-title">{thread.title}</h1>
+
+      <article class="board-post board-op-post" data-post-id={thread.id} data-user-id={thread.user_id}>
+        <div class="board-post-meta">
+          {profileMap[thread.user_id]?.is_public && profileMap[thread.user_id]?.nickname ? (
+            <a href={`/users/${encodeURIComponent(profileMap[thread.user_id].nickname)}`} class="board-author">
+              {profileMap[thread.user_id].nickname}
+            </a>
+          ) : (
+            <span class="board-author board-author-private">非公開ユーザー</span>
+          )}
+          <span class="board-post-date">{formatDateTime(thread.created_at)}</span>
+        </div>
+        <p class="board-post-body">{thread.body}</p>
+        <div class="board-post-actions">
+          <button type="button" class="board-report-btn" data-target-type="thread" data-target-id={thread.id}>
+            通報
+          </button>
+          <button type="button" class="board-delete-btn" data-target-type="thread" data-target-id={thread.id} style="display:none;">
+            スレッドを削除
+          </button>
+        </div>
+        <div class="board-report-form" data-report-for={thread.id} hidden>
+          <textarea class="board-report-reason" maxlength="300" placeholder="通報理由(任意)"></textarea>
+          <div class="board-form-actions">
+            <button type="button" class="best-one-clear-btn board-report-submit-btn">通報する</button>
+            <button type="button" class="board-report-cancel-btn">キャンセル</button>
+          </div>
+          <p class="board-report-status"></p>
+        </div>
+      </article>
+
+      <h2 class="section-title">返信({(replies ?? []).length}件)</h2>
+
+      {(!replies || replies.length === 0) && <p class="no-reviews">まだ返信がありません。</p>}
+
+      <ul class="board-reply-list">
+        {(replies ?? []).map((r) => (
+          <li class="board-post board-reply-post" data-post-id={r.id} data-user-id={r.user_id}>
+            <div class="board-post-meta">
+              {profileMap[r.user_id]?.is_public && profileMap[r.user_id]?.nickname ? (
+                <a href={`/users/${encodeURIComponent(profileMap[r.user_id].nickname)}`} class="board-author">
+                  {profileMap[r.user_id].nickname}
+                </a>
+              ) : (
+                <span class="board-author board-author-private">非公開ユーザー</span>
+              )}
+              <span class="board-post-date">{formatDateTime(r.created_at)}</span>
+            </div>
+            <p class="board-post-body">{r.body}</p>
+            <div class="board-post-actions">
+              <button type="button" class="board-report-btn" data-target-type="reply" data-target-id={r.id}>
+                通報
+              </button>
+              <button type="button" class="board-delete-btn" data-target-type="reply" data-target-id={r.id} style="display:none;">
+                削除
+              </button>
+            </div>
+            <div class="board-report-form" data-report-for={r.id} hidden>
+              <textarea class="board-report-reason" maxlength="300" placeholder="通報理由(任意)"></textarea>
+              <div class="board-form-actions">
+                <button type="button" class="best-one-clear-btn board-report-submit-btn">通報する</button>
+                <button type="button" class="board-report-cancel-btn">キャンセル</button>
+              </div>
+              <p class="board-report-status"></p>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <div class="board-reply-form">
+        <label class="profile-edit-label" for="board-reply-input">返信する</label>
+        <textarea id="board-reply-input" class="board-thread-body-input" maxlength="2000" rows="4" placeholder="返信を書く"></textarea>
+
+        <div class="board-nickname-gate" hidden>
+          <p>掲示板に投稿するにはニックネームの設定が必要です。</p>
+          <input type="text" class="nickname-input board-gate-nickname-input" maxlength="20" placeholder="例: じょい" />
+          <button type="button" class="best-one-clear-btn board-gate-save-btn">設定して投稿する</button>
+          <p class="board-gate-status"></p>
+        </div>
+
+        <button type="button" class="btn-primary" id="board-reply-submit-btn">返信する</button>
+        <p id="board-reply-status"></p>
+      </div>
+    </main>
+    <SiteFooter />
+
+    <script>
+      import { supabase } from '../../lib/supabase.js';
+
+      const ADMIN_USER_ID = '278377ee-a457-41bc-ab79-c1be9f4b768e';
+
+      const mainEl = document.querySelector('.board-thread-main');
+      const threadId = mainEl?.dataset.threadId;
+      const threadOwnerId = mainEl?.dataset.threadOwnerId;
+
+      // 自分の投稿・自分のスレッド内の返信・管理者には削除ボタンを出す
+      async function initPermissions() {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const uid = session.user.id;
+        const isAdmin = uid === ADMIN_USER_ID;
+
+        document.querySelectorAll('.board-delete-btn').forEach((btn) => {
+          const post = btn.closest('[data-user-id]');
+          const postOwnerId = post?.dataset.userId;
+          const isReply = btn.dataset.targetType === 'reply';
+          const canDelete = isAdmin || postOwnerId === uid || (isReply && threadOwnerId === uid);
+          if (canDelete) btn.style.display = 'inline-block';
+        });
+      }
+
+      // 既に自分が通報済みの投稿は「通報済み」表示にする
+      async function initReportState() {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const { data: myReports } = await supabase
+          .from('board_reports')
+          .select('thread_id, reply_id')
+          .eq('reporter_id', session.user.id);
+
+        const reportedThreadIds = new Set((myReports ?? []).filter((r) => r.thread_id).map((r) => r.thread_id));
+        const reportedReplyIds = new Set((myReports ?? []).filter((r) => r.reply_id).map((r) => r.reply_id));
+
+        document.querySelectorAll('.board-report-btn').forEach((btn) => {
+          const targetId = btn.dataset.targetId;
+          const isReported =
+            btn.dataset.targetType === 'thread' ? reportedThreadIds.has(targetId) : reportedReplyIds.has(targetId);
+          if (isReported) {
+            btn.disabled = true;
+            btn.textContent = '通報済み';
+          }
+        });
+      }
+
+      document.addEventListener('click', async (e) => {
+        const delBtn = e.target.closest('.board-delete-btn');
+        if (delBtn) {
+          const targetType = delBtn.dataset.targetType;
+          const targetId = delBtn.dataset.targetId;
+          const isThread = targetType === 'thread';
+
+          if (!confirm(isThread ? 'このスレッドを削除しますか？(返信もすべて削除されます)' : 'この返信を削除しますか？')) {
+            return;
+          }
+
+          const table = isThread ? 'board_threads' : 'board_replies';
+          const { error } = await supabase.from(table).delete().eq('id', targetId);
+          if (error) {
+            alert('削除に失敗しました');
+            return;
+          }
+
+          if (isThread) {
+            window.location.href = '/board/';
+          } else {
+            delBtn.closest('.board-reply-post')?.remove();
+          }
+          return;
+        }
+
+        const reportBtn = e.target.closest('.board-report-btn');
+        if (reportBtn) {
+          if (reportBtn.disabled) return;
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (!session) {
+            alert('通報するにはログインが必要です');
+            return;
+          }
+          const targetId = reportBtn.dataset.targetId;
+          const form = document.querySelector(`.board-report-form[data-report-for="${targetId}"]`);
+          if (form) form.hidden = !form.hidden;
+          return;
+        }
+
+        const reportCancelBtn = e.target.closest('.board-report-cancel-btn');
+        if (reportCancelBtn) {
+          reportCancelBtn.closest('.board-report-form').hidden = true;
+          return;
+        }
+
+        const reportSubmitBtn = e.target.closest('.board-report-submit-btn');
+        if (reportSubmitBtn) {
+          const form = reportSubmitBtn.closest('.board-report-form');
+          const targetId = form.dataset.reportFor;
+          const reasonEl = form.querySelector('.board-report-reason');
+          const statusEl = form.querySelector('.board-report-status');
+          const reportBtnEl = document.querySelector(`.board-report-btn[data-target-id="${targetId}"]`);
+          const targetType = reportBtnEl?.dataset.targetType;
+
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (!session) {
+            statusEl.textContent = 'ログインが必要です。';
+            return;
+          }
+
+          reportSubmitBtn.disabled = true;
+          const { error } = await supabase.from('board_reports').insert({
+            reporter_id: session.user.id,
+            reason: reasonEl.value.trim() || null,
+            thread_id: targetType === 'thread' ? targetId : null,
+            reply_id: targetType === 'reply' ? targetId : null,
+          });
+          reportSubmitBtn.disabled = false;
+
+          if (error) {
+            statusEl.textContent =
+              error.code === '23505' ? 'この投稿は既に通報済みです。' : '通報に失敗しました。';
+            return;
+          }
+
+          statusEl.textContent = '通報しました。ご協力ありがとうございます。';
+          if (reportBtnEl) {
+            reportBtnEl.disabled = true;
+            reportBtnEl.textContent = '通報済み';
+          }
+          setTimeout(() => {
+            form.hidden = true;
+          }, 1200);
+        }
+      });
+
+      async function submitReply() {
+        const textarea = document.getElementById('board-reply-input');
+        const gate = document.querySelector('.board-reply-form .board-nickname-gate');
+        const statusEl = document.getElementById('board-reply-status');
+        const submitBtn = document.getElementById('board-reply-submit-btn');
+
+        const body = textarea.value.trim();
+        if (!body) {
+          statusEl.textContent = '返信内容を入力してください。';
+          return;
+        }
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) {
+          alert('返信するにはログインが必要です');
+          return;
+        }
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('nickname')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (!profile?.nickname) {
+          gate.hidden = false;
+          return;
+        }
+
+        submitBtn.disabled = true;
+        statusEl.textContent = '投稿中...';
+
+        const { error } = await supabase
+          .from('board_replies')
+          .insert({ thread_id: threadId, user_id: session.user.id, body });
+
+        submitBtn.disabled = false;
+
+        if (error) {
+          console.error(error);
+          statusEl.textContent = '投稿に失敗しました。';
+          return;
+        }
+
+        // スレッドの「あげ」・返信数はサーバ側(トリガー)で更新されるため、再読み込みして反映する
+        window.location.reload();
+      }
+
+      document.getElementById('board-reply-submit-btn')?.addEventListener('click', submitReply);
+
+      document.querySelector('.board-reply-form .board-gate-save-btn')?.addEventListener('click', async () => {
+        const gate = document.querySelector('.board-reply-form .board-nickname-gate');
+        const nicknameInput = gate.querySelector('.board-gate-nickname-input');
+        const gateStatus = gate.querySelector('.board-gate-status');
+        const nickname = nicknameInput.value.trim();
+
+        if (!nickname) {
+          gateStatus.textContent = 'ニックネームを入力してください。';
+          return;
+        }
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) {
+          gateStatus.textContent = 'ログインが必要です。';
+          return;
+        }
+
+        const { error } = await supabase
+          .from('profiles')
+          .upsert({ id: session.user.id, nickname }, { onConflict: 'id' });
+
+        if (error) {
+          gateStatus.textContent = 'このニックネームは使用できない可能性があります(重複など)。';
+          return;
+        }
+
+        gate.hidden = true;
+        submitReply();
+      });
+
+      initPermissions();
+      initReportState();
+    </script>
+  </body>
+</html>

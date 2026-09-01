@@ -1,8 +1,6 @@
 ---
 import { supabase } from '../../lib/supabase.js';
 import '../../styles/global.css';
-import SiteHeader from '../../components/SiteHeader.astro';
-import SiteFooter from '../../components/SiteFooter.astro';
 
 // 商品ページと同様、ビルド時の事前生成(prerender)はせず、リクエストごとに
 // その場でSupabaseから該当プロフィールを取得する(SSR)方式にしている。
@@ -25,20 +23,60 @@ if (profile && profile.is_public === false) {
 
 const snsLinks = Array.isArray(profile?.sns_links) ? profile.sns_links.filter((l) => l?.url) : [];
 
-let checks = [];
+// checksは「そのユーザーのチェック全件」(公開・非公開を問わず)を取得しておき、
+// 一覧表示には公開分だけを絞り込んで使う。TOP3・ベストな口コミ・バッジ/称号・
+// 統計欄は、ユーザー本人が公開を意図した情報(TOP3選出やベスト口コミ選出、
+// 集計としてのバッジ)なので、個々のチェックのis_publicに関わらず全件から計算する。
+// (以前はTOP3・ベストな口コミも公開チェックのみから検索していたため、
+// 選んだ商品のチェック自体が非公開だと表示から抜け落ちるバグがあった)
+let allChecks = [];
 if (profile) {
   const { data } = await supabase
     .from('checks')
     .select(
-      'status, tier, rating, review_title, review_text, detail_review_title, detail_review_text, updated_at, products(id, dmm_content_id, name, maker, price, image_url)'
+      'status, tier, rating, review_title, review_text, detail_review_title, detail_review_text, review_images, retirement_reason, similar_products, memo, is_public, updated_at, products(id, dmm_content_id, name, maker, price, image_url, genre_tags, raw_data)'
     )
     .eq('user_id', profile.id)
-    .eq('is_public', true)
     .order('updated_at', { ascending: false });
-  checks = data ?? [];
+  allChecks = data ?? [];
+}
+const checks = allChecks.filter((c) => c.is_public);
+
+function isOnSale(check) {
+  const p = check.products;
+  if (!p) return false;
+  const listPrice = p.raw_data?.prices?.list_price ? Number(p.raw_data.prices.list_price) : null;
+  return Boolean(listPrice && p.price && listPrice > p.price);
 }
 
-const usedCount = checks.filter((c) => c.status === 'used').length;
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+  );
+}
+
+const TIER_LABELS_PRE = { first: '一軍', second: '二軍', retired: '引退' };
+
+const groupedAll = { used: [], interested: [] };
+for (const c of allChecks) {
+  if (groupedAll[c.status]) groupedAll[c.status].push(c);
+}
+const usedByTierAll = { first: [], second: [], retired: [] };
+for (const c of groupedAll.used) {
+  if (c.tier && usedByTierAll[c.tier]) usedByTierAll[c.tier].push(c);
+}
+const totalSpentAll = groupedAll.used.reduce((sum, c) => sum + (c.products?.price ?? 0), 0);
+
+const groupedPublic = { used: [], interested: [] };
+for (const c of checks) {
+  if (groupedPublic[c.status]) groupedPublic[c.status].push(c);
+}
+const usedByTierPublic = { first: [], second: [], retired: [] };
+for (const c of groupedPublic.used) {
+  if (c.tier && usedByTierPublic[c.tier]) usedByTierPublic[c.tier].push(c);
+}
 
 const TOP3_IDS = profile
   ? [profile.best_product_id_1, profile.best_product_id_2, profile.best_product_id_3]
@@ -49,13 +87,13 @@ const TOP3_REASONS = profile
 
 const top3 = TOP3_IDS.map((pid, i) => {
   if (!pid) return null;
-  const check = checks.find((c) => c.products?.id === pid);
+  const check = allChecks.find((c) => c.products?.id === pid);
   if (!check) return null;
   return { check, reason: TOP3_REASONS[i], rank: i + 1 };
 }).filter(Boolean);
 
 const bestReviewCheck = profile
-  ? checks.find((c) => c.products?.id === profile.best_review_product_id) ?? null
+  ? allChecks.find((c) => c.products?.id === profile.best_review_product_id) ?? null
   : null;
 const bestReviewIsDetail = Boolean(bestReviewCheck?.detail_review_text);
 const bestReviewText = bestReviewCheck
@@ -66,6 +104,77 @@ const bestReviewTitle = bestReviewCheck
     ? bestReviewCheck.detail_review_title
     : bestReviewCheck.review_title
   : '';
+const bestReviewDateStr = bestReviewCheck?.updated_at
+  ? new Date(bestReviewCheck.updated_at).toLocaleDateString('ja-JP')
+  : '';
+
+function starString(rating) {
+  if (!rating) return '';
+  const full = Math.max(0, Math.min(5, Math.round(rating)));
+  return '★'.repeat(full) + '☆'.repeat(5 - full);
+}
+
+function publicCardMeta(check) {
+  const p = check.products;
+  if (!p) return null;
+  const top3Idx = top3.findIndex((s) => s.check.products?.id === p.id);
+  const isTop3 = check.status === 'used' && top3Idx >= 0;
+  const hasReview = Boolean(check.review_text || check.detail_review_text);
+  const isBestReview = hasReview && p.id === profile?.best_review_product_id;
+  let subInfo = '';
+  if (check.status === 'used' && check.tier) {
+    subInfo += `<span class="mp-tag">${escapeHtml(TIER_LABELS_PRE[check.tier])}</span>`;
+  }
+  if (check.rating) subInfo += `<span class="mp-tag">★${check.rating}</span>`;
+  if (isTop3) subInfo += `<span class="mp-tag mp-best">TOP3: ${top3Idx + 1}位</span>`;
+  if (isBestReview) subInfo += `<span class="mp-tag mp-best">ベスト口コミ</span>`;
+  return { p, isTop3, subInfo };
+}
+
+function publicCardHtml(check) {
+  const meta = publicCardMeta(check);
+  if (!meta) return '';
+  const { p, isTop3, subInfo } = meta;
+  const stars = starString(check.rating);
+  const starsHtml = stars ? '<p class="mp-mobile-stars">' + stars + '</p>' : '';
+  return `
+    <li class="mp-card ${isTop3 ? 'mp-card-best' : ''}" data-tier="${check.tier ?? ''}">
+      <a href="/products/${p.dmm_content_id}/">
+        <img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy" />
+        <div class="mp-card-body">
+          <p class="mp-maker">${escapeHtml(p.maker ?? '')}</p>
+          <h3>${escapeHtml(p.name)}</h3>
+          <p class="mp-price">${p.price ? `¥${p.price.toLocaleString()}` : ''}</p>
+          <div class="mp-tags">${subInfo}</div>
+          ${starsHtml}
+        </div>
+      </a>
+    </li>
+  `;
+}
+
+function publicRowHtml(check) {
+  const meta = publicCardMeta(check);
+  if (!meta) return '';
+  const { p, isTop3, subInfo } = meta;
+  return `
+    <li class="mp-row ${isTop3 ? 'mp-row-best' : ''}" data-tier="${check.tier ?? ''}">
+      <a href="/products/${p.dmm_content_id}/" class="mp-row-link">
+        <img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy" />
+        <div class="mp-row-body">
+          <h3>${escapeHtml(p.name)}</h3>
+          <p class="mp-price">${p.price ? `¥${p.price.toLocaleString()}` : ''}</p>
+          <div class="mp-tags">${subInfo}</div>
+        </div>
+      </a>
+    </li>
+  `;
+}
+
+const interestedCardsHtml = groupedPublic.interested.map(publicCardHtml).join('');
+const interestedRowsHtml = groupedPublic.interested.map(publicRowHtml).join('');
+const usedCardsHtml = groupedPublic.used.map(publicCardHtml).join('');
+const usedRowsHtml = groupedPublic.used.map(publicRowHtml).join('');
 
 let totalUsedCount = 0;
 if (profile) {
@@ -140,22 +249,361 @@ if (profile) {
   followingCount = gc ?? 0;
 }
 
-const STATUS_LABELS = { interested: '気になる', used: '使った' };
-const TIER_LABELS = { first: '一軍', second: '二軍', retired: '引退' };
+const STATUS_LABELS = { interested: '気になる', used: '使った', folders: 'フォルダ' };
+const TIER_LABELS = TIER_LABELS_PRE;
+const STATUS_TAB_ORDER = ['interested', 'used', 'folders'];
+
+const publicReviews = checks.filter((c) => c.review_text || c.detail_review_text);
+
+const badgeChipsList = (() => {
+  const chips = [];
+  if (badgeCurrent) {
+    chips.push(`
+      <div class="badge-chip-card">
+        <span class="badge-chip-icon">🏆</span>
+        <div class="badge-chip-body">
+          <p class="badge-chip-name">${escapeHtml(badgeCurrent.name)}</p>
+          <p class="badge-chip-sub">${escapeHtml(badgeNextText)}</p>
+        </div>
+      </div>
+    `);
+  }
+  for (const b of makerBadges) {
+    chips.push(`
+      <div class="badge-chip-card">
+        <span class="badge-chip-icon">🏭</span>
+        <div class="badge-chip-body">
+          <p class="badge-chip-name">${escapeHtml(b.maker)}${escapeHtml(b.badge.name)}</p>
+          <p class="badge-chip-sub">同メーカー${b.badge.threshold}本以上使用</p>
+        </div>
+      </div>
+    `);
+  }
+  return chips;
+})();
+const badgeChipsHtml = badgeChipsList.join('');
+const badgeCount = badgeChipsList.length;
+
+// 称号の判定条件で使う集計ヘルパー(マイページと同じロジック)
+const countWhere = (checks, pred) => checks.filter(pred).length;
+const titleUsedCount = (checks) => countWhere(checks, (c) => c.status === 'used');
+const titleInterestedCount = (checks) => countWhere(checks, (c) => c.status === 'interested');
+const titleTierCount = (checks, tier) => countWhere(checks, (c) => c.status === 'used' && c.tier === tier);
+const titleRatingCount = (checks, n) => countWhere(checks, (c) => c.rating === n);
+const titleReviewTextCount = (checks) => countWhere(checks, (c) => Boolean(c.review_text));
+const titleDetailReviewCount = (checks) => countWhere(checks, (c) => Boolean(c.detail_review_text));
+const titleReviewImageCount = (checks) =>
+  countWhere(checks, (c) => Array.isArray(c.review_images) && c.review_images.length > 0);
+const titleComboReviewCount = (checks) =>
+  countWhere(checks, (c) => Boolean(c.review_text) && Boolean(c.detail_review_text));
+const titlePublicCount = (checks) => countWhere(checks, (c) => Boolean(c.is_public));
+const titleSimilarCount = (checks) => countWhere(checks, (c) => Boolean(c.similar_products));
+const titleRetirementReasonCount = (checks) => countWhere(checks, (c) => Boolean(c.retirement_reason));
+const titleMemoCount = (checks) => countWhere(checks, (c) => Boolean(c.memo));
+const titleMakerDiversity = (checks) =>
+  new Set(checks.filter((c) => c.status === 'used' && c.products?.maker).map((c) => c.products.maker)).size;
+const titleGenreDiversity = (checks) => {
+  const s = new Set();
+  for (const c of checks) {
+    if (c.status !== 'used') continue;
+    for (const g of c.products?.genre_tags ?? []) s.add(g);
+  }
+  return s.size;
+};
+const titleHasExpensiveUsed = (checks, min) =>
+  checks.some((c) => c.status === 'used' && c.products?.price != null && c.products.price >= min);
+const titleHasCheapUsed = (checks, max) =>
+  checks.some((c) => c.status === 'used' && c.products?.price != null && c.products.price > 0 && c.products.price < max);
+const titleHasAllTiers = (checks) =>
+  ['first', 'second', 'retired'].every((tier) => checks.some((c) => c.status === 'used' && c.tier === tier));
+const totalSpentOfTitles = (checks) =>
+  checks.filter((c) => c.status === 'used').reduce((sum, c) => sum + (c.products?.price ?? 0), 0);
+const titleTop3FilledCount = [profile?.best_product_id_1, profile?.best_product_id_2, profile?.best_product_id_3].filter(
+  Boolean
+).length;
+
+// 称号(実績)。マイページと同じ判定ロジック。公開ページでは「NEW」表示は行わない
+// (localStorageで管理する「新着」は本人向けの演出のため、他人のプロフィールでは意味がない)。
+// 判定はallChecks(非公開チェックも含む)を対象にしている。バッジ同様「集計としての称号」は
+// 個々のチェックの公開設定に関わらずアカウント全体の実績として扱う設計。
+const TITLES = [
+  { id: 'first_check', icon: '🎯', name: '一歩目', desc: 'はじめてチェックを記録する', check: (cs) => cs.length > 0 },
+  { id: 'interested_one', icon: '👀', name: '気になる屋さん', desc: '「気になる」を1件登録する', check: (cs) => cs.some((c) => c.status === 'interested') },
+  { id: 'used_one', icon: '✅', name: '使用開始', desc: '「使った」を1件記録する', check: (cs) => cs.some((c) => c.status === 'used') },
+  { id: 'first_tier', icon: '🥇', name: '一軍認定', desc: '「一軍」を1件選ぶ', check: (cs) => cs.some((c) => c.tier === 'first') },
+  { id: 'retired_one', icon: '👋', name: '卒業', desc: '「引退」を1件記録する', check: (cs) => cs.some((c) => c.tier === 'retired') },
+  { id: 'rating_one', icon: '⭐', name: '星をつけた', desc: '星評価を1件つける', check: (cs) => cs.some((c) => c.rating) },
+  { id: 'rating_five', icon: '🌟', name: '満点評価', desc: '★5をつける', check: (cs) => cs.some((c) => c.rating === 5) },
+  { id: 'review_one', icon: '✍️', name: 'ひとことレビュアー', desc: 'ひとことレビューを1件書く', check: (cs) => cs.some((c) => c.review_text) },
+  { id: 'detail_review_one', icon: '📝', name: '語り部', desc: '詳細レビューを1件書く', check: (cs) => cs.some((c) => c.detail_review_text) },
+  { id: 'image_one', icon: '📷', name: 'カメラマン', desc: 'レビュー画像を1件投稿する', check: (cs) => cs.some((c) => c.review_images && c.review_images.length > 0) },
+  { id: 'retirement_reason_one', icon: '💌', name: '正直者', desc: '手放した理由を1件書く', check: (cs) => cs.some((c) => c.retirement_reason) },
+  { id: 'similar_one', icon: '🔍', name: '目利き', desc: '似てるオナホールを1件記入する', check: (cs) => cs.some((c) => c.similar_products) },
+  { id: 'public_one', icon: '📢', name: '公開派', desc: 'レビューを1件公開する', check: (cs) => cs.some((c) => c.is_public) },
+  { id: 'memo_one', icon: '🗒️', name: 'メモ魔', desc: 'ひとことメモを1件書く', check: (cs) => cs.some((c) => c.memo) },
+  {
+    id: 'genre_explorer',
+    icon: '🧭',
+    name: 'ジャンル探検家',
+    desc: '3種類以上のジャンルの商品を使う',
+    check: (cs) => {
+      const genres = new Set();
+      for (const c of cs) {
+        if (c.status !== 'used') continue;
+        for (const g of c.products?.genre_tags ?? []) genres.add(g);
+      }
+      return genres.size >= 3;
+    },
+  },
+  {
+    id: 'multi_maker',
+    icon: '🏭',
+    name: '多メーカー派',
+    desc: '3社以上のメーカーの商品を使う',
+    check: (cs) => {
+      const makers = new Set();
+      for (const c of cs) {
+        if (c.status === 'used' && c.products?.maker) makers.add(c.products.maker);
+      }
+      return makers.size >= 3;
+    },
+  },
+  { id: 'nickname_set', icon: '🪪', name: '名乗り', desc: 'ニックネームを設定する', check: () => true },
+
+  // 使った本数マイルストーン
+  { id: 'used_3', icon: '📦', name: '駆け出しコレクター', desc: '使った本数3本達成', check: (cs) => titleUsedCount(cs) >= 3 },
+  { id: 'used_7', icon: '📦', name: '成長中', desc: '使った本数7本達成', check: (cs) => titleUsedCount(cs) >= 7 },
+  { id: 'used_15', icon: '📦', name: '中堅コレクター', desc: '使った本数15本達成', check: (cs) => titleUsedCount(cs) >= 15 },
+  { id: 'used_20', icon: '📦', name: '愛好家', desc: '使った本数20本達成', check: (cs) => titleUsedCount(cs) >= 20 },
+  { id: 'used_25', icon: '📦', name: '探求者', desc: '使った本数25本達成', check: (cs) => titleUsedCount(cs) >= 25 },
+  { id: 'used_40', icon: '📦', name: '練達の域', desc: '使った本数40本達成', check: (cs) => titleUsedCount(cs) >= 40 },
+  { id: 'used_60', icon: '📦', name: '熟練コレクター', desc: '使った本数60本達成', check: (cs) => titleUsedCount(cs) >= 60 },
+  { id: 'used_75', icon: '📦', name: '達人', desc: '使った本数75本達成', check: (cs) => titleUsedCount(cs) >= 75 },
+  { id: 'used_90', icon: '📦', name: '極める者', desc: '使った本数90本達成', check: (cs) => titleUsedCount(cs) >= 90 },
+  { id: 'used_120', icon: '📦', name: '殿堂入り', desc: '使った本数120本達成', check: (cs) => titleUsedCount(cs) >= 120 },
+
+  // 気になる件数マイルストーン
+  { id: 'interested_3', icon: '👀', name: '気になるさんいらっしゃい', desc: '気になるを3件登録する', check: (cs) => titleInterestedCount(cs) >= 3 },
+  { id: 'interested_5', icon: '👀', name: '目移り中', desc: '気になるを5件登録する', check: (cs) => titleInterestedCount(cs) >= 5 },
+  { id: 'interested_10', icon: '👀', name: 'リスト充実', desc: '気になるを10件登録する', check: (cs) => titleInterestedCount(cs) >= 10 },
+  { id: 'interested_20', icon: '👀', name: '物色家', desc: '気になるを20件登録する', check: (cs) => titleInterestedCount(cs) >= 20 },
+  { id: 'interested_30', icon: '👀', name: 'ウィンドウショッパー', desc: '気になるを30件登録する', check: (cs) => titleInterestedCount(cs) >= 30 },
+  { id: 'interested_50', icon: '👀', name: '気になる収集家', desc: '気になるを50件登録する', check: (cs) => titleInterestedCount(cs) >= 50 },
+  { id: 'interested_75', icon: '👀', name: '際限なきリスト', desc: '気になるを75件登録する', check: (cs) => titleInterestedCount(cs) >= 75 },
+  { id: 'interested_100', icon: '👀', name: '気になるコンプリート', desc: '気になるを100件登録する', check: (cs) => titleInterestedCount(cs) >= 100 },
+
+  // 評価関連
+  { id: 'rating_two', icon: '⭐', name: '率直な評価', desc: '★2をつける', check: (cs) => titleRatingCount(cs, 2) >= 1 },
+  { id: 'rating_three', icon: '⭐', name: 'バランス評価', desc: '★3をつける', check: (cs) => titleRatingCount(cs, 3) >= 1 },
+  { id: 'rating_four', icon: '⭐', name: '高評価派', desc: '★4をつける', check: (cs) => titleRatingCount(cs, 4) >= 1 },
+  { id: 'five_star_5', icon: '🌟', name: '満点マイスター', desc: '★5を5回つける', check: (cs) => titleRatingCount(cs, 5) >= 5 },
+  { id: 'five_star_10', icon: '🌟', name: '満点コレクター', desc: '★5を10回つける', check: (cs) => titleRatingCount(cs, 5) >= 10 },
+  { id: 'one_star_3', icon: '💧', name: '厳しい目', desc: '★1を3回つける', check: (cs) => titleRatingCount(cs, 1) >= 3 },
+
+  // レビュー関連
+  { id: 'review_5', icon: '✍️', name: 'レビュアー見習い', desc: 'ひとことレビューを5件書く', check: (cs) => titleReviewTextCount(cs) >= 5 },
+  { id: 'review_10', icon: '✍️', name: 'レビュアー', desc: 'ひとことレビューを10件書く', check: (cs) => titleReviewTextCount(cs) >= 10 },
+  { id: 'review_20', icon: '✍️', name: 'ベテランレビュアー', desc: 'ひとことレビューを20件書く', check: (cs) => titleReviewTextCount(cs) >= 20 },
+  { id: 'detail_3', icon: '📝', name: '語り部見習い', desc: '詳細レビューを3件書く', check: (cs) => titleDetailReviewCount(cs) >= 3 },
+  { id: 'detail_5', icon: '📝', name: '語り部', desc: '詳細レビューを5件書く', check: (cs) => titleDetailReviewCount(cs) >= 5 },
+  { id: 'detail_10', icon: '📝', name: '物語作家', desc: '詳細レビューを10件書く', check: (cs) => titleDetailReviewCount(cs) >= 10 },
+  { id: 'image_3', icon: '📷', name: 'フォトグラファー', desc: 'レビュー画像を3件投稿する', check: (cs) => titleReviewImageCount(cs) >= 3 },
+  { id: 'image_5', icon: '📷', name: 'カメラ小僧', desc: 'レビュー画像を5件投稿する', check: (cs) => titleReviewImageCount(cs) >= 5 },
+  { id: 'image_10', icon: '📷', name: 'ビジュアル派', desc: 'レビュー画像を10件投稿する', check: (cs) => titleReviewImageCount(cs) >= 10 },
+  { id: 'combo_3', icon: '🖋️', name: 'こだわり派', desc: 'ひとこと+詳細レビュー両方を3件書く', check: (cs) => titleComboReviewCount(cs) >= 3 },
+  { id: 'combo_5', icon: '🖋️', name: 'レビュー職人', desc: 'ひとこと+詳細レビュー両方を5件書く', check: (cs) => titleComboReviewCount(cs) >= 5 },
+  { id: 'public_review_3', icon: '📢', name: '発信者', desc: 'レビューを3件公開する', check: (cs) => titlePublicCount(cs) >= 3 },
+  { id: 'public_review_5', icon: '📢', name: 'オープンマインド', desc: 'レビューを5件公開する', check: (cs) => titlePublicCount(cs) >= 5 },
+  { id: 'public_review_10', icon: '📢', name: '情報提供者', desc: 'レビューを10件公開する', check: (cs) => titlePublicCount(cs) >= 10 },
+
+  // メーカー・ジャンルの多様性
+  { id: 'maker_5', icon: '🏭', name: 'メーカー通', desc: '5社以上のメーカーの商品を使う', check: (cs) => titleMakerDiversity(cs) >= 5 },
+  { id: 'maker_8', icon: '🏭', name: 'メーカーマニア', desc: '8社以上のメーカーの商品を使う', check: (cs) => titleMakerDiversity(cs) >= 8 },
+  { id: 'maker_12', icon: '🏭', name: '全方位派', desc: '12社以上のメーカーの商品を使う', check: (cs) => titleMakerDiversity(cs) >= 12 },
+  { id: 'genre_5', icon: '🧭', name: 'ジャンル開拓者', desc: '5種類以上のジャンルの商品を使う', check: (cs) => titleGenreDiversity(cs) >= 5 },
+  { id: 'genre_8', icon: '🧭', name: 'ジャンル制覇', desc: '8種類以上のジャンルの商品を使う', check: (cs) => titleGenreDiversity(cs) >= 8 },
+
+  // 一軍・二軍・引退
+  { id: 'first_3', icon: '🥇', name: '一軍常連', desc: '一軍を3件選ぶ', check: (cs) => titleTierCount(cs, 'first') >= 3 },
+  { id: 'first_5', icon: '🥇', name: '一軍多数派', desc: '一軍を5件選ぶ', check: (cs) => titleTierCount(cs, 'first') >= 5 },
+  { id: 'first_10', icon: '🥇', name: '一軍マスター', desc: '一軍を10件選ぶ', check: (cs) => titleTierCount(cs, 'first') >= 10 },
+  { id: 'second_1', icon: '🥈', name: '二軍待機', desc: '二軍を1件記録する', check: (cs) => titleTierCount(cs, 'second') >= 1 },
+  { id: 'second_3', icon: '🥈', name: '二軍層厚し', desc: '二軍を3件記録する', check: (cs) => titleTierCount(cs, 'second') >= 3 },
+  { id: 'second_5', icon: '🥈', name: '二軍ベンチ満員', desc: '二軍を5件記録する', check: (cs) => titleTierCount(cs, 'second') >= 5 },
+  { id: 'retired_3', icon: '👋', name: '卒業生多数', desc: '引退を3件記録する', check: (cs) => titleTierCount(cs, 'retired') >= 3 },
+  { id: 'retired_5', icon: '👋', name: '殿堂送り', desc: '引退を5件記録する', check: (cs) => titleTierCount(cs, 'retired') >= 5 },
+  { id: 'all_tiers', icon: '⚖️', name: 'バランス型', desc: '一軍・二軍・引退をすべて経験する', check: (cs) => titleHasAllTiers(cs) },
+
+  // 合計使用金額マイルストーン
+  { id: 'spend_10000', icon: '💰', name: '小さな投資', desc: '合計使用金額1万円達成', check: (cs) => totalSpentOfTitles(cs) >= 10000 },
+  { id: 'spend_50000', icon: '💰', name: '本格派', desc: '合計使用金額5万円達成', check: (cs) => totalSpentOfTitles(cs) >= 50000 },
+  { id: 'spend_100000', icon: '💴', name: '大投資家', desc: '合計使用金額10万円達成', check: (cs) => totalSpentOfTitles(cs) >= 100000 },
+  { id: 'spend_300000', icon: '💴', name: '豪華絢爛', desc: '合計使用金額30万円達成', check: (cs) => totalSpentOfTitles(cs) >= 300000 },
+  { id: 'spend_500000', icon: '💎', name: '散財の美学', desc: '合計使用金額50万円達成', check: (cs) => totalSpentOfTitles(cs) >= 500000 },
+  { id: 'spend_1000000', icon: '👑', name: '億り人予備軍', desc: '合計使用金額100万円達成', check: (cs) => totalSpentOfTitles(cs) >= 1000000 },
+
+  // プロフィール
+  { id: 'avatar_set', icon: '🖼️', name: '顔出し', desc: 'プロフィール画像を設定する', check: () => Boolean(profile?.avatar_url) },
+  { id: 'header_set', icon: '🏞️', name: 'イメチェン', desc: 'ヘッダー画像を設定する', check: () => Boolean(profile?.header_url) },
+  { id: 'bio_set', icon: '📖', name: '自己紹介デビュー', desc: '自己紹介文を書く', check: () => Boolean(profile?.bio) },
+  { id: 'sns_set', icon: '🔗', name: 'つながり上手', desc: 'SNSリンクを1件追加する', check: () => Array.isArray(profile?.sns_links) && profile.sns_links.length > 0 },
+  { id: 'profile_public', icon: '🌐', name: '公開派プロフィール', desc: 'プロフィールを公開設定にする', check: () => Boolean(profile?.is_public) },
+
+  // マイベスト・推し
+  { id: 'top3_one', icon: '🥇', name: 'マイベスト始動', desc: 'マイベストを1つ選ぶ', check: () => titleTop3FilledCount >= 1 },
+  { id: 'top3_all', icon: '🏅', name: 'マイベストコンプリート', desc: 'マイベストを3つ全部選ぶ', check: () => titleTop3FilledCount >= 3 },
+  { id: 'oshi_set', icon: '💗', name: '推し宣言', desc: '推しメーカーを設定する', check: () => Boolean(profile?.oshi_maker) },
+  { id: 'oshi_reason_set', icon: '💬', name: '推し語り', desc: '推しメーカーの理由を書く', check: () => Boolean(profile?.oshi_maker_reason) },
+  { id: 'best_review_set', icon: '📣', name: 'イチオシレビュー', desc: 'ベストな口コミを設定する', check: () => Boolean(profile?.best_review_product_id) },
+
+  // フォルダ
+  { id: 'folder_1', icon: '📁', name: 'フォルダデビュー', desc: 'フォルダを1つ作る', check: () => publicFolders.length >= 1 },
+  { id: 'folder_3', icon: '📁', name: '整理上手', desc: 'フォルダを3つ作る', check: () => publicFolders.length >= 3 },
+  { id: 'folder_5', icon: '📁', name: 'コレクション管理者', desc: 'フォルダを5つ作る', check: () => publicFolders.length >= 5 },
+  { id: 'folder_item_1', icon: '🗂️', name: '収納開始', desc: 'フォルダに商品を1つ入れる', check: () => publicFolders.some((f) => (f.folder_items || []).length > 0) },
+
+  // その他
+  { id: 'similar_3', icon: '🔍', name: '目利き上級者', desc: '似てるオナホールを3件記入する', check: (cs) => titleSimilarCount(cs) >= 3 },
+  { id: 'retirement_reason_3', icon: '💌', name: '正直者コンプリート', desc: '手放した理由を3件書く', check: (cs) => titleRetirementReasonCount(cs) >= 3 },
+  { id: 'memo_5', icon: '🗒️', name: 'メモ魔レベル2', desc: 'ひとことメモを5件書く', check: (cs) => titleMemoCount(cs) >= 5 },
+  { id: 'expensive_used', icon: '💎', name: '高級志向', desc: '1万円以上の商品を使う', check: (cs) => titleHasExpensiveUsed(cs, 10000) },
+  { id: 'cheap_used', icon: '🪙', name: 'コスパ重視', desc: '1千円未満の商品を使う', check: (cs) => titleHasCheapUsed(cs, 1000) },
+];
+
+const earnedTitleIds = new Set();
+const titleCardsData = TITLES.map((t) => {
+  const earned = t.check(allChecks);
+  if (earned) earnedTitleIds.add(t.id);
+  return { ...t, earned };
+});
+const earnedTitleCount = earnedTitleIds.size;
+
+// バッジ・称号を統合した「ランク」制度。マイページと同じ判定ロジック
+const RANK_TIERS = [
+  { key: 'god', threshold: 90, name: 'ゴッド', emoji: '👑' },
+  { key: 'master', threshold: 65, name: 'マスター', emoji: '💎' },
+  { key: 'gold', threshold: 40, name: 'ゴールド', emoji: '🥇' },
+  { key: 'silver', threshold: 20, name: 'シルバー', emoji: '🥈' },
+  { key: 'bronze', threshold: 5, name: 'ブロンズ', emoji: '🥉' },
+];
+
+function getRankInfo(totalEarned) {
+  const current = RANK_TIERS.find((t) => totalEarned >= t.threshold) ?? null;
+  const idx = current ? RANK_TIERS.indexOf(current) : RANK_TIERS.length;
+  const next = idx > 0 ? RANK_TIERS[idx - 1] : null;
+  const prevThreshold = current ? current.threshold : 0;
+  let progressPercent = 100;
+  let remaining = 0;
+  if (next) {
+    const span = next.threshold - prevThreshold;
+    progressPercent = Math.max(0, Math.min(100, Math.round(((totalEarned - prevThreshold) / span) * 100)));
+    remaining = next.threshold - totalEarned;
+  }
+  return { current, next, progressPercent, remaining };
+}
+
+const totalEarnedForRank = badgeCount + earnedTitleCount;
+const rankInfo = getRankInfo(totalEarnedForRank);
+const rankTierClass = rankInfo.current ? `rank-${rankInfo.current.key}` : 'rank-none';
+const rankCrest = rankInfo.current ? rankInfo.current.emoji : '🔰';
+const rankName = rankInfo.current ? rankInfo.current.name : '未認定';
+const rankProgressText = rankInfo.next
+  ? `次の「${rankInfo.next.name}」まであと${rankInfo.remaining}個`
+  : rankInfo.current
+    ? '最高ランクに到達しました'
+    : 'バッジや称号を1つ獲得するとランクがつきます';
+
+const titleCardsHtml = titleCardsData
+  .map(
+    (t) => `
+    <div class="title-card ${t.earned ? 'earned' : 'locked'}">
+      <span class="title-icon">${t.icon}</span>
+      <p class="title-name">${escapeHtml(t.name)}</p>
+      <p class="title-desc">${escapeHtml(t.desc)}</p>
+    </div>
+  `
+  )
+  .join('');
+
+// その金額で買えたかもしれないもの(目安の遊び機能)。マイページと同じロジック。
+const MONEY_COMPARISON_ITEMS = [
+  { name: '缶コーヒー', price: 130, unit: '本' },
+  { name: 'ガチャガチャ', price: 300, unit: '回' },
+  { name: 'コンビニおにぎり', price: 150, unit: '個' },
+  { name: '牛丼(並盛)', price: 480, unit: '杯' },
+  { name: 'カフェのコーヒー', price: 500, unit: '杯' },
+  { name: '週刊少年マンガ誌', price: 290, unit: '冊' },
+  { name: 'ラーメン', price: 900, unit: '杯' },
+  { name: '文庫本', price: 700, unit: '冊' },
+  { name: '映画館(1回)', price: 2000, unit: '回' },
+  { name: '焼肉食べ放題', price: 4000, unit: '回' },
+  { name: 'コミック全巻セット(20巻)', price: 12000, unit: 'セット' },
+  { name: 'ワイヤレスイヤホン', price: 25000, unit: '個' },
+  { name: 'Nintendo Switch 2', price: 49980, unit: '台' },
+  { name: '電動アシスト自転車', price: 120000, unit: '台' },
+  { name: 'PlayStation 5', price: 79980, unit: '台' },
+  { name: 'iPhone 17', price: 139800, unit: '台' },
+  { name: 'iPhone 17 Pro', price: 179800, unit: '台' },
+  { name: '高性能ゲーミングPC', price: 250000, unit: '台' },
+  { name: '大型有機ELテレビ(65インチ)', price: 350000, unit: '台' },
+  { name: '海外旅行(1週間)', price: 300000, unit: '回' },
+  { name: '国内旅行(3泊4日)', price: 100000, unit: '回' },
+  { name: 'ハイエンドノートPC', price: 300000, unit: '台' },
+  { name: 'ブランドバッグ', price: 350000, unit: '個' },
+  { name: 'ブランド腕時計', price: 400000, unit: '本' },
+  { name: '中古の軽自動車', price: 800000, unit: '台' },
+  { name: '都内ワンルームの年間家賃', price: 1200000, unit: '年分' },
+  { name: 'ハイブランド腕時計', price: 1500000, unit: '本' },
+  { name: '新車(コンパクトカー)', price: 2000000, unit: '台' },
+  { name: '新車(ミニバン)', price: 3500000, unit: '台' },
+  { name: '結婚式の平均費用', price: 3000000, unit: '回分' },
+  { name: '新車(高級セダン)', price: 6000000, unit: '台' },
+  { name: '中古マンション(郊外)', price: 30000000, unit: '戸' },
+];
+
+function moneyComparisonPicks(amount, count = 6) {
+  if (!amount) return [];
+  // 価格が安い順に並べ、その中から等間隔にcount件選ぶことで、
+  // 少額〜高額まで幅広い「解像度」で例えを見せる
+  const sorted = MONEY_COMPARISON_ITEMS.map((it) => ({ ...it, ratio: amount / it.price })).sort(
+    (a, b) => a.price - b.price
+  );
+  if (sorted.length <= count) return sorted;
+  const picks = [];
+  for (let i = 0; i < count; i++) {
+    const idx = Math.round((i * (sorted.length - 1)) / (count - 1));
+    picks.push(sorted[idx]);
+  }
+  const seen = new Set();
+  return picks.filter((it) => {
+    if (seen.has(it.name)) return false;
+    seen.add(it.name);
+    return true;
+  });
+}
+
+function formatMoneyComparison(it) {
+  if (it.ratio >= 1) {
+    const count = it.ratio >= 10 ? Math.round(it.ratio) : Math.round(it.ratio * 10) / 10;
+    return `${it.name} 約${count.toLocaleString()}${it.unit}分`;
+  }
+  const percent = Math.max(1, Math.round(it.ratio * 100));
+  return `${it.name}の約${percent}%`;
+}
+
+const moneyComparisons = moneyComparisonPicks(totalSpentAll).map(formatMoneyComparison);
 ---
 
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#2b5fad" />
     <title>{profile ? `${profile.nickname}さんのプロフィール` : 'ユーザーが見つかりません'} | オナホめも</title>
   </head>
   <body>
-    <SiteHeader />
+    <header class="site-header">
+      <a href="/" class="site-logo">オナホめも</a>
+    </header>
     <main class="profile-page">
       {!profile && <p>そのニックネームのユーザーは見つかりませんでした。</p>}
 
@@ -200,136 +648,494 @@ const TIER_LABELS = { first: '一軍', second: '二軍', retired: '引退' };
             <button id="follow-btn" class="follow-btn" style="display:none;">フォローする</button>
           </div>
 
-          {badgeCurrent && (
-            <div class="badge-section">
-              <span class="badge-chip">{badgeCurrent.name}</span>
-              <p class="badge-detail">使った本数: {totalUsedCount}本 ・ {badgeNextText}</p>
+          <div class="mp-stats">
+            <div class="mp-stat-card mp-stat-jump" data-stat-jump="used" role="button" tabindex="0"><span class="mp-stat-num">{groupedAll.used.length}</span><span class="mp-stat-label">使った本数</span></div>
+            <div class="mp-stat-card mp-stat-jump" data-stat-jump="interested" role="button" tabindex="0"><span class="mp-stat-num">{groupedAll.interested.length}</span><span class="mp-stat-label">気になる</span></div>
+            <div class="mp-stat-card mp-stat-jump" data-stat-jump="first" role="button" tabindex="0"><span class="mp-stat-num">{usedByTierAll.first.length}</span><span class="mp-stat-label">一軍</span></div>
+            <div class="mp-stat-card mp-stat-jump" data-stat-jump="second" role="button" tabindex="0"><span class="mp-stat-num">{usedByTierAll.second.length}</span><span class="mp-stat-label">二軍</span></div>
+            <div
+              class="mp-stat-card mp-stat-card-wide mp-spend-card"
+              id="profile-spend-card"
+              role="button"
+              tabindex="0"
+              aria-expanded="false"
+            >
+              <span class="mp-stat-num">¥{totalSpentAll.toLocaleString()}</span>
+              <span class="mp-stat-label">合計使用金額(タップで換算)</span>
             </div>
-          )}
+          </div>
+          <div class="mp-spend-compare" id="profile-spend-compare" hidden>
+            {moneyComparisons.length === 0 ? (
+              <p class="mp-spend-compare-empty">まだ使った記録がありません。</p>
+            ) : (
+              <>
+                <p class="mp-spend-compare-title">その金額で買えたかもしれないもの(目安)</p>
+                <ul class="mp-spend-compare-list">
+                  {moneyComparisons.map((line) => (
+                    <li>{line}</li>
+                  ))}
+                </ul>
+                <p class="mp-spend-compare-note">※価格はあくまで目安です</p>
+              </>
+            )}
+          </div>
 
-          {makerBadges.length > 0 && (
-            <div class="maker-badge-section">
-              <h2 class="maker-badge-title">メーカーバッジ</h2>
-              <div class="maker-badge-list">
-                {makerBadges.map((b) => (
-                  <span class="maker-badge-chip">
-                    {b.maker} {b.badge.name}
-                    <span class="maker-badge-count">({b.count}本)</span>
-                  </span>
+          <div class="mp-main-tabs" id="profile-main-tabs" role="tablist">
+            <button type="button" class="mp-main-tab" data-main-tab="all" role="tab">すべて</button>
+            <button type="button" class="mp-main-tab" data-main-tab="oshi" role="tab">推しメーカーとマイベスト3</button>
+            <button type="button" class="mp-main-tab" data-main-tab="reviews" role="tab">口コミ一覧</button>
+            <button type="button" class="mp-main-tab" data-main-tab="badges" role="tab">バッジ・称号</button>
+          </div>
+
+          <div class="mp-main-panel" data-main-panel="all">
+            <div class="mp-tabs-row">
+              <div class="ranking-tabs mp-status-tabs" id="profile-status-tabs">
+                {STATUS_TAB_ORDER.map((status) => (
+                  <button
+                    type="button"
+                    class={`ranking-tab mp-status-tab ${status === 'interested' ? 'ranking-tab-active' : ''}`}
+                    data-status={status}
+                  >
+                    {STATUS_LABELS[status]}
+                    {status === 'folders' ? '' : `(${groupedPublic[status].length})`}
+                  </button>
                 ))}
               </div>
-            </div>
-          )}
-
-          {top3.length > 0 && (
-            <div class="top3-section">
-              <h2 class="top3-title">マイベストTOP3</h2>
-              <div class="top3-grid">
-                {top3.map((slot) => (
-                  <div class="top3-slot filled">
-                    <span class="top3-rank">{slot.rank}位</span>
-                    <a href={`/products/${slot.check.products.dmm_content_id}/`} class="top3-card">
-                      <img src={slot.check.products.image_url} alt={slot.check.products.name} loading="lazy" />
-                      <div class="top3-card-body">
-                        <p class="mp-maker">{slot.check.products.maker ?? ''}</p>
-                        <h3>{slot.check.products.name}</h3>
-                      </div>
-                    </a>
-                    {slot.reason && <p class="top3-reason-text">{slot.reason}</p>}
-                  </div>
-                ))}
+              <div class="mp-view-toggle" id="profile-view-toggle">
+                <button type="button" class="mp-view-btn active" data-view="grid" title="グリッド表示" aria-label="グリッド表示">▦</button>
+                <button type="button" class="mp-view-btn" data-view="list" title="リスト表示" aria-label="リスト表示">☰</button>
               </div>
             </div>
-          )}
 
-          {publicFolders.length > 0 && (
-            <div class="folders-section">
-              <h2 class="folders-title">マイフォルダ</h2>
-              <div class="folder-list">
-                {publicFolders.map((folder) => {
-                  const items = (folder.folder_items ?? []).filter((fi) => fi.products);
-                  return (
-                    <div class="folder-card">
-                      <div class="folder-card-head">
-                        <h3 class="folder-name">{folder.name}</h3>
-                        <span class="folder-count">{items.length}件</span>
-                      </div>
-                      {items.length === 0 ? (
-                        <p class="badge-empty">まだ商品が入っていません。</p>
-                      ) : (
-                        <ul class="folder-items-grid">
-                          {items.map((fi) => (
-                            <li class="folder-item-card">
-                              <a href={`/products/${fi.products.dmm_content_id}/`}>
-                                <img src={fi.products.image_url} alt={fi.products.name} loading="lazy" />
-                                <p class="folder-item-name">{fi.products.name}</p>
-                              </a>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {bestReviewCheck && bestReviewCheck.products && (
-            <div class="best-review-section">
-              <h2 class="best-review-title">ベストな口コミ</h2>
-              <a href={`/products/${bestReviewCheck.products.dmm_content_id}/`} class="best-review-product">
-                <img src={bestReviewCheck.products.image_url} alt={bestReviewCheck.products.name} loading="lazy" />
-                <div class="best-review-product-body">
-                  <p class="mp-maker">{bestReviewCheck.products.maker ?? ''}</p>
-                  <h3>{bestReviewCheck.products.name}</h3>
-                </div>
-              </a>
-              {bestReviewTitle && <p class="best-review-quote-title">{bestReviewTitle}</p>}
-              {bestReviewIsDetail ? (
-                <p class="best-review-quote" set:html={bestReviewText} />
+            <div class="mp-status-panel" data-status-panel="interested">
+              {groupedPublic.interested.length === 0 ? (
+                <p class="mp-empty-tab">まだ気になるの商品がありません。</p>
               ) : (
-                <p class="best-review-quote">{bestReviewText}</p>
+                <>
+                  <ul class="mp-grid mp-grid-compact" data-view-variant="grid" set:html={interestedCardsHtml} />
+                  <ul class="mp-list" data-view-variant="list" hidden set:html={interestedRowsHtml} />
+                </>
               )}
             </div>
-          )}
 
-          {profile.oshi_maker && (
-            <div class="oshi-maker-section">
-              <h2 class="oshi-maker-title">推しメーカー</h2>
-              <span class="badge-chip oshi-maker-chip">{profile.oshi_maker}</span>
-              {profile.oshi_maker_reason && <p class="badge-detail">{profile.oshi_maker_reason}</p>}
+            <div class="mp-status-panel" data-status-panel="used" hidden>
+              {groupedPublic.used.length === 0 ? (
+                <p class="mp-empty-tab">まだ使ったの商品がありません。</p>
+              ) : (
+                <>
+                  <div class="mp-tier-tabs" id="profile-tier-tabs">
+                    <button type="button" class="mp-tier-tab mp-tier-tab-active" data-tier="all">すべて({groupedPublic.used.length})</button>
+                    <button type="button" class="mp-tier-tab" data-tier="first">一軍({usedByTierPublic.first.length})</button>
+                    <button type="button" class="mp-tier-tab" data-tier="second">二軍({usedByTierPublic.second.length})</button>
+                    <button type="button" class="mp-tier-tab" data-tier="retired">引退({usedByTierPublic.retired.length})</button>
+                  </div>
+                  <ul class="mp-grid mp-grid-compact" data-view-variant="grid" set:html={usedCardsHtml} />
+                  <ul class="mp-list" data-view-variant="list" hidden set:html={usedRowsHtml} />
+                  <p class="mp-empty-tab" id="profile-tier-empty" hidden>この絞り込みに該当する商品がありません。</p>
+                </>
+              )}
             </div>
-          )}
 
-          <p class="profile-page-count">公開記録: {checks.length}件(使った: {usedCount}件)</p>
+            <div class="mp-status-panel" data-status-panel="folders" hidden>
+              {publicFolders.length === 0 ? (
+                <p class="mp-empty-tab">公開されているフォルダがありません。</p>
+              ) : (
+                <div class="folders-section">
+                  <h2 class="folders-title">マイフォルダ</h2>
+                  <div class="folder-list">
+                    {publicFolders.map((folder) => {
+                      const items = (folder.folder_items ?? []).filter((fi) => fi.products);
+                      return (
+                        <div class="folder-card">
+                          <div class="folder-card-head">
+                            <h3 class="folder-name">{folder.name}</h3>
+                            <span class="folder-count">{items.length}件</span>
+                          </div>
+                          {items.length === 0 ? (
+                            <p class="badge-empty">まだ商品が入っていません。</p>
+                          ) : (
+                            <ul class="folder-items-grid">
+                              {items.map((fi) => (
+                                <li class="folder-item-card">
+                                  <a href={`/products/${fi.products.dmm_content_id}/`}>
+                                    <img src={fi.products.image_url} alt={fi.products.name} loading="lazy" />
+                                    <p class="folder-item-name">{fi.products.name}</p>
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
 
-          {checks.length === 0 && <p class="mp-empty">まだ公開されている記録がありません。</p>}
+          <div class="mp-main-panel" data-main-panel="oshi" hidden>
+            {profile.oshi_maker && (
+              <div class="oshi-maker-section">
+                <h2 class="oshi-maker-title">推しメーカー</h2>
+                <span class="badge-chip oshi-maker-chip">{profile.oshi_maker}</span>
+                {profile.oshi_maker_reason && <p class="badge-detail">{profile.oshi_maker_reason}</p>}
+              </div>
+            )}
 
-          <ul class="shelf-grid">
-            {checks.map((c) => {
-              const p = c.products;
-              return (
-                <li class="shelf-card">
-                  <a href={`/products/${p.dmm_content_id}/`} class="shelf-cover">
-                    <img src={p.image_url} alt={p.name} loading="lazy" />
-                  </a>
-                  {c.rating ? (
-                    <p class="shelf-stars">{'★'.repeat(c.rating)}{'☆'.repeat(5 - c.rating)}</p>
-                  ) : (
-                    <p class="shelf-stars-empty">{STATUS_LABELS[c.status]}{c.tier ? `・${TIER_LABELS[c.tier]}` : ''}</p>
-                  )}
-                  <p class="shelf-name">{p.name}</p>
-                </li>
-              );
-            })}
-          </ul>
+            {top3.length > 0 && (
+              <div class="top3-section">
+                <h2 class="top3-title">マイベストTOP3</h2>
+                <div class="top3-grid">
+                  {top3.map((slot) => (
+                    <div class="top3-slot filled">
+                      <span class="top3-rank">{slot.rank}位</span>
+                      <a href={`/products/${slot.check.products.dmm_content_id}/`} class="top3-card">
+                        <img src={slot.check.products.image_url} alt={slot.check.products.name} loading="lazy" />
+                        <div class="top3-card-body">
+                          <p class="mp-maker">{slot.check.products.maker ?? ''}</p>
+                          <h3>{slot.check.products.name}</h3>
+                        </div>
+                      </a>
+                      {slot.reason && <p class="top3-reason-text">{slot.reason}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!profile.oshi_maker && top3.length === 0 && (
+              <p class="mp-empty">まだ推しメーカーやマイベスト3が設定されていません。</p>
+            )}
+          </div>
+
+          <div class="mp-main-panel" data-main-panel="reviews" hidden>
+            {bestReviewCheck && bestReviewCheck.products && (
+              <div class="best-review-section">
+                <h2 class="best-review-title">ベストな口コミ</h2>
+                <a href={`/products/${bestReviewCheck.products.dmm_content_id}/`} class="best-review-product">
+                  <img src={bestReviewCheck.products.image_url} alt={bestReviewCheck.products.name} loading="lazy" />
+                  <div class="best-review-product-body">
+                    <p class="mp-maker">{bestReviewCheck.products.maker ?? ''}</p>
+                    <h3>{bestReviewCheck.products.name}</h3>
+                  </div>
+                </a>
+                {bestReviewTitle && <p class="best-review-quote-title">{bestReviewTitle}</p>}
+                {bestReviewIsDetail ? (
+                  <p class="best-review-quote" set:html={bestReviewText} />
+                ) : (
+                  <p class="best-review-quote">{bestReviewText}</p>
+                )}
+                {bestReviewDateStr && <p class="review-item-date">{bestReviewDateStr}</p>}
+              </div>
+            )}
+
+            <div class="reviews-list-section">
+              <h2 class="reviews-list-title">口コミ一覧{publicReviews.length > 0 && `(${publicReviews.length}件)`}</h2>
+              {publicReviews.length === 0 ? (
+                <p class="badge-empty">まだ公開されている口コミがありません。</p>
+              ) : (
+                <ul class="reviews-list">
+                  {publicReviews.map((c) => {
+                    const p = c.products;
+                    const isDetail = Boolean(c.detail_review_text);
+                    const text = c.detail_review_text || c.review_text || '';
+                    const title = isDetail ? c.detail_review_title : c.review_title;
+                    const isBest = p.id === profile.best_review_product_id;
+                    const dateStr = c.updated_at ? new Date(c.updated_at).toLocaleDateString('ja-JP') : '';
+                    return (
+                      <li class={`review-item ${isBest ? 'review-item-best' : ''}`}>
+                        <a href={`/products/${p.dmm_content_id}/`} class="review-item-head">
+                          <img src={p.image_url} alt={p.name} loading="lazy" />
+                          <div class="review-item-head-body">
+                            <p class="mp-maker">{p.maker ?? ''}</p>
+                            <h3>{p.name}</h3>
+                            <div class="mp-tags">
+                              {c.rating && <span class="mp-tag">★{c.rating}</span>}
+                              {c.tier && <span class="mp-tag">{TIER_LABELS[c.tier]}</span>}
+                              {isBest && <span class="mp-tag mp-best">ベスト口コミ</span>}
+                            </div>
+                          </div>
+                        </a>
+                        {title && <p class="review-item-title">{title}</p>}
+                        {isDetail ? (
+                          <p class="review-item-text" set:html={text} />
+                        ) : (
+                          <p class="review-item-text">{text}</p>
+                        )}
+                        {dateStr && <p class="review-item-date">{dateStr}</p>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <div class="mp-main-panel" data-main-panel="badges" hidden>
+            <div class={`rank-hero ${rankTierClass}`}>
+              <div class="rank-hero-crest">{rankCrest}</div>
+              <div class="rank-hero-body">
+                <p class="rank-hero-label">ランク</p>
+                <p class="rank-hero-name">{rankName}</p>
+                <div class="rank-hero-progress-track">
+                  <div class="rank-hero-progress-fill" style={`width:${rankInfo.progressPercent}%`}></div>
+                </div>
+                <p class="rank-hero-progress-text">{rankProgressText}</p>
+                <p class="rank-hero-breakdown">バッジ{badgeCount}個・称号{earnedTitleCount}個(計{totalEarnedForRank}個)</p>
+              </div>
+            </div>
+            <div class="grid-density-toggle" id="profile-badges-view-toggle">
+              <button type="button" class="density-tab" data-badges-view="card" aria-label="カード表示" title="カード表示">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <rect x="1" y="1" width="6.5" height="6.5" rx="1" fill="currentColor" />
+                  <rect x="8.5" y="1" width="6.5" height="6.5" rx="1" fill="currentColor" />
+                  <rect x="1" y="8.5" width="6.5" height="6.5" rx="1" fill="currentColor" />
+                  <rect x="8.5" y="8.5" width="6.5" height="6.5" rx="1" fill="currentColor" />
+                </svg>
+              </button>
+              <button type="button" class="density-tab" data-badges-view="grid" aria-label="グリッド表示" title="グリッド表示">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <rect x="1" y="1" width="4" height="4" rx="0.8" fill="currentColor" />
+                  <rect x="6" y="1" width="4" height="4" rx="0.8" fill="currentColor" />
+                  <rect x="11" y="1" width="4" height="4" rx="0.8" fill="currentColor" />
+                  <rect x="1" y="6" width="4" height="4" rx="0.8" fill="currentColor" />
+                  <rect x="6" y="6" width="4" height="4" rx="0.8" fill="currentColor" />
+                  <rect x="11" y="6" width="4" height="4" rx="0.8" fill="currentColor" />
+                  <rect x="1" y="11" width="4" height="4" rx="0.8" fill="currentColor" />
+                  <rect x="6" y="11" width="4" height="4" rx="0.8" fill="currentColor" />
+                  <rect x="11" y="11" width="4" height="4" rx="0.8" fill="currentColor" />
+                </svg>
+              </button>
+            </div>
+            <div class="badges-view-scope" id="profile-badges-view-scope">
+              <div class="badge-chips-section">
+                <h2 class="badge-chips-title">バッジ</h2>
+                {badgeChipsHtml ? (
+                  <div class="badge-chips-row" set:html={badgeChipsHtml} />
+                ) : (
+                  <p class="badge-empty">まだバッジがありません。1本使うと「はじめての一本」バッジがもらえます。</p>
+                )}
+              </div>
+
+              <div class="titles-section">
+                <h2 class="titles-title">称号(実績)</h2>
+                <p class="badge-detail titles-count">称号 {earnedTitleCount}/{TITLES.length}個 獲得</p>
+                <div class="title-grid" set:html={titleCardsHtml} />
+              </div>
+            </div>
+          </div>
         </>
       )}
     </main>
 
     <script>
       import { supabase } from '../../lib/supabase.js';
+
+      let applyMainTab = null;
+
+      const mainTabsNav = document.getElementById('profile-main-tabs');
+      if (mainTabsNav) {
+        const mainPanels = document.querySelectorAll('.mp-main-panel');
+        const MAIN_TAB_KEYS = ['all', 'oshi', 'reviews', 'badges'];
+        let currentMainTab = 'all';
+        try {
+          const saved = localStorage.getItem('onahole_profile_main_tab');
+          if (MAIN_TAB_KEYS.includes(saved)) currentMainTab = saved;
+        } catch (e) {}
+
+        applyMainTab = (tab) => {
+          currentMainTab = tab;
+          mainTabsNav.querySelectorAll('.mp-main-tab').forEach((btn) => {
+            const active = btn.dataset.mainTab === tab;
+            btn.classList.toggle('mp-main-tab-active', active);
+            btn.setAttribute('aria-selected', active ? 'true' : 'false');
+          });
+          mainPanels.forEach((panel) => {
+            panel.hidden = panel.dataset.mainPanel !== tab;
+          });
+          try {
+            localStorage.setItem('onahole_profile_main_tab', tab);
+          } catch (e) {}
+        };
+
+        mainTabsNav.addEventListener('click', (e) => {
+          const btn = e.target.closest('.mp-main-tab');
+          if (!btn) return;
+          applyMainTab(btn.dataset.mainTab);
+        });
+
+        applyMainTab(currentMainTab);
+      }
+
+      let applyStatusTab = null;
+      let applyTierFilter = null;
+
+      const statusTabsNav = document.getElementById('profile-status-tabs');
+      if (statusTabsNav) {
+        const viewToggle = document.getElementById('profile-view-toggle');
+        const statusPanels = document.querySelectorAll('.mp-status-panel');
+        const STATUS_KEYS = ['interested', 'used', 'folders'];
+
+        let currentStatus = 'interested';
+        try {
+          const saved = localStorage.getItem('onahole_profile_status_tab');
+          if (STATUS_KEYS.includes(saved)) currentStatus = saved;
+        } catch (e) {}
+
+        let currentView = 'grid';
+        try {
+          const savedView = localStorage.getItem('onahole_profile_view_mode');
+          if (savedView === 'grid' || savedView === 'list') currentView = savedView;
+        } catch (e) {}
+
+        const tierTabsNav = document.getElementById('profile-tier-tabs');
+
+        applyTierFilter = (tier) => {
+          if (!tierTabsNav) return;
+          tierTabsNav.querySelectorAll('.mp-tier-tab').forEach((btn) => {
+            btn.classList.toggle('mp-tier-tab-active', btn.dataset.tier === tier);
+          });
+          document.querySelectorAll('.mp-status-panel[data-status-panel="used"] li[data-tier]').forEach((el) => {
+            el.hidden = tier !== 'all' && el.dataset.tier !== tier;
+          });
+          const emptyEl = document.getElementById('profile-tier-empty');
+          if (emptyEl) {
+            const visibleVariant = document.querySelector(
+              '.mp-status-panel[data-status-panel="used"] [data-view-variant]:not([hidden])'
+            );
+            const hasVisible = visibleVariant
+              ? visibleVariant.querySelectorAll('li[data-tier]:not([hidden])').length > 0
+              : true;
+            emptyEl.hidden = hasVisible;
+          }
+        };
+
+        if (tierTabsNav) {
+          tierTabsNav.addEventListener('click', (e) => {
+            const btn = e.target.closest('.mp-tier-tab');
+            if (!btn) return;
+            applyTierFilter(btn.dataset.tier);
+          });
+        }
+
+        applyStatusTab = (status) => {
+          currentStatus = status;
+          statusTabsNav.querySelectorAll('.mp-status-tab').forEach((btn) => {
+            btn.classList.toggle('ranking-tab-active', btn.dataset.status === status);
+          });
+          statusPanels.forEach((panel) => {
+            panel.hidden = panel.dataset.statusPanel !== status;
+          });
+          if (viewToggle) viewToggle.style.display = status === 'folders' ? 'none' : '';
+          if (status !== 'used') applyTierFilter('all');
+          try {
+            localStorage.setItem('onahole_profile_status_tab', status);
+          } catch (e) {}
+        };
+
+        const applyView = (view) => {
+          currentView = view;
+          if (viewToggle) {
+            viewToggle.querySelectorAll('.mp-view-btn').forEach((btn) => {
+              btn.classList.toggle('active', btn.dataset.view === view);
+            });
+          }
+          document.querySelectorAll('[data-view-variant]').forEach((el) => {
+            el.hidden = el.dataset.viewVariant !== view;
+          });
+          try {
+            localStorage.setItem('onahole_profile_view_mode', view);
+          } catch (e) {}
+        };
+
+        statusTabsNav.addEventListener('click', (e) => {
+          const btn = e.target.closest('.mp-status-tab');
+          if (!btn) return;
+          applyStatusTab(btn.dataset.status);
+        });
+
+        if (viewToggle) {
+          viewToggle.addEventListener('click', (e) => {
+            const btn = e.target.closest('.mp-view-btn');
+            if (!btn) return;
+            applyView(btn.dataset.view);
+          });
+        }
+
+        applyStatusTab(currentStatus);
+        applyView(currentView);
+        applyTierFilter('all');
+      }
+
+      const statJumpCards = document.querySelectorAll('.mp-stat-jump');
+      if (statJumpCards.length) {
+        const jumpToStat = (kind) => {
+          if (applyMainTab) applyMainTab('all');
+          if (kind === 'interested') {
+            if (applyStatusTab) applyStatusTab('interested');
+          } else if (kind === 'used') {
+            if (applyStatusTab) applyStatusTab('used');
+            if (applyTierFilter) applyTierFilter('all');
+          } else if (kind === 'first' || kind === 'second') {
+            if (applyStatusTab) applyStatusTab('used');
+            if (applyTierFilter) applyTierFilter(kind);
+          }
+          const target = document.getElementById('profile-status-tabs') || document.querySelector('.mp-main-panel[data-main-panel="all"]');
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+
+        statJumpCards.forEach((card) => {
+          card.addEventListener('click', () => jumpToStat(card.dataset.statJump));
+          card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              jumpToStat(card.dataset.statJump);
+            }
+          });
+        });
+      }
+
+      const spendCard = document.getElementById('profile-spend-card');
+      const spendCompare = document.getElementById('profile-spend-compare');
+      if (spendCard && spendCompare) {
+        const toggleSpendCompare = () => {
+          const expanded = spendCard.getAttribute('aria-expanded') === 'true';
+          spendCard.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+          spendCompare.hidden = expanded;
+        };
+        spendCard.addEventListener('click', toggleSpendCompare);
+        spendCard.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleSpendCompare();
+          }
+        });
+      }
+
+      const badgesViewToggle = document.getElementById('profile-badges-view-toggle');
+      const badgesViewScope = document.getElementById('profile-badges-view-scope');
+      if (badgesViewToggle && badgesViewScope) {
+        const applyBadgesView = (view) => {
+          badgesViewScope.classList.toggle('badges-dense', view === 'grid');
+          badgesViewToggle.querySelectorAll('.density-tab').forEach((btn) => {
+            btn.classList.toggle('density-tab-active', btn.dataset.badgesView === view);
+          });
+          try {
+            localStorage.setItem('onahole_profile_badges_view', view);
+          } catch (e) {}
+        };
+        badgesViewToggle.addEventListener('click', (e) => {
+          const btn = e.target.closest('.density-tab');
+          if (!btn) return;
+          applyBadgesView(btn.dataset.badgesView);
+        });
+        let savedBadgesView = 'card';
+        try {
+          savedBadgesView = localStorage.getItem('onahole_profile_badges_view') || 'card';
+        } catch (e) {}
+        applyBadgesView(savedBadgesView);
+      }
 
       async function initFollow() {
         const section = document.getElementById('follow-section');
@@ -394,6 +1200,5 @@ const TIER_LABELS = { first: '一軍', second: '二軍', retired: '引退' };
 
       initFollow();
     </script>
-    <SiteFooter />
   </body>
 </html>

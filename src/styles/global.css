@@ -293,6 +293,92 @@ main {
   gap: 1.5rem;
 }
 
+/* 商品一覧の表示密度切り替え(標準表示/コンパクト表示)のアイコンボタン。
+   annictの一覧ページ(表示切り替えアイコン)を参考に、右詰めのアイコンのみのボタンにしている */
+.grid-density-toggle {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.density-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.density-tab svg {
+  width: 18px;
+  height: 18px;
+}
+
+.density-tab:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.density-tab-active,
+.density-tab-active:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* コンパクト表示: デスクトップで8〜9列になるよう詰める。
+   情報過多にならないよう、メーカー名・価格・評価は隠し、
+   画像・商品タイトル・記録ボタン(とSALE/NEWバッジ)だけを残す */
+.grid-dense {
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 0.6rem;
+}
+
+.grid-dense .card .maker,
+.grid-dense .card .price,
+.grid-dense .card .card-ratings {
+  display: none;
+}
+
+/* カードが小さくなる分、SALE/NEWバッジも少し小さくして詰める */
+.grid-dense .sale-ribbon,
+.grid-dense .new-badge {
+  top: 0.35rem;
+  font-size: 0.56rem;
+  padding: 0.15rem 0.4rem;
+}
+
+.grid-dense .sale-ribbon {
+  left: 0.35rem;
+}
+
+.grid-dense .new-badge {
+  right: 0.35rem;
+}
+
+.grid-dense .card .body {
+  padding: 0.5rem;
+  gap: 0.2rem;
+}
+
+.grid-dense .card h3 {
+  font-size: 0.7rem;
+  min-height: 2.2em;
+}
+
+.grid-dense .quick-check-btn {
+  font-size: 0.62rem;
+  padding: 0.3rem 0.4rem;
+}
+
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -361,6 +447,7 @@ main {
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 2rem;
+  align-items: start;
 }
 
 .detail-grid img {
@@ -369,16 +456,27 @@ main {
   border: 1px solid var(--border);
 }
 
-.detail-grid h1 {
-  font-family: 'Noto Sans JP', sans-serif;
-  font-size: 1.5rem;
-  margin: 0.3rem 0 0.8rem;
+/* 画像+主要情報(価格・評価など)の下に続く、購入サイト比較・記録ウィジェット・
+   フォルダ追加などの操作エリア。スマホでも画像の横に詰め込まず、常に幅いっぱいで表示する */
+.detail-actions {
+  margin-top: 1.5rem;
 }
 
-.detail-grid .price {
+/* 商品詳細ページのタイトル: FANZAの商品ページのように、画像・情報の
+   2カラムレイアウトより上に、ページ幅いっぱいで表示する */
+.detail-title {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.45;
+  margin: 0.3rem 0 1.4rem;
+}
+
+.detail-price-fallback {
   font-size: 1.3rem;
   color: var(--text);
   font-weight: 700;
+  margin: 0.6rem 0 0;
 }
 
 .tags {
@@ -445,6 +543,18 @@ main {
   font-size: 0.8rem;
   color: var(--text-muted);
   margin: 0 0 0.5rem;
+}
+
+/* 参考価格は全サイト共通の値なので、特定のショップ行に付けず
+   一覧の上に1回だけ表示する(FANZAだけがセール中のように見えるのを防ぐ) */
+.shop-links-ref-price {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: -0.15rem 0 0.6rem;
+}
+
+.shop-links-ref-price-value {
+  text-decoration: line-through;
 }
 
 .shop-links-list {
@@ -541,14 +651,24 @@ main {
 }
 
 @media (max-width: 640px) {
+  /* FANZAの商品ページを参考に、スマホでも画像を縦に積まず、
+     左に画像・右に価格などの主要情報を並べる(2カラムのまま、幅の配分だけ変える)。
+     画像が小さすぎて右側の文字とバランスが悪かったため、画像の比率を広めにしている */
   .detail-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 45% 1fr;
+    gap: 0.8rem;
   }
 
   /* スマホでは商品カードの画像が大きくなりすぎるため、1画面に2列表示する */
   .grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 0.7rem;
+  }
+
+  /* コンパクト表示ではスマホで3列にする */
+  .grid-dense {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
   }
 
   .card .body {
@@ -572,13 +692,60 @@ main {
   }
 
   .detail-grid img {
-    max-width: 200px;
-    margin: 0 auto;
+    max-width: 100%;
+    margin: 0;
   }
 
-  .detail-grid h1 {
-    font-size: 1.25rem;
-    margin: 0.2rem 0 0.6rem;
+  .detail-title {
+    font-size: 1.2rem;
+    margin: 0.2rem 0 1rem;
+  }
+
+  /* 右カラムが狭くなる分、メーカー名などのチップ類を一回り小さくする。
+     画像とのバランスを取るため、画像幅を広げた分だけ文字側も控えめにしている */
+  .detail-info .maker {
+    font-size: 0.8rem;
+  }
+
+  /* 価格は右側の情報カラムから購入サイト比較エリアに集約したため、
+     そちら側の表示だけスマホ幅に合わせて少し詰める */
+  .shop-link-price {
+    font-size: 0.95rem;
+  }
+
+  .shop-links-ref-price {
+    font-size: 0.7rem;
+  }
+
+  .detail-info .spec-list {
+    gap: 0.35rem;
+    margin: 0.6rem 0;
+  }
+
+  .detail-info .spec-list li {
+    font-size: 0.68rem;
+    padding: 0.2rem 0.5rem;
+  }
+
+  .detail-info p {
+    font-size: 0.85rem;
+  }
+
+  .detail-info .site-rating-link {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+    padding: 0.5rem 0.6rem;
+    margin: 0.5rem 0;
+  }
+
+  .detail-info .site-rating-label {
+    font-size: 0.62rem;
+  }
+
+  .detail-info .site-rating-value {
+    font-size: 0.72rem;
+    text-align: left;
   }
 
   .check-widget {
@@ -825,6 +992,99 @@ main {
 
 .stat-chip-sale .stat-chip-value {
   color: var(--sale);
+}
+
+/* 未ログイン時のトップページ用: ランキングの下の「もっと見る」
+   「オナホめもでできること」「オナホめもを始めよう」セクション */
+.more-link-section {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 1.5rem 2.5rem;
+  display: flex;
+  justify-content: center;
+}
+
+.more-link-btn {
+  font-size: 0.85rem;
+  padding: 0.65rem 1.8rem;
+}
+
+.features-section {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem 3rem;
+}
+
+.features-title {
+  text-align: center;
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 2rem;
+  font-size: 1.3rem;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.8rem 2.5rem;
+}
+
+.feature-item h3 {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+  color: var(--accent);
+}
+
+.feature-item p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+.final-cta-section {
+  max-width: 700px;
+  margin: 1rem auto 4rem;
+  padding: 3.2rem 1.5rem;
+  text-align: center;
+  border-top: none;
+  background: linear-gradient(135deg, var(--accent), #6f97cc);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.final-cta-title {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0 0 0.8rem;
+  color: #fff;
+}
+
+.final-cta-lead {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.92rem;
+  margin: 0 0 1.8rem;
+}
+
+.final-cta-section .btn-primary {
+  background: #fff;
+  color: var(--accent);
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(20, 20, 20, 0.15);
+  transition: transform 0.15s ease;
+}
+
+.final-cta-section .btn-primary:hover {
+  transform: translateY(-1px);
+}
+
+@media (max-width: 640px) {
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .stat-chip-new .stat-chip-value {
@@ -1159,6 +1419,42 @@ main {
   color: var(--accent);
   font-weight: 500;
 }
+
+/* オナホめも評価(タップすると記録フォームまでスクロールする) */
+.site-rating-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  text-align: left;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.8rem;
+  margin: 0.7rem 0;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.site-rating-link:hover {
+  border-color: var(--accent);
+}
+
+.site-rating-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.site-rating-value {
+  font-size: 0.85rem;
+  color: var(--accent);
+  font-weight: 600;
+  text-align: right;
+}
 .card-ratings {
   margin-top: 0.3rem;
   display: flex;
@@ -1304,28 +1600,6 @@ main {
 .qc-reset:hover {
   border-color: var(--sale);
   color: var(--sale);
-}
-.price-block {
-  margin: 0.3rem 0;
-}
-
-.list-price {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  text-decoration: line-through;
-  margin: 0 0 0.1rem;
-}
-
-.discount-badge {
-  display: inline-block;
-  background: var(--sale);
-  color: #fff;
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  margin-left: 0.5rem;
-  vertical-align: middle;
 }
 .card {
   position: relative;
@@ -1540,6 +1814,259 @@ main {
   grid-column: span 2;
 }
 
+.mp-spend-card {
+  cursor: pointer;
+  user-select: none;
+}
+
+.mp-spend-card:hover {
+  border-color: var(--accent);
+}
+
+.mp-stat-jump {
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+
+.mp-stat-jump:hover {
+  border-color: var(--accent);
+}
+
+.mp-stat-jump:active {
+  transform: scale(0.97);
+}
+
+.mp-spend-compare {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 1rem 1.1rem;
+  margin: -1.2rem 0 2rem;
+}
+
+.mp-spend-compare-title {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0 0 0.6rem;
+  color: var(--accent);
+}
+
+.mp-spend-compare-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.mp-spend-compare-list li {
+  font-size: 0.85rem;
+  color: var(--text);
+  padding-left: 1rem;
+  position: relative;
+}
+
+.mp-spend-compare-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.mp-spend-compare-note {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin: 0.7rem 0 0;
+}
+
+.mp-spend-compare-empty {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* バッジ・称号を統合した「ランク」ヒーロー */
+.rank-hero {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  background: linear-gradient(135deg, var(--bg-card), var(--bg));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 1.1rem 1.3rem;
+  margin-bottom: 1.5rem;
+}
+
+.rank-hero-crest {
+  font-size: 2.6rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.rank-hero-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.rank-hero-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin: 0 0 0.1rem;
+  letter-spacing: 0.05em;
+}
+
+.rank-hero-name {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0 0 0.55rem;
+}
+
+.rank-hero-progress-track {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+  margin-bottom: 0.4rem;
+}
+
+.rank-hero-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.rank-hero-progress-text {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin: 0 0 0.2rem;
+}
+
+.rank-hero-breakdown {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.rank-hero.rank-bronze .rank-hero-name {
+  color: #a15c2b;
+}
+.rank-hero.rank-bronze .rank-hero-progress-fill {
+  background: #a15c2b;
+}
+
+.rank-hero.rank-silver .rank-hero-name {
+  color: #7c8794;
+}
+.rank-hero.rank-silver .rank-hero-progress-fill {
+  background: #8a94a3;
+}
+
+.rank-hero.rank-gold .rank-hero-name {
+  color: #b8860a;
+}
+.rank-hero.rank-gold .rank-hero-progress-fill {
+  background: #c8960a;
+}
+
+.rank-hero.rank-master .rank-hero-name {
+  color: #6b3fb8;
+}
+.rank-hero.rank-master .rank-hero-progress-fill {
+  background: linear-gradient(90deg, #6b3fb8, #a06be0);
+}
+
+.rank-hero.rank-god {
+  background: linear-gradient(135deg, #2a2140, #4a2f66);
+  border-color: #b48eea;
+}
+.rank-hero.rank-god .rank-hero-name {
+  background: linear-gradient(90deg, #ffd76a, #ff9ecf, #8ec8ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.rank-hero.rank-god .rank-hero-label,
+.rank-hero.rank-god .rank-hero-progress-text,
+.rank-hero.rank-god .rank-hero-breakdown {
+  color: #d8c9f5;
+}
+.rank-hero.rank-god .rank-hero-progress-track {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: transparent;
+}
+.rank-hero.rank-god .rank-hero-progress-fill {
+  background: linear-gradient(90deg, #ffd76a, #ff9ecf);
+}
+
+.rank-hero.rank-none .rank-hero-name {
+  color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  .rank-hero {
+    padding: 0.9rem 1rem;
+    gap: 0.8rem;
+  }
+  .rank-hero-crest {
+    font-size: 2.1rem;
+  }
+  .rank-hero-name {
+    font-size: 1.15rem;
+  }
+}
+
+/* バッジ・称号のカード/グリッド表示切り替え */
+.badges-view-scope.badges-dense .badge-chips-row {
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 0.5rem;
+}
+
+.badges-view-scope.badges-dense .badge-chip-card {
+  flex-direction: column;
+  text-align: center;
+  padding: 0.6rem 0.4rem;
+  gap: 0.3rem;
+}
+
+.badges-view-scope.badges-dense .badge-chip-sub {
+  display: none;
+}
+
+.badges-view-scope.badges-dense .title-grid {
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 0.5rem;
+}
+
+.badges-view-scope.badges-dense .title-card {
+  padding: 0.5rem 0.3rem;
+}
+
+.badges-view-scope.badges-dense .title-icon {
+  font-size: 1.3rem;
+  margin-bottom: 0.2rem;
+}
+
+.badges-view-scope.badges-dense .title-name {
+  font-size: 0.68rem;
+  margin: 0;
+}
+
+.badges-view-scope.badges-dense .title-desc {
+  display: none;
+}
+
 .mp-section-title {
   font-family: 'Noto Sans JP', sans-serif;
   font-size: 1.1rem;
@@ -1555,6 +2082,47 @@ main {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .mp-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.9rem;
+  }
+  /* 公開ページの「すべて」タブ用。3列に収まるよう情報量を絞ったコンパクト表示 */
+  .mp-grid.mp-grid-compact {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+  }
+  .mp-grid-compact .mp-card-body .mp-maker,
+  .mp-grid-compact .mp-card-body .mp-price,
+  .mp-grid-compact .mp-card-body .mp-tags {
+    display: none;
+  }
+  .mp-grid-compact .mp-card h3 {
+    font-size: 0.72rem;
+    min-height: 2.2em;
+    -webkit-line-clamp: 2;
+  }
+  .mp-grid-compact .mp-mobile-stars {
+    display: block;
+  }
+}
+
+.mp-mobile-stars {
+  display: none;
+  font-size: 0.78rem;
+  color: var(--gold);
+  margin: 0.25rem 0 0;
+  letter-spacing: 1px;
+}
+
+/* display:flex/gridを直接指定している要素はネイティブのhidden属性が
+   上書きされてしまうため、明示的に[hidden]を優先させる */
+.mp-grid[hidden],
+.mp-list[hidden],
+.mp-row[hidden] {
+  display: none;
 }
 
 .mp-card {
@@ -1729,6 +2297,142 @@ main {
   }
 }
 
+/* マイページの大タブ(すべて/推しメーカー/口コミ/バッジ) */
+.mp-main-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0 0 2rem;
+  padding-bottom: 1.2rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.mp-main-tab {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0.6rem 1.3rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.mp-main-tab:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.mp-main-tab-active,
+.mp-main-tab-active:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.mp-main-panel {
+  margin-bottom: 2.5rem;
+}
+
+@media (max-width: 640px) {
+  .mp-main-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .mp-main-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .mp-main-tab {
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    padding: 0.5rem 1.1rem;
+  }
+}
+
+/* 口コミ一覧 */
+.reviews-list-section {
+  margin-bottom: 2rem;
+}
+
+.reviews-list-title {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 1.05rem;
+  margin: 0 0 1rem;
+}
+
+.reviews-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.review-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 1rem;
+}
+
+.review-item-best {
+  border-color: var(--accent);
+}
+
+.review-item-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 0.7rem;
+}
+
+.review-item-head img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #ececeb, #e2e1de);
+  flex-shrink: 0;
+}
+
+.review-item-head-body {
+  min-width: 0;
+}
+
+.review-item-head-body h3 {
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin: 0.1rem 0 0.4rem;
+}
+
+.review-item-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+}
+
+.review-item-text {
+  font-size: 0.85rem;
+  line-height: 1.75;
+  color: var(--text);
+  white-space: pre-wrap;
+  margin: 0 0 0.5rem;
+}
+
+.review-item-date {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin: 0;
+  text-align: right;
+}
+
 /* マイページのステータスタブ + 表示切り替え(グリッド/リスト) */
 .mp-tabs-row {
   display: flex;
@@ -1741,6 +2445,40 @@ main {
 
 .mp-status-tabs {
   flex: 1 1 auto;
+}
+
+/* 「使った」タブ内の一軍/二軍/引退の絞り込み */
+.mp-tier-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.2rem;
+}
+
+.mp-tier-tab {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0.35rem 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.mp-tier-tab:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.mp-tier-tab-active,
+.mp-tier-tab-active:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 
 .mp-view-toggle {
@@ -3307,14 +4045,30 @@ main {
   text-decoration: underline;
 }
 
+/* 「みんなのレビュー」の上に表示する、オナ王レビュー記事へのリンク */
+.onaking-link-block {
+  max-width: 700px;
+  margin: 2rem auto 0;
+  text-align: center;
+}
+
 .onaking-review-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.6rem 1.4rem;
   color: var(--accent);
   text-decoration: none;
   font-weight: 500;
+  font-size: 0.88rem;
+  transition: border-color 0.15s ease;
 }
 
 .onaking-review-link:hover {
-  text-decoration: underline;
+  border-color: var(--accent);
 }
 
 .onaking-links-section {
@@ -3882,4 +4636,372 @@ main {
   border-radius: 50%;
   border: 4px solid var(--bg);
   background: var(--border);
+}
+
+/* 掲示板(雑談・知恵袋・フォーラム) */
+.board-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.board-admin-link {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-pill);
+  padding: 0.4rem 0.9rem;
+}
+
+.board-back-link {
+  display: inline-block;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.board-back-link:hover {
+  color: var(--accent);
+}
+
+.board-channel-head {
+  margin-bottom: 1.2rem;
+}
+
+.board-new-thread-form[hidden],
+.board-nickname-gate[hidden],
+.board-report-form[hidden],
+.board-reply-form[hidden] {
+  display: none;
+}
+
+.board-new-thread-form {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 1.2rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.board-thread-body-input,
+.board-report-reason {
+  width: 100%;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.88rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.7rem 0.9rem;
+  resize: vertical;
+}
+
+.board-thread-body-input:focus,
+.board-report-reason:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.board-nickname-gate {
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.board-nickname-gate p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.board-gate-status,
+.board-thread-status,
+.board-report-status,
+.board-report-action-status {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  min-height: 1.1em;
+}
+
+.board-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.board-thread-cancel-btn,
+.board-report-cancel-btn,
+.board-report-dismiss-btn {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0.55rem 1.2rem;
+  cursor: pointer;
+}
+
+.board-thread-cancel-btn:hover,
+.board-report-cancel-btn:hover,
+.board-report-dismiss-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.board-thread-list,
+.board-reply-list,
+.board-report-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.board-thread-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 1.1rem 1.3rem;
+  display: block;
+  transition: border-color 0.15s ease;
+}
+
+.board-thread-card:hover {
+  border-color: var(--accent);
+}
+
+.board-thread-title {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.4rem;
+}
+
+.board-thread-title:hover {
+  color: var(--accent);
+}
+
+.board-thread-excerpt {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0 0 0.6rem;
+  line-height: 1.6;
+}
+
+.board-thread-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.board-author {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.board-author-private {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.board-thread-replies {
+  margin-left: auto;
+  font-weight: 600;
+}
+
+.board-thread-channel-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin: 0 0 0.3rem;
+}
+
+.board-thread-page-title {
+  margin-bottom: 1.6rem;
+}
+
+.board-post {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 1.2rem 1.4rem;
+  margin-bottom: 1.5rem;
+}
+
+.board-op-post {
+  border-left: 3px solid var(--accent);
+}
+
+.board-reply-post {
+  margin-bottom: 0;
+}
+
+.board-post-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
+}
+
+.board-post-date {
+  color: var(--text-muted);
+}
+
+.board-post-body {
+  font-size: 0.9rem;
+  line-height: 1.8;
+  color: var(--text);
+  white-space: pre-wrap;
+  margin: 0 0 0.8rem;
+}
+
+.board-post-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.board-report-btn,
+.board-delete-btn {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+}
+
+.board-report-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.board-report-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.board-delete-btn {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.board-delete-btn:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.board-report-form {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.board-reply-form {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 1.2rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+}
+
+/* 通報一覧(管理者専用) */
+.board-report-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 1.1rem 1.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.board-report-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.board-report-target-type {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.board-report-target-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0.2rem 0 0;
+}
+
+.board-report-target-body {
+  font-size: 0.85rem;
+  color: var(--text);
+  line-height: 1.7;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.board-report-meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.board-report-view-link {
+  font-size: 0.8rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.board-report-delete-post-btn {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.board-report-delete-post-btn:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+@media (max-width: 640px) {
+  .board-thread-replies {
+    margin-left: 0;
+    width: 100%;
+  }
 }

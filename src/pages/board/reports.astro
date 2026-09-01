@@ -1,0 +1,203 @@
+---
+import '../../styles/global.css';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+
+// 通報された投稿はすぐには消さず、ここ(管理者専用)に溜まる。
+// 管理者が内容を確認してから、投稿を削除するか通報を却下するかを判断する。
+// 管理者かどうかの判定は他の管理用ウィジェットと同じくクライアント側で行う。
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#2b5fad" />
+    <title>通報一覧 | オナホめも</title>
+  </head>
+  <body>
+    <SiteHeader />
+    <main class="mypage-main">
+      <a href="/board/" class="board-back-link">← 掲示板に戻る</a>
+      <h1 class="mypage-title">通報一覧(管理者)</h1>
+      <div id="board-reports-content">
+        <p class="mypage-loading">読み込み中...</p>
+      </div>
+    </main>
+    <SiteFooter />
+
+    <script>
+      import { supabase } from '../../lib/supabase.js';
+
+      const ADMIN_USER_ID = '278377ee-a457-41bc-ab79-c1be9f4b768e';
+      const CHANNEL_LABELS = { chat: '雑談', qa: '知恵袋', forum: 'フォーラム' };
+      const content = document.getElementById('board-reports-content');
+
+      function formatDateTime(iso) {
+        if (!iso) return '';
+        const d = new Date(iso);
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      }
+
+      function excerpt(text, len) {
+        if (!text) return '';
+        const clean = text.replace(/\s+/g, ' ').trim();
+        return clean.length > len ? `${clean.slice(0, len)}…` : clean;
+      }
+
+      function reportCardHtml(report, target, targetType, authorLabel, reporterLabel) {
+        const li = document.createElement('li');
+        li.className = 'board-report-card';
+        li.dataset.reportId = report.id;
+
+        const targetLabel = targetType === 'thread' ? 'スレッド' : '返信';
+        const channelLabel = target?.channel ? CHANNEL_LABELS[target.channel] ?? target.channel : '';
+        const titleLine = targetType === 'thread' ? target?.title ?? '(削除済み)' : '';
+        const link = targetType === 'thread' && target ? `/board/${target.id}/` : target ? `/board/${target.thread_id}/` : null;
+
+        li.innerHTML = `
+          <div class="board-report-card-head">
+            <span class="board-report-target-type">${targetLabel}${channelLabel ? `・${channelLabel}` : ''}</span>
+            <span class="board-report-date">${formatDateTime(report.created_at)}</span>
+          </div>
+          ${titleLine ? `<p class="board-report-target-title"></p>` : ''}
+          <p class="board-report-target-body"></p>
+          <p class="board-report-meta">投稿者: <span class="board-report-author"></span></p>
+          <p class="board-report-meta">通報者: <span class="board-report-reporter"></span></p>
+          <p class="board-report-meta">通報理由: <span class="board-report-reason"></span></p>
+          ${link ? `<a href="${link}" target="_blank" rel="noopener" class="board-report-view-link">投稿を見る →</a>` : ''}
+          <div class="board-form-actions">
+            <button type="button" class="best-one-clear-btn board-report-delete-post-btn" data-report-id="${report.id}" data-target-type="${targetType}" data-target-id="${target?.id ?? ''}">
+              投稿を削除する
+            </button>
+            <button type="button" class="board-report-dismiss-btn" data-report-id="${report.id}">却下する(投稿は残す)</button>
+          </div>
+          <p class="board-report-action-status"></p>
+        `;
+
+        if (titleLine) li.querySelector('.board-report-target-title').textContent = titleLine;
+        li.querySelector('.board-report-target-body').textContent = target ? excerpt(target.body, 200) : '(この投稿は既に削除されています)';
+        li.querySelector('.board-report-author').textContent = authorLabel;
+        li.querySelector('.board-report-reporter').textContent = reporterLabel;
+        li.querySelector('.board-report-reason').textContent = report.reason || '(理由の記載なし)';
+
+        return li;
+      }
+
+      async function loadReports() {
+        content.innerHTML = '<p class="mypage-loading">読み込み中...</p>';
+
+        const { data: reports, error } = await supabase
+          .from('board_reports')
+          .select('id, thread_id, reply_id, reporter_id, reason, created_at')
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          content.innerHTML = `<p>読み込みに失敗しました: ${error.message}</p>`;
+          return;
+        }
+
+        if (!reports || reports.length === 0) {
+          content.innerHTML = '<p class="mp-empty">未対応の通報はありません。</p>';
+          return;
+        }
+
+        const threadIds = [...new Set(reports.filter((r) => r.thread_id).map((r) => r.thread_id))];
+        const replyIds = [...new Set(reports.filter((r) => r.reply_id).map((r) => r.reply_id))];
+
+        let threadsById = {};
+        if (threadIds.length > 0) {
+          const { data } = await supabase
+            .from('board_threads')
+            .select('id, channel, title, body, user_id')
+            .in('id', threadIds);
+          for (const t of data ?? []) threadsById[t.id] = t;
+        }
+
+        let repliesById = {};
+        if (replyIds.length > 0) {
+          const { data } = await supabase.from('board_replies').select('id, thread_id, body, user_id').in('id', replyIds);
+          for (const r of data ?? []) repliesById[r.id] = r;
+        }
+
+        const userIds = new Set();
+        for (const r of reports) userIds.add(r.reporter_id);
+        for (const t of Object.values(threadsById)) userIds.add(t.user_id);
+        for (const r of Object.values(repliesById)) userIds.add(r.user_id);
+
+        let nicknameById = {};
+        if (userIds.size > 0) {
+          const { data: profiles } = await supabase.from('profiles').select('id, nickname').in('id', [...userIds]);
+          for (const p of profiles ?? []) nicknameById[p.id] = p.nickname;
+        }
+
+        const list = document.createElement('ul');
+        list.className = 'board-report-list';
+
+        for (const report of reports) {
+          const isThread = Boolean(report.thread_id);
+          const target = isThread ? threadsById[report.thread_id] : repliesById[report.reply_id];
+          const authorLabel = target ? nicknameById[target.user_id] ?? '(不明)' : '(不明)';
+          const reporterLabel = nicknameById[report.reporter_id] ?? '(不明)';
+          list.appendChild(reportCardHtml(report, target, isThread ? 'thread' : 'reply', authorLabel, reporterLabel));
+        }
+
+        content.innerHTML = '';
+        content.appendChild(list);
+      }
+
+      content.addEventListener('click', async (e) => {
+        const deleteBtn = e.target.closest('.board-report-delete-post-btn');
+        if (deleteBtn) {
+          const targetType = deleteBtn.dataset.targetType;
+          const targetId = deleteBtn.dataset.targetId;
+          if (!targetId) {
+            loadReports();
+            return;
+          }
+          if (!confirm('この投稿を削除しますか？(関連する通報もまとめて処理されます)')) return;
+
+          const table = targetType === 'thread' ? 'board_threads' : 'board_replies';
+          const { error } = await supabase.from(table).delete().eq('id', targetId);
+          if (error) {
+            alert('削除に失敗しました');
+            return;
+          }
+          loadReports();
+          return;
+        }
+
+        const dismissBtn = e.target.closest('.board-report-dismiss-btn');
+        if (dismissBtn) {
+          const reportId = dismissBtn.dataset.reportId;
+          const { error } = await supabase.from('board_reports').update({ status: 'dismissed' }).eq('id', reportId);
+          if (error) {
+            alert('処理に失敗しました');
+            return;
+          }
+          loadReports();
+        }
+      });
+
+      async function init() {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session || session.user.id !== ADMIN_USER_ID) {
+          content.innerHTML = '<p>このページは管理者専用です。</p>';
+          return;
+        }
+
+        loadReports();
+      }
+
+      init();
+    </script>
+  </body>
+</html>

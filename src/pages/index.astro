@@ -322,7 +322,7 @@ const RANKINGS = [
     </header>
 
     {(saleTargetCount > 0 || weeklyNewCount > 0) && (
-      <section class="stat-chips">
+      <section class="stat-chips home-feed-section" style="display:none">
         <div class="stat-chip stat-chip-sale">
           <span class="stat-chip-label">本日のセール対象</span>
           <span class="stat-chip-value">{saleTargetCount.toLocaleString()}点</span>
@@ -335,7 +335,7 @@ const RANKINGS = [
     )}
 
     {newInfoItems.length > 0 && (
-      <section class="new-info-section">
+      <section class="new-info-section home-feed-section" style="display:none">
         <h2 class="new-info-title">新着情報</h2>
         <ul class="new-info-list">
           {newInfoItems.map((p) => (
@@ -413,8 +413,58 @@ const RANKINGS = [
       });
     </script>
 
+    <div class="more-link-section logged-out-only" id="more-link-section">
+      <a href="#product-list" class="btn-outline more-link-btn">もっと見る</a>
+    </div>
+
+    <section class="features-section logged-out-only">
+      <h2 class="section-title features-title">オナホめもでできること</h2>
+      <div class="features-grid">
+        <div class="feature-item">
+          <h3>使ったオナホールを記録できる</h3>
+          <p>
+            「あれ、まだ使ってなかったっけ？」とならないように、使ったオナホールを記録することができます。
+            星評価やレビューを残して、あとから見返すことができます。
+          </p>
+        </div>
+        <div class="feature-item">
+          <h3>気になる・使った・一軍/二軍/引退で管理</h3>
+          <p>
+            商品を「気になる」「使った」のステータスで管理し、使った商品はさらに「一軍」「二軍」「引退」で整理できます。
+            自分だけのコレクションとして一覧できます。
+          </p>
+        </div>
+        <div class="feature-item">
+          <h3>公開プロフィールでコレクションをシェア</h3>
+          <p>
+            自分のコレクションを公開プロフィールページでシェアできます。
+            気になるユーザーをフォローして、みんなの記録をチェックすることもできます。
+          </p>
+        </div>
+        <div class="feature-item">
+          <h3>ランキングやセール情報をチェック</h3>
+          <p>
+            人気ランキングや高評価ランキング、値下がり中の商品などをトップページでまとめてチェックできます。
+          </p>
+        </div>
+        <div class="feature-item">
+          <h3>掲示板でみんなと交流できる</h3>
+          <p>
+            雑談・知恵袋・フォーラムの3つの掲示板で、他のユーザーと自由に情報交換ができます。
+            気になることを質問したり、雑談したりしてみましょう。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="final-cta-section logged-out-only">
+      <h2 class="final-cta-title">オナホめもを始めよう</h2>
+      <p class="final-cta-lead">気になる商品を記録して、あなただけのコレクションを作りましょう。</p>
+      <a href="/signup" class="btn-primary">アカウント作成</a>
+    </section>
+
     {latestReviews.length > 0 && (
-      <section class="latest-reviews">
+      <section class="latest-reviews home-feed-section" style="display:none">
         <h2 class="latest-reviews-title">
           最新のレビュー
           <span class="ranking-subtitle">みんなが投稿したレビュー</span>
@@ -447,7 +497,7 @@ const RANKINGS = [
 
     <div id="my-sale-section"></div>
 
-    <main>
+    <main id="product-list" class="home-feed-section" style="display:none">
       {error && <p>データの取得に失敗しました: {error.message}</p>}
 
       <div class="toolbar">
@@ -516,6 +566,47 @@ const RANKINGS = [
       </div>
 
       <h2 class="section-title">商品一覧</h2>
+
+      <div class="grid-density-toggle" role="tablist" aria-label="表示切り替え">
+        <button
+          type="button"
+          class="density-tab density-tab-active"
+          data-density="standard"
+          role="tab"
+          aria-selected="true"
+          aria-label="標準表示"
+          title="標準表示"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="8" height="8" rx="1.5" />
+            <rect x="13" y="3" width="8" height="8" rx="1.5" />
+            <rect x="3" y="13" width="8" height="8" rx="1.5" />
+            <rect x="13" y="13" width="8" height="8" rx="1.5" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="density-tab"
+          data-density="compact"
+          role="tab"
+          aria-selected="false"
+          aria-label="コンパクト表示"
+          title="コンパクト表示"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="5" height="5" rx="1" />
+            <rect x="9.5" y="3" width="5" height="5" rx="1" />
+            <rect x="16" y="3" width="5" height="5" rx="1" />
+            <rect x="3" y="9.5" width="5" height="5" rx="1" />
+            <rect x="9.5" y="9.5" width="5" height="5" rx="1" />
+            <rect x="16" y="9.5" width="5" height="5" rx="1" />
+            <rect x="3" y="16" width="5" height="5" rx="1" />
+            <rect x="9.5" y="16" width="5" height="5" rx="1" />
+            <rect x="16" y="16" width="5" height="5" rx="1" />
+          </svg>
+        </button>
+      </div>
+
       <ul class="grid" id="product-grid"></ul>
 
       <div class="pager" id="pager" data-total={count} data-page-size={PAGE_SIZE}>
@@ -571,6 +662,7 @@ const RANKINGS = [
       const priceMinInput = document.getElementById('price-min-input');
       const priceMaxInput = document.getElementById('price-max-input');
       const grid = document.getElementById('product-grid');
+      const densityTabs = document.querySelectorAll('.density-tab');
       const pager = document.getElementById('pager');
       const prevBtn = document.getElementById('prev-page');
       const nextBtn = document.getElementById('next-page');
@@ -918,6 +1010,35 @@ const RANKINGS = [
         loadMySaleSection();
       }
 
+      // 商品カードの表示密度切り替え(標準表示 / コンパクト表示)
+      // コンパクト表示では列数を増やし、カードは画像・タイトル・記録ボタンだけにする
+      // (見た目の切り替えのみなので再取得はせず、グリッドにクラスを付け外しするだけ)
+      function applyDensity(density) {
+        grid.classList.toggle('grid-dense', density === 'compact');
+        densityTabs.forEach((btn) => {
+          const active = btn.dataset.density === density;
+          btn.classList.toggle('density-tab-active', active);
+          btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        try {
+          localStorage.setItem('gridDensity', density);
+        } catch (e) {
+          // プライベートブラウジングなどでlocalStorageが使えない場合は無視する
+        }
+      }
+
+      densityTabs.forEach((btn) => {
+        btn.addEventListener('click', () => applyDensity(btn.dataset.density));
+      });
+
+      let savedDensity = 'standard';
+      try {
+        savedDensity = localStorage.getItem('gridDensity') || 'standard';
+      } catch (e) {
+        // 同上
+      }
+      applyDensity(savedDensity);
+
       sortSelect.addEventListener('change', () => reload({ resetPage: true }));
 
       let searchTimeout;
@@ -965,12 +1086,36 @@ const RANKINGS = [
 
       async function renderAuthArea() {
         const { data: { session } } = await supabase.auth.getSession();
+        const isLoggedIn = Boolean(session);
 
         // ヘッダー右上(#site-auth-area)に既にユーザー名・ログアウトボタンを
         // 表示しているため、ログイン済みの場合はトップページ中央の
         // アカウント作成/ログインCTAのみ非表示にし、#auth-areaは常に空のままにする
-        heroActions.style.display = session ? 'none' : 'flex';
+        heroActions.style.display = isLoggedIn ? 'none' : 'flex';
         authArea.innerHTML = '';
+
+        // 未ログイン時は、annictのトップページのように「もっと見る」
+        // 「オナホめもでできること」「オナホめもを始めよう」を案内として表示し、
+        // ログイン後のフィード的なセクション(本日のセール対象/新着情報/最新のレビュー)は
+        // ログインするまで隠しておく(ログイン後はそのまま下の商品一覧を使ってもらう)
+        document.querySelectorAll('.logged-out-only').forEach((el) => {
+          el.style.display = isLoggedIn ? 'none' : '';
+        });
+        document.querySelectorAll('.home-feed-section').forEach((el) => {
+          el.style.display = isLoggedIn ? '' : 'none';
+        });
+      }
+
+      // 「もっと見る」ボタン: 未ログイン時は隠している商品一覧(検索・絞り込み・グリッド)を
+      // 表示してから、そこまでスムーズにスクロールする
+      const moreLinkBtn = document.querySelector('.more-link-btn');
+      if (moreLinkBtn) {
+        moreLinkBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const productList = document.getElementById('product-list');
+          if (productList) productList.style.display = '';
+          productList?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
       }
 
       async function loadMySaleSection() {

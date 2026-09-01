@@ -21,25 +21,64 @@ import SiteFooter from '../components/SiteFooter.astro';
 
       <div id="mp-stats-container"></div>
 
-      <div id="top3-container"></div>
+      <div class="mp-main-tabs" id="mp-main-tabs" role="tablist">
+        <button type="button" class="mp-main-tab" data-main-tab="all" role="tab">すべて</button>
+        <button type="button" class="mp-main-tab" data-main-tab="oshi" role="tab">推しメーカーとマイベスト3</button>
+        <button type="button" class="mp-main-tab" data-main-tab="reviews" role="tab">口コミ一覧</button>
+        <button type="button" class="mp-main-tab" data-main-tab="badges" role="tab">バッジ・称号</button>
+      </div>
 
-      <div id="best-review-container"></div>
+      <div class="mp-main-panel" data-main-panel="all">
+        <div id="mypage-content">
+          <p class="mypage-loading">読み込み中...</p>
+        </div>
+        <div id="folders-container" style="display:none"></div>
+      </div>
 
-      <div id="oshi-maker-container"></div>
+      <div class="mp-main-panel" data-main-panel="oshi">
+        <div id="oshi-maker-container"></div>
+        <div id="top3-container"></div>
+      </div>
 
-      <div id="badge-section-container"></div>
+      <div class="mp-main-panel" data-main-panel="reviews">
+        <div id="best-review-container"></div>
+        <div id="reviews-list-container"></div>
+      </div>
 
-      <div id="folders-container"></div>
+      <div class="mp-main-panel" data-main-panel="badges">
+        <div id="rank-hero-container"></div>
+        <div class="grid-density-toggle" id="badges-view-toggle">
+          <button type="button" class="density-tab" data-badges-view="card" aria-label="カード表示" title="カード表示">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <rect x="1" y="1" width="6.5" height="6.5" rx="1" fill="currentColor" />
+              <rect x="8.5" y="1" width="6.5" height="6.5" rx="1" fill="currentColor" />
+              <rect x="1" y="8.5" width="6.5" height="6.5" rx="1" fill="currentColor" />
+              <rect x="8.5" y="8.5" width="6.5" height="6.5" rx="1" fill="currentColor" />
+            </svg>
+          </button>
+          <button type="button" class="density-tab" data-badges-view="grid" aria-label="グリッド表示" title="グリッド表示">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <rect x="1" y="1" width="4" height="4" rx="0.8" fill="currentColor" />
+              <rect x="6" y="1" width="4" height="4" rx="0.8" fill="currentColor" />
+              <rect x="11" y="1" width="4" height="4" rx="0.8" fill="currentColor" />
+              <rect x="1" y="6" width="4" height="4" rx="0.8" fill="currentColor" />
+              <rect x="6" y="6" width="4" height="4" rx="0.8" fill="currentColor" />
+              <rect x="11" y="6" width="4" height="4" rx="0.8" fill="currentColor" />
+              <rect x="1" y="11" width="4" height="4" rx="0.8" fill="currentColor" />
+              <rect x="6" y="11" width="4" height="4" rx="0.8" fill="currentColor" />
+              <rect x="11" y="11" width="4" height="4" rx="0.8" fill="currentColor" />
+            </svg>
+          </button>
+        </div>
+        <div class="badges-view-scope" id="badges-view-scope">
+          <div id="badge-section-container"></div>
+          <div id="titles-section-container"></div>
+        </div>
+      </div>
 
       <div id="onaking-links-container"></div>
 
       <div id="manual-product-container"></div>
-
-      <div id="titles-section-container"></div>
-
-      <div id="mypage-content">
-        <p class="mypage-loading">読み込み中...</p>
-      </div>
     </main>
 
     <script>
@@ -55,6 +94,9 @@ import SiteFooter from '../components/SiteFooter.astro';
       const onakingLinksContainer = document.getElementById('onaking-links-container');
       const manualProductContainer = document.getElementById('manual-product-container');
       const profileDetailsContainer = document.getElementById('profile-details-container');
+      const reviewsListContainer = document.getElementById('reviews-list-container');
+      const mainTabsNav = document.getElementById('mp-main-tabs');
+      const mainPanels = document.querySelectorAll('.mp-main-panel');
       const PRODUCT_IMAGE_BUCKET = 'product-images';
       const PROFILE_IMAGE_BUCKET = 'profile-images';
       let manualProducts = [];
@@ -88,13 +130,15 @@ import SiteFooter from '../components/SiteFooter.astro';
       let currentStatusTab = 'used';
       try {
         const savedTab = localStorage.getItem('onahole_status_tab');
-        if (savedTab === 'used' || savedTab === 'interested') currentStatusTab = savedTab;
+        if (savedTab === 'used' || savedTab === 'interested' || savedTab === 'folders') currentStatusTab = savedTab;
       } catch (e) {}
+      let currentUsedTier = 'all';
       const ADMIN_USER_ID = '278377ee-a457-41bc-ab79-c1be9f4b768e';
 
       const STATUS_LABELS = {
         interested: '気になる',
         used: '使った',
+        folders: 'フォルダ',
       };
       const TIER_LABELS = {
         first: '一軍',
@@ -102,7 +146,142 @@ import SiteFooter from '../components/SiteFooter.astro';
         retired: '引退',
       };
       const STATUS_ORDER = ['used', 'interested'];
-      const STATUS_TAB_ORDER = ['interested', 'used'];
+      const STATUS_TAB_ORDER = ['interested', 'used', 'folders'];
+
+      const MAIN_TAB_KEYS = ['all', 'oshi', 'reviews', 'badges'];
+      let currentMainTab = 'all';
+      try {
+        const savedMainTab = localStorage.getItem('onahole_main_tab');
+        if (MAIN_TAB_KEYS.includes(savedMainTab)) currentMainTab = savedMainTab;
+      } catch (e) {}
+
+      function applyMainTab(tab) {
+        currentMainTab = tab;
+        mainTabsNav.querySelectorAll('.mp-main-tab').forEach((btn) => {
+          const active = btn.dataset.mainTab === tab;
+          btn.classList.toggle('mp-main-tab-active', active);
+          btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        mainPanels.forEach((panel) => {
+          panel.hidden = panel.dataset.mainPanel !== tab;
+        });
+        try {
+          localStorage.setItem('onahole_main_tab', tab);
+        } catch (e) {}
+      }
+
+      mainTabsNav.addEventListener('click', (e) => {
+        const btn = e.target.closest('.mp-main-tab');
+        if (!btn) return;
+        applyMainTab(btn.dataset.mainTab);
+      });
+
+      applyMainTab(currentMainTab);
+
+      const badgesViewToggle = document.getElementById('badges-view-toggle');
+      const badgesViewScope = document.getElementById('badges-view-scope');
+      function applyBadgesView(view) {
+        badgesViewScope.classList.toggle('badges-dense', view === 'grid');
+        badgesViewToggle.querySelectorAll('.density-tab').forEach((btn) => {
+          const active = btn.dataset.badgesView === view;
+          btn.classList.toggle('density-tab-active', active);
+          btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        try {
+          localStorage.setItem('onahole_badges_view', view);
+        } catch (e) {}
+      }
+      if (badgesViewToggle && badgesViewScope) {
+        badgesViewToggle.addEventListener('click', (e) => {
+          const btn = e.target.closest('.density-tab');
+          if (!btn) return;
+          applyBadgesView(btn.dataset.badgesView);
+        });
+        let savedBadgesView = 'card';
+        try {
+          savedBadgesView = localStorage.getItem('onahole_badges_view') || 'card';
+        } catch (e) {}
+        applyBadgesView(savedBadgesView);
+      }
+
+      const MONEY_COMPARISON_ITEMS = [
+        { name: '缶コーヒー', price: 130, unit: '本' },
+        { name: 'ガチャガチャ', price: 300, unit: '回' },
+        { name: 'コンビニおにぎり', price: 150, unit: '個' },
+        { name: '牛丼(並盛)', price: 480, unit: '杯' },
+        { name: 'カフェのコーヒー', price: 500, unit: '杯' },
+        { name: '週刊少年マンガ誌', price: 290, unit: '冊' },
+        { name: 'ラーメン', price: 900, unit: '杯' },
+        { name: '文庫本', price: 700, unit: '冊' },
+        { name: '映画館(1回)', price: 2000, unit: '回' },
+        { name: '焼肉食べ放題', price: 4000, unit: '回' },
+        { name: 'コミック全巻セット(20巻)', price: 12000, unit: 'セット' },
+        { name: 'ワイヤレスイヤホン', price: 25000, unit: '個' },
+        { name: 'Nintendo Switch 2', price: 49980, unit: '台' },
+        { name: '電動アシスト自転車', price: 120000, unit: '台' },
+        { name: 'PlayStation 5', price: 79980, unit: '台' },
+        { name: 'iPhone 17', price: 139800, unit: '台' },
+        { name: 'iPhone 17 Pro', price: 179800, unit: '台' },
+        { name: '高性能ゲーミングPC', price: 250000, unit: '台' },
+        { name: '大型有機ELテレビ(65インチ)', price: 350000, unit: '台' },
+        { name: '海外旅行(1週間)', price: 300000, unit: '回' },
+        { name: '国内旅行(3泊4日)', price: 100000, unit: '回' },
+        { name: 'ハイエンドノートPC', price: 300000, unit: '台' },
+        { name: 'ブランドバッグ', price: 350000, unit: '個' },
+        { name: 'ブランド腕時計', price: 400000, unit: '本' },
+        { name: '中古の軽自動車', price: 800000, unit: '台' },
+        { name: '都内ワンルームの年間家賃', price: 1200000, unit: '年分' },
+        { name: 'ハイブランド腕時計', price: 1500000, unit: '本' },
+        { name: '新車(コンパクトカー)', price: 2000000, unit: '台' },
+        { name: '新車(ミニバン)', price: 3500000, unit: '台' },
+        { name: '結婚式の平均費用', price: 3000000, unit: '回分' },
+        { name: '新車(高級セダン)', price: 6000000, unit: '台' },
+        { name: '中古マンション(郊外)', price: 30000000, unit: '戸' },
+      ];
+
+      function moneyComparisonPicks(amount, count = 6) {
+        if (!amount) return [];
+        // 価格が安い順に並べ、その中から等間隔にcount件選ぶことで、
+        // 少額〜高額まで幅広い「解像度」で例えを見せる
+        const sorted = MONEY_COMPARISON_ITEMS.map((it) => ({ ...it, ratio: amount / it.price })).sort(
+          (a, b) => a.price - b.price
+        );
+        if (sorted.length <= count) return sorted;
+        const picks = [];
+        for (let i = 0; i < count; i++) {
+          const idx = Math.round((i * (sorted.length - 1)) / (count - 1));
+          picks.push(sorted[idx]);
+        }
+        const seen = new Set();
+        return picks.filter((it) => {
+          if (seen.has(it.name)) return false;
+          seen.add(it.name);
+          return true;
+        });
+      }
+
+      function formatMoneyComparison(it) {
+        if (it.ratio >= 1) {
+          const count = it.ratio >= 10 ? Math.round(it.ratio) : Math.round(it.ratio * 10) / 10;
+          return `${it.name} 約${count.toLocaleString()}${it.unit}分`;
+        }
+        const percent = Math.max(1, Math.round(it.ratio * 100));
+        return `${it.name}の約${percent}%`;
+      }
+
+      function moneyComparisonHtml(amount) {
+        const picks = moneyComparisonPicks(amount);
+        if (picks.length === 0) {
+          return `<p class="mp-spend-compare-empty">まだ使った記録がありません。</p>`;
+        }
+        return `
+          <p class="mp-spend-compare-title">その金額で買えたかもしれないもの(目安)</p>
+          <ul class="mp-spend-compare-list">
+            ${picks.map((it) => `<li>${formatMoneyComparison(it)}</li>`).join('')}
+          </ul>
+          <p class="mp-spend-compare-note">※価格はあくまで目安です</p>
+        `;
+      }
 
       function isOnSale(check) {
         const p = check.products;
@@ -170,9 +349,9 @@ import SiteFooter from '../components/SiteFooter.astro';
           `);
         }
 
-        return `
+        const html = `
           <div class="badge-chips-section">
-            <h2 class="badge-chips-title">バッジ・称号</h2>
+            <h2 class="badge-chips-title">バッジ</h2>
             ${
               chips.length
                 ? `<div class="badge-chips-row">${chips.join('')}</div>`
@@ -180,6 +359,7 @@ import SiteFooter from '../components/SiteFooter.astro';
             }
           </div>
         `;
+        return { html, badgeCount: chips.length };
       }
 
       const MAKER_BADGE_TIERS = [
@@ -192,6 +372,41 @@ import SiteFooter from '../components/SiteFooter.astro';
       function getMakerBadge(count) {
         return MAKER_BADGE_TIERS.find((t) => count >= t.threshold) ?? null;
       }
+
+      // 称号の判定条件で使う集計ヘルパー
+      const countWhere = (checks, pred) => checks.filter(pred).length;
+      const titleUsedCount = (checks) => countWhere(checks, (c) => c.status === 'used');
+      const titleInterestedCount = (checks) => countWhere(checks, (c) => c.status === 'interested');
+      const titleTierCount = (checks, tier) => countWhere(checks, (c) => c.status === 'used' && c.tier === tier);
+      const titleRatingCount = (checks, n) => countWhere(checks, (c) => c.rating === n);
+      const titleReviewTextCount = (checks) => countWhere(checks, (c) => Boolean(c.review_text));
+      const titleDetailReviewCount = (checks) => countWhere(checks, (c) => Boolean(c.detail_review_text));
+      const titleReviewImageCount = (checks) =>
+        countWhere(checks, (c) => Array.isArray(c.review_images) && c.review_images.length > 0);
+      const titleComboReviewCount = (checks) =>
+        countWhere(checks, (c) => Boolean(c.review_text) && Boolean(c.detail_review_text));
+      const titlePublicCount = (checks) => countWhere(checks, (c) => Boolean(c.is_public));
+      const titleSimilarCount = (checks) => countWhere(checks, (c) => Boolean(c.similar_products));
+      const titleRetirementReasonCount = (checks) => countWhere(checks, (c) => Boolean(c.retirement_reason));
+      const titleMemoCount = (checks) => countWhere(checks, (c) => Boolean(c.memo));
+      const titleMakerDiversity = (checks) =>
+        new Set(checks.filter((c) => c.status === 'used' && c.products?.maker).map((c) => c.products.maker)).size;
+      const titleGenreDiversity = (checks) => {
+        const s = new Set();
+        for (const c of checks) {
+          if (c.status !== 'used') continue;
+          for (const g of c.products?.genre_tags ?? []) s.add(g);
+        }
+        return s.size;
+      };
+      const titleHasExpensiveUsed = (checks, min) =>
+        checks.some((c) => c.status === 'used' && c.products?.price != null && c.products.price >= min);
+      const titleHasCheapUsed = (checks, max) =>
+        checks.some((c) => c.status === 'used' && c.products?.price != null && c.products.price > 0 && c.products.price < max);
+      const titleHasAllTiers = (checks) =>
+        ['first', 'second', 'retired'].every((tier) => checks.some((c) => c.status === 'used' && c.tier === tier));
+      const totalSpentOfTitles = (checks) =>
+        checks.filter((c) => c.status === 'used').reduce((sum, c) => sum + (c.products?.price ?? 0), 0);
 
       const TITLES = [
         {
@@ -324,27 +539,118 @@ import SiteFooter from '../components/SiteFooter.astro';
           icon: '🪪',
           name: '名乗り',
           desc: 'ニックネームを設定する',
-          check: (_checks, hasNickname) => hasNickname,
+          check: (_checks, ctx) => Boolean(ctx?.hasNickname),
         },
+
+        // 使った本数マイルストーン
+        { id: 'used_3', icon: '📦', name: '駆け出しコレクター', desc: '使った本数3本達成', check: (cs) => titleUsedCount(cs) >= 3 },
+        { id: 'used_7', icon: '📦', name: '成長中', desc: '使った本数7本達成', check: (cs) => titleUsedCount(cs) >= 7 },
+        { id: 'used_15', icon: '📦', name: '中堅コレクター', desc: '使った本数15本達成', check: (cs) => titleUsedCount(cs) >= 15 },
+        { id: 'used_20', icon: '📦', name: '愛好家', desc: '使った本数20本達成', check: (cs) => titleUsedCount(cs) >= 20 },
+        { id: 'used_25', icon: '📦', name: '探求者', desc: '使った本数25本達成', check: (cs) => titleUsedCount(cs) >= 25 },
+        { id: 'used_40', icon: '📦', name: '練達の域', desc: '使った本数40本達成', check: (cs) => titleUsedCount(cs) >= 40 },
+        { id: 'used_60', icon: '📦', name: '熟練コレクター', desc: '使った本数60本達成', check: (cs) => titleUsedCount(cs) >= 60 },
+        { id: 'used_75', icon: '📦', name: '達人', desc: '使った本数75本達成', check: (cs) => titleUsedCount(cs) >= 75 },
+        { id: 'used_90', icon: '📦', name: '極める者', desc: '使った本数90本達成', check: (cs) => titleUsedCount(cs) >= 90 },
+        { id: 'used_120', icon: '📦', name: '殿堂入り', desc: '使った本数120本達成', check: (cs) => titleUsedCount(cs) >= 120 },
+
+        // 気になる件数マイルストーン
+        { id: 'interested_3', icon: '👀', name: '気になるさんいらっしゃい', desc: '気になるを3件登録する', check: (cs) => titleInterestedCount(cs) >= 3 },
+        { id: 'interested_5', icon: '👀', name: '目移り中', desc: '気になるを5件登録する', check: (cs) => titleInterestedCount(cs) >= 5 },
+        { id: 'interested_10', icon: '👀', name: 'リスト充実', desc: '気になるを10件登録する', check: (cs) => titleInterestedCount(cs) >= 10 },
+        { id: 'interested_20', icon: '👀', name: '物色家', desc: '気になるを20件登録する', check: (cs) => titleInterestedCount(cs) >= 20 },
+        { id: 'interested_30', icon: '👀', name: 'ウィンドウショッパー', desc: '気になるを30件登録する', check: (cs) => titleInterestedCount(cs) >= 30 },
+        { id: 'interested_50', icon: '👀', name: '気になる収集家', desc: '気になるを50件登録する', check: (cs) => titleInterestedCount(cs) >= 50 },
+        { id: 'interested_75', icon: '👀', name: '際限なきリスト', desc: '気になるを75件登録する', check: (cs) => titleInterestedCount(cs) >= 75 },
+        { id: 'interested_100', icon: '👀', name: '気になるコンプリート', desc: '気になるを100件登録する', check: (cs) => titleInterestedCount(cs) >= 100 },
+
+        // 評価関連
+        { id: 'rating_two', icon: '⭐', name: '率直な評価', desc: '★2をつける', check: (cs) => titleRatingCount(cs, 2) >= 1 },
+        { id: 'rating_three', icon: '⭐', name: 'バランス評価', desc: '★3をつける', check: (cs) => titleRatingCount(cs, 3) >= 1 },
+        { id: 'rating_four', icon: '⭐', name: '高評価派', desc: '★4をつける', check: (cs) => titleRatingCount(cs, 4) >= 1 },
+        { id: 'five_star_5', icon: '🌟', name: '満点マイスター', desc: '★5を5回つける', check: (cs) => titleRatingCount(cs, 5) >= 5 },
+        { id: 'five_star_10', icon: '🌟', name: '満点コレクター', desc: '★5を10回つける', check: (cs) => titleRatingCount(cs, 5) >= 10 },
+        { id: 'one_star_3', icon: '💧', name: '厳しい目', desc: '★1を3回つける', check: (cs) => titleRatingCount(cs, 1) >= 3 },
+
+        // レビュー関連
+        { id: 'review_5', icon: '✍️', name: 'レビュアー見習い', desc: 'ひとことレビューを5件書く', check: (cs) => titleReviewTextCount(cs) >= 5 },
+        { id: 'review_10', icon: '✍️', name: 'レビュアー', desc: 'ひとことレビューを10件書く', check: (cs) => titleReviewTextCount(cs) >= 10 },
+        { id: 'review_20', icon: '✍️', name: 'ベテランレビュアー', desc: 'ひとことレビューを20件書く', check: (cs) => titleReviewTextCount(cs) >= 20 },
+        { id: 'detail_3', icon: '📝', name: '語り部見習い', desc: '詳細レビューを3件書く', check: (cs) => titleDetailReviewCount(cs) >= 3 },
+        { id: 'detail_5', icon: '📝', name: '語り部', desc: '詳細レビューを5件書く', check: (cs) => titleDetailReviewCount(cs) >= 5 },
+        { id: 'detail_10', icon: '📝', name: '物語作家', desc: '詳細レビューを10件書く', check: (cs) => titleDetailReviewCount(cs) >= 10 },
+        { id: 'image_3', icon: '📷', name: 'フォトグラファー', desc: 'レビュー画像を3件投稿する', check: (cs) => titleReviewImageCount(cs) >= 3 },
+        { id: 'image_5', icon: '📷', name: 'カメラ小僧', desc: 'レビュー画像を5件投稿する', check: (cs) => titleReviewImageCount(cs) >= 5 },
+        { id: 'image_10', icon: '📷', name: 'ビジュアル派', desc: 'レビュー画像を10件投稿する', check: (cs) => titleReviewImageCount(cs) >= 10 },
+        { id: 'combo_3', icon: '🖋️', name: 'こだわり派', desc: 'ひとこと+詳細レビュー両方を3件書く', check: (cs) => titleComboReviewCount(cs) >= 3 },
+        { id: 'combo_5', icon: '🖋️', name: 'レビュー職人', desc: 'ひとこと+詳細レビュー両方を5件書く', check: (cs) => titleComboReviewCount(cs) >= 5 },
+        { id: 'public_review_3', icon: '📢', name: '発信者', desc: 'レビューを3件公開する', check: (cs) => titlePublicCount(cs) >= 3 },
+        { id: 'public_review_5', icon: '📢', name: 'オープンマインド', desc: 'レビューを5件公開する', check: (cs) => titlePublicCount(cs) >= 5 },
+        { id: 'public_review_10', icon: '📢', name: '情報提供者', desc: 'レビューを10件公開する', check: (cs) => titlePublicCount(cs) >= 10 },
+
+        // メーカー・ジャンルの多様性
+        { id: 'maker_5', icon: '🏭', name: 'メーカー通', desc: '5社以上のメーカーの商品を使う', check: (cs) => titleMakerDiversity(cs) >= 5 },
+        { id: 'maker_8', icon: '🏭', name: 'メーカーマニア', desc: '8社以上のメーカーの商品を使う', check: (cs) => titleMakerDiversity(cs) >= 8 },
+        { id: 'maker_12', icon: '🏭', name: '全方位派', desc: '12社以上のメーカーの商品を使う', check: (cs) => titleMakerDiversity(cs) >= 12 },
+        { id: 'genre_5', icon: '🧭', name: 'ジャンル開拓者', desc: '5種類以上のジャンルの商品を使う', check: (cs) => titleGenreDiversity(cs) >= 5 },
+        { id: 'genre_8', icon: '🧭', name: 'ジャンル制覇', desc: '8種類以上のジャンルの商品を使う', check: (cs) => titleGenreDiversity(cs) >= 8 },
+
+        // 一軍・二軍・引退
+        { id: 'first_3', icon: '🥇', name: '一軍常連', desc: '一軍を3件選ぶ', check: (cs) => titleTierCount(cs, 'first') >= 3 },
+        { id: 'first_5', icon: '🥇', name: '一軍多数派', desc: '一軍を5件選ぶ', check: (cs) => titleTierCount(cs, 'first') >= 5 },
+        { id: 'first_10', icon: '🥇', name: '一軍マスター', desc: '一軍を10件選ぶ', check: (cs) => titleTierCount(cs, 'first') >= 10 },
+        { id: 'second_1', icon: '🥈', name: '二軍待機', desc: '二軍を1件記録する', check: (cs) => titleTierCount(cs, 'second') >= 1 },
+        { id: 'second_3', icon: '🥈', name: '二軍層厚し', desc: '二軍を3件記録する', check: (cs) => titleTierCount(cs, 'second') >= 3 },
+        { id: 'second_5', icon: '🥈', name: '二軍ベンチ満員', desc: '二軍を5件記録する', check: (cs) => titleTierCount(cs, 'second') >= 5 },
+        { id: 'retired_3', icon: '👋', name: '卒業生多数', desc: '引退を3件記録する', check: (cs) => titleTierCount(cs, 'retired') >= 3 },
+        { id: 'retired_5', icon: '👋', name: '殿堂送り', desc: '引退を5件記録する', check: (cs) => titleTierCount(cs, 'retired') >= 5 },
+        { id: 'all_tiers', icon: '⚖️', name: 'バランス型', desc: '一軍・二軍・引退をすべて経験する', check: (cs) => titleHasAllTiers(cs) },
+
+        // 合計使用金額マイルストーン
+        { id: 'spend_10000', icon: '💰', name: '小さな投資', desc: '合計使用金額1万円達成', check: (cs) => totalSpentOfTitles(cs) >= 10000 },
+        { id: 'spend_50000', icon: '💰', name: '本格派', desc: '合計使用金額5万円達成', check: (cs) => totalSpentOfTitles(cs) >= 50000 },
+        { id: 'spend_100000', icon: '💴', name: '大投資家', desc: '合計使用金額10万円達成', check: (cs) => totalSpentOfTitles(cs) >= 100000 },
+        { id: 'spend_300000', icon: '💴', name: '豪華絢爛', desc: '合計使用金額30万円達成', check: (cs) => totalSpentOfTitles(cs) >= 300000 },
+        { id: 'spend_500000', icon: '💎', name: '散財の美学', desc: '合計使用金額50万円達成', check: (cs) => totalSpentOfTitles(cs) >= 500000 },
+        { id: 'spend_1000000', icon: '👑', name: '億り人予備軍', desc: '合計使用金額100万円達成', check: (cs) => totalSpentOfTitles(cs) >= 1000000 },
+
+        // プロフィール
+        { id: 'avatar_set', icon: '🖼️', name: '顔出し', desc: 'プロフィール画像を設定する', check: (_cs, ctx) => Boolean(ctx?.avatarUrl) },
+        { id: 'header_set', icon: '🏞️', name: 'イメチェン', desc: 'ヘッダー画像を設定する', check: (_cs, ctx) => Boolean(ctx?.headerUrl) },
+        { id: 'bio_set', icon: '📖', name: '自己紹介デビュー', desc: '自己紹介文を書く', check: (_cs, ctx) => Boolean(ctx?.bio) },
+        { id: 'sns_set', icon: '🔗', name: 'つながり上手', desc: 'SNSリンクを1件追加する', check: (_cs, ctx) => Array.isArray(ctx?.snsLinks) && ctx.snsLinks.length > 0 },
+        { id: 'profile_public', icon: '🌐', name: '公開派プロフィール', desc: 'プロフィールを公開設定にする', check: (_cs, ctx) => Boolean(ctx?.isPublicProfile) },
+
+        // マイベスト・推し
+        { id: 'top3_one', icon: '🥇', name: 'マイベスト始動', desc: 'マイベストを1つ選ぶ', check: (_cs, ctx) => (ctx?.top3 ?? []).filter(Boolean).length >= 1 },
+        { id: 'top3_all', icon: '🏅', name: 'マイベストコンプリート', desc: 'マイベストを3つ全部選ぶ', check: (_cs, ctx) => (ctx?.top3 ?? []).filter(Boolean).length >= 3 },
+        { id: 'oshi_set', icon: '💗', name: '推し宣言', desc: '推しメーカーを設定する', check: (_cs, ctx) => Boolean(ctx?.oshiMaker) },
+        { id: 'oshi_reason_set', icon: '💬', name: '推し語り', desc: '推しメーカーの理由を書く', check: (_cs, ctx) => Boolean(ctx?.oshiMakerReason) },
+        { id: 'best_review_set', icon: '📣', name: 'イチオシレビュー', desc: 'ベストな口コミを設定する', check: (_cs, ctx) => Boolean(ctx?.bestReviewProductId) },
+
+        // フォルダ
+        { id: 'folder_1', icon: '📁', name: 'フォルダデビュー', desc: 'フォルダを1つ作る', check: (_cs, ctx) => (ctx?.folders ?? []).length >= 1 },
+        { id: 'folder_3', icon: '📁', name: '整理上手', desc: 'フォルダを3つ作る', check: (_cs, ctx) => (ctx?.folders ?? []).length >= 3 },
+        { id: 'folder_5', icon: '📁', name: 'コレクション管理者', desc: 'フォルダを5つ作る', check: (_cs, ctx) => (ctx?.folders ?? []).length >= 5 },
+        { id: 'folder_item_1', icon: '🗂️', name: '収納開始', desc: 'フォルダに商品を1つ入れる', check: (_cs, ctx) => (ctx?.folders ?? []).some((f) => (f.folder_items || []).length > 0) },
+
+        // その他
+        { id: 'similar_3', icon: '🔍', name: '目利き上級者', desc: '似てるオナホールを3件記入する', check: (cs) => titleSimilarCount(cs) >= 3 },
+        { id: 'retirement_reason_3', icon: '💌', name: '正直者コンプリート', desc: '手放した理由を3件書く', check: (cs) => titleRetirementReasonCount(cs) >= 3 },
+        { id: 'memo_5', icon: '🗒️', name: 'メモ魔レベル2', desc: 'ひとことメモを5件書く', check: (cs) => titleMemoCount(cs) >= 5 },
+        { id: 'expensive_used', icon: '💎', name: '高級志向', desc: '1万円以上の商品を使う', check: (cs) => titleHasExpensiveUsed(cs, 10000) },
+        { id: 'cheap_used', icon: '🪙', name: 'コスパ重視', desc: '1千円未満の商品を使う', check: (cs) => titleHasCheapUsed(cs, 1000) },
       ];
 
-      const META_RANK_TIERS = [
-        { threshold: 17, name: 'マスター' },
-        { threshold: 12, name: 'エキスパート' },
-        { threshold: 6, name: 'ミドル' },
-        { threshold: 1, name: 'ビギナー' },
-      ];
-
-      function titlesSectionHtml(checks, hasNickname) {
+      function titlesSectionHtml(checks, ctx) {
         const earnedIds = new Set();
         const cards = TITLES.map((t) => {
-          const earned = t.check(checks, hasNickname);
+          const earned = t.check(checks, ctx);
           if (earned) earnedIds.add(t.id);
           return { ...t, earned };
         });
 
         const earnedCount = earnedIds.size;
-        const metaRank = META_RANK_TIERS.find((r) => earnedCount >= r.threshold) ?? null;
 
         let previouslyEarned = [];
         try {
@@ -358,19 +664,6 @@ import SiteFooter from '../components/SiteFooter.astro';
         } catch (e) {
           // localStorageが使えない環境は無視
         }
-
-        const rankHtml = metaRank
-          ? `
-            <div class="title-rank-section">
-              <span class="badge-chip title-rank-chip">${metaRank.name}</span>
-              <p class="badge-detail">称号 ${earnedCount}/${TITLES.length}個 獲得</p>
-            </div>
-          `
-          : `
-            <div class="title-rank-section">
-              <p class="badge-empty">称号を1つ集めると「ビギナー」ランクがもらえます。</p>
-            </div>
-          `;
 
         const cardsHtml = cards
           .map((t) => {
@@ -386,11 +679,64 @@ import SiteFooter from '../components/SiteFooter.astro';
           })
           .join('');
 
-        return `
+        const html = `
           <div class="titles-section">
             <h2 class="titles-title">称号(実績)</h2>
-            ${rankHtml}
+            <p class="badge-detail titles-count">称号 ${earnedCount}/${TITLES.length}個 獲得</p>
             <div class="title-grid">${cardsHtml}</div>
+          </div>
+        `;
+        return { html, earnedCount };
+      }
+
+      // バッジ・称号を統合した「ランク」制度。獲得したバッジ(使用本数バッジ+メーカーバッジ)と
+      // 称号の合計数でブロンズ〜ゴッドの5段階を判定する
+      const RANK_TIERS = [
+        { key: 'god', threshold: 90, name: 'ゴッド', emoji: '👑' },
+        { key: 'master', threshold: 65, name: 'マスター', emoji: '💎' },
+        { key: 'gold', threshold: 40, name: 'ゴールド', emoji: '🥇' },
+        { key: 'silver', threshold: 20, name: 'シルバー', emoji: '🥈' },
+        { key: 'bronze', threshold: 5, name: 'ブロンズ', emoji: '🥉' },
+      ];
+
+      function getRankInfo(totalEarned) {
+        const current = RANK_TIERS.find((t) => totalEarned >= t.threshold) ?? null;
+        const idx = current ? RANK_TIERS.indexOf(current) : RANK_TIERS.length;
+        const next = idx > 0 ? RANK_TIERS[idx - 1] : null;
+        const prevThreshold = current ? current.threshold : 0;
+        let progressPercent = 100;
+        let remaining = 0;
+        if (next) {
+          const span = next.threshold - prevThreshold;
+          progressPercent = Math.max(0, Math.min(100, Math.round(((totalEarned - prevThreshold) / span) * 100)));
+          remaining = next.threshold - totalEarned;
+        }
+        return { current, next, progressPercent, remaining };
+      }
+
+      function rankHeroHtml(totalEarned, badgeCount, titleCount) {
+        const { current, next, progressPercent, remaining } = getRankInfo(totalEarned);
+        const tierClass = current ? `rank-${current.key}` : 'rank-none';
+        const crest = current ? current.emoji : '🔰';
+        const rankName = current ? current.name : '未認定';
+        const progressText = next
+          ? `次の「${next.name}」まであと${remaining}個`
+          : current
+          ? '最高ランクに到達しました'
+          : 'バッジや称号を1つ獲得するとランクがつきます';
+
+        return `
+          <div class="rank-hero ${tierClass}">
+            <div class="rank-hero-crest">${crest}</div>
+            <div class="rank-hero-body">
+              <p class="rank-hero-label">ランク</p>
+              <p class="rank-hero-name">${rankName}</p>
+              <div class="rank-hero-progress-track">
+                <div class="rank-hero-progress-fill" style="width:${progressPercent}%"></div>
+              </div>
+              <p class="rank-hero-progress-text">${progressText}</p>
+              <p class="rank-hero-breakdown">バッジ${badgeCount}個・称号${titleCount}個(計${totalEarned}個)</p>
+            </div>
           </div>
         `;
       }
@@ -509,6 +855,9 @@ import SiteFooter from '../components/SiteFooter.astro';
         const isDetail = Boolean(bestReviewCheck.detail_review_text);
         const text = bestReviewCheck.detail_review_text || bestReviewCheck.review_text || '';
         const title = isDetail ? bestReviewCheck.detail_review_title : bestReviewCheck.review_title;
+        const dateStr = bestReviewCheck.updated_at
+          ? new Date(bestReviewCheck.updated_at).toLocaleDateString('ja-JP')
+          : '';
 
         return `
           <div class="best-review-section">
@@ -522,7 +871,60 @@ import SiteFooter from '../components/SiteFooter.astro';
             </a>
             ${title ? `<p class="best-review-quote-title">${title}</p>` : ''}
             <p class="best-review-quote">${text}</p>
+            ${dateStr ? `<p class="review-item-date">${dateStr}</p>` : ''}
             <button id="clear-best-review-btn" class="best-one-clear-btn">解除する</button>
+          </div>
+        `;
+      }
+
+      function reviewItemHtml(check) {
+        const p = check.products;
+        const isDetail = Boolean(check.detail_review_text);
+        const text = check.detail_review_text || check.review_text || '';
+        const title = isDetail ? check.detail_review_title : check.review_title;
+        const isBest = p.id === currentBestReviewProductId;
+        const dateStr = check.updated_at
+          ? new Date(check.updated_at).toLocaleDateString('ja-JP')
+          : '';
+
+        return `
+          <li class="review-item ${isBest ? 'review-item-best' : ''}">
+            <a href="/products/${p.dmm_content_id}/" class="review-item-head">
+              <img src="${p.image_url}" alt="${p.name}" loading="lazy" />
+              <div class="review-item-head-body">
+                <p class="mp-maker">${p.maker ?? ''}</p>
+                <h3>${p.name}</h3>
+                <div class="mp-tags">
+                  ${check.rating ? `<span class="mp-tag">★${check.rating}</span>` : ''}
+                  ${check.tier ? `<span class="mp-tag">${TIER_LABELS[check.tier]}</span>` : ''}
+                  ${check.is_public ? `<span class="mp-tag mp-public">公開中</span>` : ''}
+                  ${isBest ? `<span class="mp-tag mp-best">ベスト口コミ</span>` : ''}
+                </div>
+              </div>
+            </a>
+            ${title ? `<p class="review-item-title">${title}</p>` : ''}
+            <p class="review-item-text">${text}</p>
+            ${dateStr ? `<p class="review-item-date">${dateStr}</p>` : ''}
+          </li>
+        `;
+      }
+
+      function reviewsListSectionHtml(checks) {
+        const reviews = checks.filter((c) => c.products && (c.review_text || c.detail_review_text));
+
+        if (reviews.length === 0) {
+          return `
+            <div class="reviews-list-section">
+              <h2 class="reviews-list-title">口コミ一覧</h2>
+              <p class="badge-empty">まだ口コミがありません。商品ページの「記録」から感想を書いてみましょう。</p>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="reviews-list-section">
+            <h2 class="reviews-list-title">口コミ一覧(${reviews.length}件)</h2>
+            <ul class="reviews-list">${reviews.map(reviewItemHtml).join('')}</ul>
           </div>
         `;
       }
@@ -1587,44 +1989,125 @@ import SiteFooter from '../components/SiteFooter.astro';
           if (c.tier && usedByTier[c.tier]) usedByTier[c.tier].push(c);
         }
 
-        const saleInterestedCount = grouped.interested.filter(isOnSale).length;
         const totalSpent = grouped.used.reduce((sum, c) => sum + (c.products?.price ?? 0), 0);
 
         statsContainer.innerHTML = `
           <div class="mp-stats">
-            <div class="mp-stat-card"><span class="mp-stat-num">${grouped.used.length}</span><span class="mp-stat-label">使った本数</span></div>
-            <div class="mp-stat-card"><span class="mp-stat-num">${usedByTier.first.length}</span><span class="mp-stat-label">一軍</span></div>
-            <div class="mp-stat-card"><span class="mp-stat-num">${grouped.interested.length}</span><span class="mp-stat-label">気になる</span></div>
-            <div class="mp-stat-card"><span class="mp-stat-num">${saleInterestedCount}</span><span class="mp-stat-label">気になるでセール中</span></div>
-            <div class="mp-stat-card mp-stat-card-wide"><span class="mp-stat-num">¥${totalSpent.toLocaleString()}</span><span class="mp-stat-label">合計使用金額</span></div>
+            <div class="mp-stat-card mp-stat-jump" data-stat-jump="used" role="button" tabindex="0"><span class="mp-stat-num">${grouped.used.length}</span><span class="mp-stat-label">使った本数</span></div>
+            <div class="mp-stat-card mp-stat-jump" data-stat-jump="interested" role="button" tabindex="0"><span class="mp-stat-num">${grouped.interested.length}</span><span class="mp-stat-label">気になる</span></div>
+            <div class="mp-stat-card mp-stat-jump" data-stat-jump="first" role="button" tabindex="0"><span class="mp-stat-num">${usedByTier.first.length}</span><span class="mp-stat-label">一軍</span></div>
+            <div class="mp-stat-card mp-stat-jump" data-stat-jump="second" role="button" tabindex="0"><span class="mp-stat-num">${usedByTier.second.length}</span><span class="mp-stat-label">二軍</span></div>
+            <div class="mp-stat-card mp-stat-card-wide mp-spend-card" id="mp-spend-card" role="button" tabindex="0" aria-expanded="false">
+              <span class="mp-stat-num">¥${totalSpent.toLocaleString()}</span>
+              <span class="mp-stat-label">合計使用金額(タップで換算)</span>
+            </div>
           </div>
+          <div class="mp-spend-compare" id="mp-spend-compare" hidden></div>
         `;
 
+        function jumpToStat(kind) {
+          applyMainTab('all');
+          if (kind === 'interested') {
+            currentStatusTab = 'interested';
+            currentUsedTier = 'all';
+          } else if (kind === 'used') {
+            currentStatusTab = 'used';
+            currentUsedTier = 'all';
+          } else if (kind === 'first' || kind === 'second') {
+            currentStatusTab = 'used';
+            currentUsedTier = kind;
+          }
+          try {
+            localStorage.setItem('onahole_status_tab', currentStatusTab);
+          } catch (e) {}
+          renderProductLists();
+          content.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        statsContainer.querySelectorAll('.mp-stat-jump').forEach((card) => {
+          card.addEventListener('click', () => jumpToStat(card.dataset.statJump));
+          card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              jumpToStat(card.dataset.statJump);
+            }
+          });
+        });
+
+        const spendCard = document.getElementById('mp-spend-card');
+        const spendCompare = document.getElementById('mp-spend-compare');
+        if (spendCard && spendCompare) {
+          const toggleSpendCompare = () => {
+            const expanded = spendCard.getAttribute('aria-expanded') === 'true';
+            if (expanded) {
+              spendCard.setAttribute('aria-expanded', 'false');
+              spendCompare.hidden = true;
+              return;
+            }
+            spendCompare.innerHTML = moneyComparisonHtml(totalSpent);
+            spendCompare.hidden = false;
+            spendCard.setAttribute('aria-expanded', 'true');
+          };
+          spendCard.addEventListener('click', toggleSpendCompare);
+          spendCard.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              toggleSpendCompare();
+            }
+          });
+        }
+
         if (!STATUS_LABELS[currentStatusTab]) currentStatusTab = 'used';
+
+        const isFoldersTab = currentStatusTab === 'folders';
+        const isUsedTab = currentStatusTab === 'used';
 
         const tabsHtml = `
           <div class="mp-tabs-row">
             <div class="ranking-tabs mp-status-tabs">
               ${STATUS_TAB_ORDER.map(
                 (status) => `
-                <button type="button" class="ranking-tab mp-status-tab ${currentStatusTab === status ? 'ranking-tab-active' : ''}" data-status="${status}">${STATUS_LABELS[status]}(${grouped[status].length})</button>
+                <button type="button" class="ranking-tab mp-status-tab ${currentStatusTab === status ? 'ranking-tab-active' : ''}" data-status="${status}">${STATUS_LABELS[status]}${status === 'folders' ? '' : `(${grouped[status].length})`}</button>
               `
               ).join('')}
             </div>
-            <div class="mp-view-toggle">
+            ${
+              isFoldersTab
+                ? ''
+                : `<div class="mp-view-toggle">
               <button type="button" class="mp-view-btn ${currentViewMode === 'grid' ? 'active' : ''}" data-view="grid" title="グリッド表示" aria-label="グリッド表示">▦</button>
               <button type="button" class="mp-view-btn ${currentViewMode === 'list' ? 'active' : ''}" data-view="list" title="リスト表示" aria-label="リスト表示">☰</button>
-            </div>
+            </div>`
+            }
           </div>
+          ${
+            isUsedTab
+              ? `<div class="mp-tier-tabs">
+              <button type="button" class="mp-tier-tab ${currentUsedTier === 'all' ? 'mp-tier-tab-active' : ''}" data-tier="all">すべて(${grouped.used.length})</button>
+              <button type="button" class="mp-tier-tab ${currentUsedTier === 'first' ? 'mp-tier-tab-active' : ''}" data-tier="first">一軍(${usedByTier.first.length})</button>
+              <button type="button" class="mp-tier-tab ${currentUsedTier === 'second' ? 'mp-tier-tab-active' : ''}" data-tier="second">二軍(${usedByTier.second.length})</button>
+              <button type="button" class="mp-tier-tab ${currentUsedTier === 'retired' ? 'mp-tier-tab-active' : ''}" data-tier="retired">引退(${usedByTier.retired.length})</button>
+            </div>`
+              : ''
+          }
         `;
+
+        if (isFoldersTab) {
+          content.innerHTML = tabsHtml;
+          foldersContainer.style.display = '';
+          return;
+        }
+        foldersContainer.style.display = 'none';
 
         const renderItem = currentViewMode === 'list' ? productRowHtml : productCardHtml;
         const listTag = currentViewMode === 'list' ? 'mp-list' : 'mp-grid';
-        const activeList = grouped[currentStatusTab] ?? [];
+        const activeList =
+          isUsedTab && currentUsedTier !== 'all' ? usedByTier[currentUsedTier] ?? [] : grouped[currentStatusTab] ?? [];
 
+        const emptyLabel = isUsedTab && currentUsedTier !== 'all' ? TIER_LABELS[currentUsedTier] : STATUS_LABELS[currentStatusTab];
         const listHtml = activeList.length
           ? `<ul class="${listTag}">${activeList.map(renderItem).join('')}</ul>`
-          : `<p class="mp-empty-tab">まだ${STATUS_LABELS[currentStatusTab]}の商品がありません。</p>`;
+          : `<p class="mp-empty-tab">まだ${emptyLabel}の商品がありません。</p>`;
 
         content.innerHTML = tabsHtml + listHtml;
       }
@@ -1693,6 +2176,7 @@ import SiteFooter from '../components/SiteFooter.astro';
 
         const bestReviewCheck = lastChecks.find((c) => c.products?.id === currentBestReviewProductId) ?? null;
         bestReviewContainer.innerHTML = bestReviewSectionHtml(bestReviewCheck);
+        reviewsListContainer.innerHTML = reviewsListSectionHtml(lastChecks);
 
         oshiMakerEditing = false;
         renderOshiMakerSection();
@@ -1702,13 +2186,27 @@ import SiteFooter from '../components/SiteFooter.astro';
         await renderManualProductSection();
 
         const usedCountForBadge = lastChecks.filter((c) => c.status === 'used').length;
-        document.getElementById('badge-section-container').innerHTML = badgeSectionHtml(
-          usedCountForBadge,
-          lastChecks
-        );
-        document.getElementById('titles-section-container').innerHTML = titlesSectionHtml(
-          lastChecks,
-          hasNickname
+        const badgeResult = badgeSectionHtml(usedCountForBadge, lastChecks);
+        const titlesCtx = {
+          hasNickname,
+          avatarUrl: currentAvatarUrl,
+          headerUrl: currentHeaderUrl,
+          bio: currentBio,
+          snsLinks: currentSnsLinks,
+          isPublicProfile: currentIsPublic,
+          top3: currentTop3,
+          oshiMaker: currentOshiMaker,
+          oshiMakerReason: currentOshiMakerReason,
+          bestReviewProductId: currentBestReviewProductId,
+          folders: currentFolders,
+        };
+        const titlesResult = titlesSectionHtml(lastChecks, titlesCtx);
+        document.getElementById('badge-section-container').innerHTML = badgeResult.html;
+        document.getElementById('titles-section-container').innerHTML = titlesResult.html;
+        document.getElementById('rank-hero-container').innerHTML = rankHeroHtml(
+          badgeResult.badgeCount + titlesResult.earnedCount,
+          badgeResult.badgeCount,
+          titlesResult.earnedCount
         );
 
         if (lastChecks.length === 0) {
@@ -1748,9 +2246,17 @@ import SiteFooter from '../components/SiteFooter.astro';
         const statusTabBtn = e.target.closest('.mp-status-tab');
         if (statusTabBtn) {
           currentStatusTab = statusTabBtn.dataset.status;
+          currentUsedTier = 'all';
           try {
             localStorage.setItem('onahole_status_tab', currentStatusTab);
           } catch (err) {}
+          renderProductLists();
+          return;
+        }
+
+        const tierTabBtn = e.target.closest('.mp-tier-tab');
+        if (tierTabBtn) {
+          currentUsedTier = tierTabBtn.dataset.tier;
           renderProductLists();
         }
       });
