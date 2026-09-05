@@ -20,7 +20,10 @@
     <a href="/mypage" class="js-mypage-link">マイページ</a>
     <a href="/following">フォロー中</a>
   </nav>
-  <div id="site-auth-area" class="site-auth-area"></div>
+  <div class="site-header-right">
+    <div id="site-notify-area" class="site-notify-area"></div>
+    <div id="site-auth-area" class="site-auth-area"></div>
+  </div>
 </header>
 
 <nav class="site-bottom-nav">
@@ -48,8 +51,10 @@
 
 <script>
   import { mountAuthArea, getMypageHref } from '../lib/authHeader.js';
+  import { mountNotifyArea } from '../lib/notifications.js';
 
   mountAuthArea(document.getElementById('site-auth-area'));
+  mountNotifyArea(document.getElementById('site-notify-area'));
 
   getMypageHref().then((href) => {
     document.querySelectorAll('.js-mypage-link').forEach((el) => {

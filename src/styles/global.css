@@ -97,11 +97,17 @@ a {
   display: none;
 }
 
+.site-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-left: auto;
+}
+
 .site-auth-area {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-left: auto;
   flex-shrink: 0;
 }
 
@@ -132,13 +138,124 @@ a {
   color: var(--accent);
 }
 
+.notify-wrap {
+  position: relative;
+}
+
+.notify-bell-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+
+.notify-bell-btn:hover {
+  color: var(--accent);
+}
+
+.notify-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: var(--radius-pill);
+  background: var(--sale);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.notify-badge[hidden] {
+  display: none;
+}
+
+.notify-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  max-width: calc(100vw - 2rem);
+  max-height: 420px;
+  overflow-y: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 50;
+}
+
+.notify-dropdown[hidden] {
+  display: none;
+}
+
+.notify-dropdown-title {
+  margin: 0;
+  padding: 0.75rem 1rem 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.notify-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.notify-item {
+  display: block;
+  padding: 0.65rem 1rem;
+  border-top: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--text);
+}
+
+.notify-item:last-child {
+  padding-bottom: 0.9rem;
+}
+
+.notify-item:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.notify-item-unread {
+  background: rgba(255, 90, 90, 0.06);
+}
+
+.notify-item-text {
+  margin: 0 0 0.2rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.notify-item-time {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.notify-empty {
+  margin: 0;
+  padding: 1.2rem 1rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 @media (max-width: 640px) {
   .site-nav {
     display: none;
-  }
-
-  .site-auth-area {
-    margin-left: auto;
   }
 
   body {
