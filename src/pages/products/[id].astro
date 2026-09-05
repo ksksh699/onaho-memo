@@ -127,65 +127,104 @@ const releaseDateDisplay = product.release_date_text || product.release_date;
 const onakingLinkData = onakingLinkResult.data;
 const onakingUrl = onakingLinkData?.onaking_url ?? null;
 
-// 他ショップの購入リンク・価格比較(パイロット導入中。対象商品のみ登録済み)
-// 各{shop}_urlが登録されている商品のみ自動的に表示順に組み込まれる
-const shopLinks = [];
-if (product.affiliate_url) {
-  shopLinks.push({ key: 'fanza', name: 'FANZA', price: product.price, url: product.affiliate_url });
-}
-if (product.pyuarabu_url) {
-  shopLinks.push({ key: 'pyuarabu', name: 'ぴゅあらばショップ', price: product.pyuarabu_price, url: product.pyuarabu_url });
-}
-if (product.nls_url) {
-  shopLinks.push({ key: 'nls', name: 'NLS', price: product.nls_price, url: product.nls_url });
-}
-if (product.daimaoh_url) {
-  shopLinks.push({ key: 'daimaoh', name: '大魔王', price: product.daimaoh_price, url: product.daimaoh_url });
-}
-if (product.hotpowers_url) {
-  shopLinks.push({ key: 'hotpowers', name: 'ホットパワーズ', price: product.hotpowers_price, url: product.hotpowers_url });
-}
-if (product.ems_url) {
-  shopLinks.push({ key: 'ems', name: 'エムズ', price: product.ems_price, url: product.ems_url });
-}
-if (product.mzakka_url) {
-  shopLinks.push({ key: 'mzakka', name: 'M-ZAKKA', price: product.mzakka_price, url: product.mzakka_url });
-}
-if (product.nobunagatoys_url) {
-  shopLinks.push({ key: 'nobunagatoys', name: '信長トイズ', price: product.nobunagatoys_price, url: product.nobunagatoys_url });
-}
+// 他ショップの購入リンク・価格比較。
+// 取り扱いの有無にかかわらず、常に8サイト全てを固定の順番で表示する
+// (取り扱いがあるサイトだけを出す方式だと、リンクの貼り忘れに気付けないため)。
+// 取り扱いがない(該当する{shop}_urlが未登録の)サイトは、そのサイトのトップページへ
+// リンクし、価格は「不明」と表示する。
+// トップページのURLは可能な限りアフィリエイトリンク化してある(踏んだ時点で成果対象になるように)。
+// - FANZA: DMMの「lurlに好きなURLを渡すとaf_id付きでリダイレクトしてくれる」汎用アフィリエイトリンクの仕組みを利用
+// - 信長トイズ: e-click(共通ASP)の「urlパラメータに好きな遷移先を渡せる」リダイレクト形式を利用
+// - 大魔王・NLS: それぞれ自社の /jump/{id}/ , /access.php?agency_id={id} が、商品を指定しない場合はトップページへ
+//   リダイレクトすることを実際に動作確認して採用
+// - ぴゅあらば・ホットパワーズ・エムズ(BannerBridge)、M-ZAKKA(afb)は、既存の商品リンクと同様に
+//   「トップページ用のリンクを1本、各社の管理画面で新規発行する」以外の方法がない(URLの汎用リダイレクトが
+//   効かないことを実際に確認済み)。管理画面から発行してもらい次第、ここをアフィリエイトリンクに差し替える。
+const SHOP_DEFS = [
+  {
+    key: 'fanza',
+    name: 'FANZA',
+    urlField: 'affiliate_url',
+    priceField: 'price',
+    topUrl:
+      'https://al.fanza.co.jp/?lurl=' +
+      encodeURIComponent('https://www.dmm.co.jp/mono/goods/') +
+      '&af_id=onakingcom-990&ch=api',
+  },
+  {
+    key: 'pyuarabu',
+    name: 'ぴゅあらばショップ',
+    urlField: 'pyuarabu_url',
+    priceField: 'pyuarabu_price',
+    topUrl: 'https://purelovers-shop.com/', // TODO: BannerBridge管理画面でトップページ用リンクを発行後、差し替え
+  },
+  {
+    key: 'nls',
+    name: 'NLS',
+    urlField: 'nls_url',
+    priceField: 'nls_price',
+    topUrl: 'https://www.e-nls.com/access.php?agency_id=af952539-mem',
+  },
+  {
+    key: 'daimaoh',
+    name: '大魔王',
+    urlField: 'daimaoh_url',
+    priceField: 'daimaoh_price',
+    topUrl: 'https://daimaoh.co.jp/jump/zl361209-ohm/',
+  },
+  {
+    key: 'mzakka',
+    name: 'M-ZAKKA',
+    urlField: 'mzakka_url',
+    priceField: 'mzakka_price',
+    topUrl: 'https://mzakka.com/', // TODO: afb管理画面でトップページ用リンクを発行後、差し替え
+  },
+  {
+    key: 'hotpowers',
+    name: 'ホットパワーズ',
+    urlField: 'hotpowers_url',
+    priceField: 'hotpowers_price',
+    topUrl: 'https://hotpowers.jp/', // TODO: BannerBridge管理画面でトップページ用リンクを発行後、差し替え
+  },
+  {
+    key: 'nobunagatoys',
+    name: '信長トイズ',
+    urlField: 'nobunagatoys_url',
+    priceField: 'nobunagatoys_price',
+    topUrl:
+      'https://www.e-click.jp/redirects/direct/33655/4171/?url=' +
+      'https%3A//www.nobunaga-toys.com/',
+  },
+  {
+    key: 'ems',
+    name: 'エムズ',
+    urlField: 'ems_url',
+    priceField: 'ems_price',
+    topUrl: 'https://www.ms-online.co.jp/', // TODO: BannerBridge管理画面でトップページ用リンクを発行後、差し替え
+  },
+];
 
-// 表示順は「安い順」ではなく固定の優先順位:
-// 1) FANZA 2) ぴゅあらばショップ 3) 残りの中で一番安いサイト(同額ならNLSを優先)
-// FANZA/ぴゅあらばが未登録の場合はその枠を詰めて表示する
-const FIXED_ORDER = { fanza: 0, pyuarabu: 1 };
-const fixedShopLinks = shopLinks
-  .filter((s) => s.key in FIXED_ORDER)
-  .sort((a, b) => FIXED_ORDER[a.key] - FIXED_ORDER[b.key]);
-const restShopLinks = shopLinks
-  .filter((s) => !(s.key in FIXED_ORDER))
-  .sort((a, b) => {
-    const diff = (a.price ?? Infinity) - (b.price ?? Infinity);
-    if (diff !== 0) return diff;
-    if (a.key === 'nls') return -1;
-    if (b.key === 'nls') return 1;
-    return 0;
-  });
-const orderedShopLinks = [...fixedShopLinks, ...restShopLinks];
+const orderedShopLinks = SHOP_DEFS.map((def) => {
+  const hasListing = Boolean(product[def.urlField]);
+  return {
+    key: def.key,
+    name: def.name,
+    hasListing,
+    price: hasListing ? product[def.priceField] : null,
+    url: hasListing ? product[def.urlField] : def.topUrl,
+  };
+});
 
-// 「最安」バッジは表示順にかかわらず、実際に一番安いサイトにだけ付ける
-const cheapestPrice = shopLinks.reduce(
-  (min, s) => (s.price != null && s.price < min ? s.price : min),
-  Infinity
-);
-const showCheapestBadge = shopLinks.length > 1 && Number.isFinite(cheapestPrice);
+// 「最安」バッジは、実際に価格が判明している(取り扱いがある)サイトの中でのみ判定する
+const knownPriceLinks = orderedShopLinks.filter((s) => s.hasListing && s.price != null);
+const cheapestPrice = knownPriceLinks.reduce((min, s) => (s.price < min ? s.price : min), Infinity);
+const showCheapestBadge = knownPriceLinks.length > 1;
 const cheapestIndex = showCheapestBadge
-  ? orderedShopLinks.findIndex((s) => s.price === cheapestPrice)
+  ? orderedShopLinks.findIndex((s) => s.hasListing && s.price === cheapestPrice)
   : -1;
 
-// 登録サイト数が増えても縦に間延びしないよう、上位のみ初期表示し、
-// 残りは<details>で折りたたんでおく
-const SHOP_LINKS_VISIBLE = 3;
+// 最初はFANZAのみ表示し、タップで残り7サイトを開けるようにする
+const SHOP_LINKS_VISIBLE = 1;
 const visibleShopLinks = orderedShopLinks.slice(0, SHOP_LINKS_VISIBLE);
 const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
 ---
@@ -264,9 +303,8 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
       <div class="detail-actions">
           {product.manual_note && <p class="manual-note">{product.manual_note}</p>}
 
-          {shopLinks.length > 0 ? (
-            <div class="shop-links">
-              <p class="shop-links-title">購入サイトを比較{shopLinks.length > 1 ? '(価格は税込)' : ''}</p>
+          <div class="shop-links">
+              <p class="shop-links-title">購入サイトを比較(価格は税込)</p>
               {hasDiscount && (
                 <p class="shop-links-ref-price">
                   参考価格: <span class="shop-links-ref-price-value">¥{listPrice.toLocaleString()}</span>
@@ -278,8 +316,8 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
                     <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link">
                       <span class="shop-link-name">{s.name}</span>
                       <span class="shop-link-price">
-                        {s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし'}
-                        {s.key === 'fanza' && hasDiscount && (
+                        {s.hasListing ? (s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし') : '不明'}
+                        {s.key === 'fanza' && s.hasListing && hasDiscount && (
                           <span class="discount-badge-small">{discountPercent}%OFF</span>
                         )}
                       </span>
@@ -292,13 +330,16 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
                 <details class="shop-links-more">
                   <summary>他{moreShopLinks.length}サイトを見る</summary>
                   <ul class="shop-links-list">
-                    {moreShopLinks.map((s) => (
-                      <li class="shop-link-item">
+                    {moreShopLinks.map((s, i) => (
+                      <li class={`shop-link-item ${i + visibleShopLinks.length === cheapestIndex ? 'cheapest' : ''}`}>
                         <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link">
                           <span class="shop-link-name">{s.name}</span>
                           <span class="shop-link-price">
-                            {s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし'}
+                            {s.hasListing ? (s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし') : '不明'}
                           </span>
+                          {i + visibleShopLinks.length === cheapestIndex && (
+                            <span class="shop-link-badge">最安</span>
+                          )}
                         </a>
                       </li>
                     ))}
@@ -306,16 +347,6 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
                 </details>
               )}
             </div>
-          ) : (
-            <>
-              {product.price && <p class="detail-price-fallback">¥{product.price.toLocaleString()}</p>}
-              {product.affiliate_url && (
-                <a class="buy-link" href={product.affiliate_url} target="_blank" rel="noopener nofollow">
-                  {product.is_manual ? '購入ページを見る' : 'FANZAで詳細を見る'}
-                </a>
-              )}
-            </>
-          )}
 
           <div id="check-widget" class="check-widget" data-product-id={product.id}>
             <p class="check-loading">読み込み中...</p>
