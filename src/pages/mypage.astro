@@ -996,13 +996,26 @@ import SiteFooter from '../components/SiteFooter.astro';
       }
 
       function oshiMakerEditHtml(options) {
+        // スマホのブラウザは<datalist>にほぼ対応しておらず、以前の
+        // text+datalist方式だとPC以外では単なる自由入力欄になってしまい、
+        // ユーザーごとに表記揺れが生まれて集計が取れなくなる問題があった。
+        // そのため、PC・スマホの両方で確実に同じ挙動になる<select>(一覧から選ぶ方式)に変更する。
+        // 万一、過去に自由入力で保存された値が現在の候補一覧に無い場合は、
+        // 選択肢を失わないよう先頭に追加しておく(集計上は既存のまま扱われる)。
+        const allOptions =
+          currentOshiMaker && !options.includes(currentOshiMaker)
+            ? [currentOshiMaker, ...options]
+            : options;
+
         return `
           <div class="oshi-maker-section">
             <h2 class="oshi-maker-title">推しメーカー</h2>
-            <input type="text" id="oshi-maker-input" class="nickname-input" list="oshi-maker-datalist" maxlength="60" placeholder="メーカー名を入力(候補から選ぶこともできます)" value="${currentOshiMaker ?? ''}" />
-            <datalist id="oshi-maker-datalist">
-              ${options.map((m) => `<option value="${m}"></option>`).join('')}
-            </datalist>
+            <select id="oshi-maker-input" class="oshi-maker-select">
+              <option value="">選択してください</option>
+              ${allOptions
+                .map((m) => `<option value="${m}" ${m === currentOshiMaker ? 'selected' : ''}>${m}</option>`)
+                .join('')}
+            </select>
             <input type="text" id="oshi-maker-reason-input" class="nickname-input" maxlength="60" placeholder="理由(任意)" value="${currentOshiMakerReason ?? ''}" />
             <button id="save-oshi-maker-btn" class="btn-primary">保存する</button>
             <button id="cancel-oshi-maker-btn" class="best-one-clear-btn">キャンセル</button>
