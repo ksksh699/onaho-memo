@@ -228,11 +228,10 @@ const SHOP_LINKS_VISIBLE = 1;
 const visibleShopLinks = orderedShopLinks.slice(0, SHOP_LINKS_VISIBLE);
 const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
 
-// Xでシェアするためのリンク。og:系タグも合わせて設定し、Xに貼った時に
-// 商品名・画像入りのカードとして表示されるようにする。
+// og:系タグ用のこのページの正規URL。Xなどに貼った時に商品名・画像入りの
+// カードとして表示されるようにする(レビュー保存後のシェアボタンは
+// products/[id].astroのクライアント側スクリプト側でlocation.hrefから作る)。
 const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
-const shareText = `「${product.name}」をチェック - オナホめも`;
-const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(pageUrl)}`;
 ---
 
 <html lang="ja">
@@ -255,10 +254,6 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
     <SiteHeader />
     <main class="detail">
       <h1 class="detail-title">{product.name}</h1>
-      <a href={xShareUrl} target="_blank" rel="noopener noreferrer" class="x-share-btn">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
-        Xでシェア
-      </a>
       <div class="detail-grid">
         <img
           src={imageUrl}
@@ -364,7 +359,7 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
               )}
             </div>
 
-          <div id="check-widget" class="check-widget" data-product-id={product.id}>
+          <div id="check-widget" class="check-widget" data-product-id={product.id} data-product-name={product.name}>
             <p class="check-loading">読み込み中...</p>
           </div>
 
@@ -876,6 +871,7 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
             ${existing ? '<button type="button" id="delete-btn" class="btn-outline">記録を削除</button>' : ''}
           </div>
           <p id="save-status" class="save-status"></p>
+          <div id="review-share-area"></div>
         `;
 
         let currentStatus = status;
@@ -1215,8 +1211,31 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
             console.error(error);
             saveStatusEl.textContent = '保存に失敗しました';
           } else {
-            saveStatusEl.textContent = '保存しました';
-            init();
+            // ひとことレビュー・詳細レビューのどちらかを書いていた場合だけ、
+            // 保存後に「このレビューをXでシェアする」を出す。
+            // init()はフォーム全体(#save-status・#review-share-areaを含む)を
+            // 作り直すので、先に判定材料だけ控えておき、再描画が終わってから
+            // 新しい要素に対してメッセージ・シェアボタンを反映する。
+            const wroteReview = Boolean(reviewTextValue.trim() || detailReviewTextValue.trim());
+            const productName = widget.dataset.productName || '';
+
+            await init();
+
+            const freshStatusEl = document.getElementById('save-status');
+            if (freshStatusEl) freshStatusEl.textContent = '保存しました';
+
+            const shareArea = document.getElementById('review-share-area');
+            if (shareArea && wroteReview) {
+              const shareText = `「${productName}」のレビューを書きました - オナホめも`;
+              const shareUrl = location.origin + location.pathname;
+              const shareHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+              shareArea.innerHTML = `
+                <a href="${shareHref}" target="_blank" rel="noopener noreferrer" class="x-share-btn review-share-btn">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
+                  このレビューをXでシェアする
+                </a>
+              `;
+            }
           }
         });
 
