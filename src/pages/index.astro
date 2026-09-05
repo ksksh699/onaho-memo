@@ -4,6 +4,20 @@ import '../styles/global.css';
 import SiteHeader from '../components/SiteHeader.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 
+// トップページのサーバー側レンダリング結果はログイン状態に依存しない
+// (ログイン表示・「気になる」等の個人向け処理はすべてブラウザ側スクリプトで行っている)ため、
+// VercelのCDN(エッジキャッシュ)に5分間キャッシュさせる。
+//   - max-age=0: ブラウザ自身はキャッシュせず、毎回CDNに問い合わせる
+//   - s-maxage=300: CDNは5分間、同じHTMLをそのまま返す(この間はSupabaseへの問い合わせがゼロになる)
+//   - stale-while-revalidate=3600: 5分を過ぎても最大1時間は古いHTMLを即座に返しつつ、裏で再生成する
+// 効果: このページが発行する約20本のDBクエリが「表示のたび」から「最大5分に1回」になり、
+// 無料プランのDBが混み合う瞬間に当たっても、訪問者はキャッシュ済みのHTMLを待たずに受け取れる。
+// 注意: ランキング(気になる数・使った人数など)への反映は最大5分遅れる。
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, max-age=0, s-maxage=300, stale-while-revalidate=3600'
+);
+
 const PAGE_SIZE = 60;
 const CAMPAIGN_KEYWORDS = ['セール', '特価', '祭', 'キャンペーン', 'OFF', '割引'];
 const RANKING_SELECT =
