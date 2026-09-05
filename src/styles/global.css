@@ -259,6 +259,39 @@ a {
   text-align: center;
 }
 
+/* X(旧Twitter)シェアボタン。商品ページ・掲示板のスレッド・公開プロフィールに設置。
+   ブランドに合わせて背景は黒、アイコンは2本の線を交差させただけのシンプルなX字。 */
+.x-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: fit-content;
+  padding: 0.5rem 1rem;
+  background: #000;
+  color: #fff;
+  border-radius: var(--radius-pill);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+}
+
+.x-share-btn:hover {
+  background: #262626;
+}
+
+.x-share-btn svg {
+  flex-shrink: 0;
+}
+
+/* マイページ・公開プロフィールの「合計使用金額」カードの下に置くシェアボタン。
+   すぐ下にある.mp-spend-compare(比較リスト)にはマイナスマージンで詰めてある
+   ため、ボタン側にも下余白を持たせて重ならないようにしている。 */
+.mp-spend-share-btn {
+  margin: 0.6rem 0 1.2rem;
+}
+
 @media (max-width: 640px) {
   .site-nav {
     display: none;

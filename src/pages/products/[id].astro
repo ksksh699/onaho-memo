@@ -227,6 +227,12 @@ const cheapestIndex = showCheapestBadge
 const SHOP_LINKS_VISIBLE = 1;
 const visibleShopLinks = orderedShopLinks.slice(0, SHOP_LINKS_VISIBLE);
 const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
+
+// Xでシェアするためのリンク。og:系タグも合わせて設定し、Xに貼った時に
+// 商品名・画像入りのカードとして表示されるようにする。
+const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
+const shareText = `「${product.name}」をチェック - オナホめも`;
+const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(pageUrl)}`;
 ---
 
 <html lang="ja">
@@ -238,11 +244,21 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#2b5fad" />
     <title>{product.name}</title>
+    <meta property="og:type" content="product" />
+    <meta property="og:title" content={product.name} />
+    <meta property="og:url" content={pageUrl} />
+    {imageUrl && <meta property="og:image" content={imageUrl} />}
+    <meta property="og:site_name" content="オナホめも" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <SiteHeader />
     <main class="detail">
       <h1 class="detail-title">{product.name}</h1>
+      <a href={xShareUrl} target="_blank" rel="noopener noreferrer" class="x-share-btn">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
+        Xでシェア
+      </a>
       <div class="detail-grid">
         <img
           src={imageUrl}

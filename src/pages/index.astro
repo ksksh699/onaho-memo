@@ -13,6 +13,13 @@ import SiteFooter from '../components/SiteFooter.astro';
 // 効果: このページが発行する約20本のDBクエリが「表示のたび」から「最大5分に1回」になり、
 // 無料プランのDBが混み合う瞬間に当たっても、訪問者はキャッシュ済みのHTMLを待たずに受け取れる。
 // 注意: ランキング(気になる数・使った人数など)への反映は最大5分遅れる。
+//
+// Vary: Cookie … 年齢確認ゲート(src/middleware.js)はCookie(age_verified)の有無で
+// 「ゲート画面」か「このページ」かを出し分けている。Varyを付けないと、CDNが
+// 「誰か1人が認証後に見たこのページのキャッシュ」をCookie無しの初回訪問者にも
+// そのまま返してしまい、年齢確認が素通りされてしまう。CookieごとにCDNのキャッシュを
+// 分けることで、その事故を防いでいる。
+Astro.response.headers.set('Vary', 'Cookie');
 Astro.response.headers.set(
   'Cache-Control',
   'public, max-age=0, s-maxage=300, stale-while-revalidate=3600'

@@ -2004,6 +2004,15 @@ import SiteFooter from '../components/SiteFooter.astro';
 
         const totalSpent = grouped.used.reduce((sum, c) => sum + (c.products?.price ?? 0), 0);
 
+        // 合計使用金額のXシェアボタン。公開プロフィールがあればそこへのリンク付きで、
+        // 無ければ(非公開 or ニックネーム未設定)サイトのトップページへのリンクにする。
+        const spendShareText = `合計使用金額 ¥${totalSpent.toLocaleString()} - オナホめも`;
+        const spendShareUrl =
+          currentIsPublic && currentNickname
+            ? `${location.origin}/users/${encodeURIComponent(currentNickname)}`
+            : `${location.origin}/`;
+        const spendShareHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(spendShareText)}&url=${encodeURIComponent(spendShareUrl)}`;
+
         statsContainer.innerHTML = `
           <div class="mp-stats">
             <div class="mp-stat-card mp-stat-jump" data-stat-jump="used" role="button" tabindex="0"><span class="mp-stat-num">${grouped.used.length}</span><span class="mp-stat-label">使った本数</span></div>
@@ -2015,6 +2024,10 @@ import SiteFooter from '../components/SiteFooter.astro';
               <span class="mp-stat-label">合計使用金額(タップで換算)</span>
             </div>
           </div>
+          <a href="${spendShareHref}" target="_blank" rel="noopener noreferrer" class="x-share-btn mp-spend-share-btn">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
+            この金額をXでシェア
+          </a>
           <div class="mp-spend-compare" id="mp-spend-compare" hidden></div>
         `;
 

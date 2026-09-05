@@ -592,6 +592,13 @@ function formatMoneyComparison(it) {
 }
 
 const moneyComparisons = moneyComparisonPicks(totalSpentAll).map(formatMoneyComparison);
+
+// Xでシェアするためのリンク(プロフィールが見つかった場合のみ)
+const pageUrl = profile ? `${Astro.url.origin}/users/${encodeURIComponent(profile.nickname)}` : '';
+const shareText = profile ? `${profile.nickname}さんのコレクション - オナホめも` : '';
+const xShareUrl = profile
+  ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(pageUrl)}`
+  : '';
 ---
 
 <html lang="ja">
@@ -599,6 +606,16 @@ const moneyComparisons = moneyComparisonPicks(totalSpentAll).map(formatMoneyComp
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
     <title>{profile ? `${profile.nickname}さんのプロフィール` : 'ユーザーが見つかりません'} | オナホめも</title>
+    {profile && (
+      <>
+        <meta property="og:type" content="profile" />
+        <meta property="og:title" content={`${profile.nickname}さんのプロフィール - オナホめも`} />
+        <meta property="og:url" content={pageUrl} />
+        {profile.avatar_url && <meta property="og:image" content={profile.avatar_url} />}
+        <meta property="og:site_name" content="オナホめも" />
+        <meta name="twitter:card" content="summary" />
+      </>
+    )}
   </head>
   <body>
     <header class="site-header">
@@ -623,6 +640,11 @@ const moneyComparisons = moneyComparisonPicks(totalSpentAll).map(formatMoneyComp
             )}
             <h1 class="profile-page-title">{profile.nickname}</h1>
           </div>
+
+          <a href={xShareUrl} target="_blank" rel="noopener noreferrer" class="x-share-btn">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
+            Xでシェア
+          </a>
 
           <a href="/mypage" id="edit-profile-btn" class="auth-btn" style="display:none;">編集する</a>
 
@@ -664,6 +686,15 @@ const moneyComparisons = moneyComparisonPicks(totalSpentAll).map(formatMoneyComp
               <span class="mp-stat-label">合計使用金額(タップで換算)</span>
             </div>
           </div>
+          <a
+            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`合計使用金額 ¥${totalSpentAll.toLocaleString()} - オナホめも`)}&url=${encodeURIComponent(pageUrl)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="x-share-btn mp-spend-share-btn"
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
+            この金額をXでシェア
+          </a>
           <div class="mp-spend-compare" id="profile-spend-compare" hidden>
             {moneyComparisons.length === 0 ? (
               <p class="mp-spend-compare-empty">まだ使った記録がありません。</p>
