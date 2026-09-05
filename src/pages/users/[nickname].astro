@@ -686,15 +686,6 @@ const xShareUrl = profile
               <span class="mp-stat-label">合計使用金額(タップで換算)</span>
             </div>
           </div>
-          <a
-            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`合計使用金額 ¥${totalSpentAll.toLocaleString()} - オナホめも`)}&url=${encodeURIComponent(pageUrl)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="x-share-btn mp-spend-share-btn"
-          >
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
-            この金額をXでシェア
-          </a>
           <div class="mp-spend-compare" id="profile-spend-compare" hidden>
             {moneyComparisons.length === 0 ? (
               <p class="mp-spend-compare-empty">まだ使った記録がありません。</p>
@@ -707,6 +698,15 @@ const xShareUrl = profile
                   ))}
                 </ul>
                 <p class="mp-spend-compare-note">※価格はあくまで目安です</p>
+                <a
+                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`合計使用金額 ¥${totalSpentAll.toLocaleString()} - オナホめも`)}&url=${encodeURIComponent(pageUrl)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="x-share-btn mp-spend-share-btn"
+                >
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
+                  この金額をXでシェア
+                </a>
               </>
             )}
           </div>

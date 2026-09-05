@@ -269,17 +269,26 @@ import SiteFooter from '../components/SiteFooter.astro';
         return `${it.name}の約${percent}%`;
       }
 
-      function moneyComparisonHtml(amount) {
+      function moneyComparisonHtml(amount, shareHref) {
         const picks = moneyComparisonPicks(amount);
         if (picks.length === 0) {
           return `<p class="mp-spend-compare-empty">まだ使った記録がありません。</p>`;
         }
+        const shareHtml = shareHref
+          ? `
+            <a href="${shareHref}" target="_blank" rel="noopener noreferrer" class="x-share-btn mp-spend-share-btn">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
+              この金額をXでシェア
+            </a>
+          `
+          : '';
         return `
           <p class="mp-spend-compare-title">その金額で買えたかもしれないもの(目安)</p>
           <ul class="mp-spend-compare-list">
             ${picks.map((it) => `<li>${formatMoneyComparison(it)}</li>`).join('')}
           </ul>
           <p class="mp-spend-compare-note">※価格はあくまで目安です</p>
+          ${shareHtml}
         `;
       }
 
@@ -2024,10 +2033,6 @@ import SiteFooter from '../components/SiteFooter.astro';
               <span class="mp-stat-label">合計使用金額(タップで換算)</span>
             </div>
           </div>
-          <a href="${spendShareHref}" target="_blank" rel="noopener noreferrer" class="x-share-btn mp-spend-share-btn">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
-            この金額をXでシェア
-          </a>
           <div class="mp-spend-compare" id="mp-spend-compare" hidden></div>
         `;
 
@@ -2070,7 +2075,7 @@ import SiteFooter from '../components/SiteFooter.astro';
               spendCompare.hidden = true;
               return;
             }
-            spendCompare.innerHTML = moneyComparisonHtml(totalSpent);
+            spendCompare.innerHTML = moneyComparisonHtml(totalSpent, spendShareHref);
             spendCompare.hidden = false;
             spendCard.setAttribute('aria-expanded', 'true');
           };
