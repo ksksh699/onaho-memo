@@ -139,7 +139,7 @@ a {
 }
 
 .notify-wrap {
-  position: relative;
+  display: flex;
 }
 
 .notify-bell-btn {
@@ -182,11 +182,17 @@ a {
 }
 
 .notify-dropdown {
+  /* .site-headerがposition: stickyなので、絶対配置の基準(containing block)は
+     すぐ外側の.notify-wrapではなくヘッダー自体になる。ヘッダーの右paddingと
+     同じ1.5rem分だけ内側に寄せることで、画面幅に関わらずヘッダーの右端
+     (ログアウトボタンなどと同じ位置)にきちんと収まるようにしている。
+     (以前は.notify-wrap基準のright:0だったため、鈴アイコンがヘッダー右端より
+     内側にある狭い画面で通知一覧が画面外にはみ出すバグがあった) */
   position: absolute;
   top: calc(100% + 8px);
-  right: 0;
+  right: 1.5rem;
   width: 320px;
-  max-width: calc(100vw - 2rem);
+  max-width: calc(100vw - 3rem);
   max-height: 420px;
   overflow-y: auto;
   background: var(--bg-card);
