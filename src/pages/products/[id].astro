@@ -138,8 +138,8 @@ const onakingUrl = onakingLinkData?.onaking_url ?? null;
 // - 大魔王・NLS: それぞれ自社の /jump/{id}/ , /access.php?agency_id={id} が、商品を指定しない場合はトップページへ
 //   リダイレクトすることを実際に動作確認して採用
 // - ぴゅあらば・ホットパワーズ・エムズ(BannerBridge)、M-ZAKKA(afb)は、既存の商品リンクと同様に
-//   「トップページ用のリンクを1本、各社の管理画面で新規発行する」以外の方法がない(URLの汎用リダイレクトが
-//   効かないことを実際に確認済み)。管理画面から発行してもらい次第、ここをアフィリエイトリンクに差し替える。
+//   URLの汎用リダイレクトが効かない(adID/aパラメータが個別発行制)ため、各社の管理画面でトップページ用の
+//   リンクを1本ずつ新規発行してもらい、そのURLをそのまま設定している(2026-09-05、ユーザーが発行)。
 const SHOP_DEFS = [
   {
     key: 'fanza',
@@ -156,14 +156,14 @@ const SHOP_DEFS = [
     name: 'ぴゅあらばショップ',
     urlField: 'pyuarabu_url',
     priceField: 'pyuarabu_price',
-    topUrl: 'https://purelovers-shop.com/', // TODO: BannerBridge管理画面でトップページ用リンクを発行後、差し替え
+    topUrl: 'https://track.bannerbridge.net/click.php?APID=195458&affID=96868&siteID=218939',
   },
   {
     key: 'nls',
     name: 'NLS',
     urlField: 'nls_url',
     priceField: 'nls_price',
-    topUrl: 'https://www.e-nls.com/access.php?agency_id=af952539-mem',
+    topUrl: 'https://www.e-nls.com/access.php?agency_id=af952539-mem&fid=388',
   },
   {
     key: 'daimaoh',
@@ -177,14 +177,14 @@ const SHOP_DEFS = [
     name: 'M-ZAKKA',
     urlField: 'mzakka_url',
     priceField: 'mzakka_price',
-    topUrl: 'https://mzakka.com/', // TODO: afb管理画面でトップページ用リンクを発行後、差し替え
+    topUrl: 'https://t.afi-b.com/visit.php?a=x112829-k378996j&p=Y9915974',
   },
   {
     key: 'hotpowers',
     name: 'ホットパワーズ',
     urlField: 'hotpowers_url',
     priceField: 'hotpowers_price',
-    topUrl: 'https://hotpowers.jp/', // TODO: BannerBridge管理画面でトップページ用リンクを発行後、差し替え
+    topUrl: 'https://track.bannerbridge.net/click.php?APID=32457&affID=96868&siteID=218939',
   },
   {
     key: 'nobunagatoys',
@@ -200,7 +200,7 @@ const SHOP_DEFS = [
     name: 'エムズ',
     urlField: 'ems_url',
     priceField: 'ems_price',
-    topUrl: 'https://www.ms-online.co.jp/', // TODO: BannerBridge管理画面でトップページ用リンクを発行後、差し替え
+    topUrl: 'https://track.bannerbridge.net/click.php?APID=171478&affID=96868&siteID=218939',
   },
 ];
 
