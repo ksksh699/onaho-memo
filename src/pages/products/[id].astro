@@ -38,6 +38,7 @@ const imageUrlLarge = imageUrlSmall ? imageUrlSmall.replace(/pt\.jpg(\?.*)?$/, '
 const imageUrl = imageUrlLarge;
 const listPrice = rawData.prices?.list_price ? Number(rawData.prices.list_price) : null;
 const hasDiscount = listPrice && product.price && listPrice > product.price;
+const discountPercent = hasDiscount ? Math.round((1 - product.price / listPrice) * 100) : null;
 
 // 以下3つはお互いに依存しない問い合わせなので、Promise.allでまとめて並列実行する
 const [publicReviewsResult, ratingResult, onakingLinkResult] = await Promise.all([
@@ -278,6 +279,9 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
                       <span class="shop-link-name">{s.name}</span>
                       <span class="shop-link-price">
                         {s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし'}
+                        {s.key === 'fanza' && hasDiscount && (
+                          <span class="discount-badge-small">{discountPercent}%OFF</span>
+                        )}
                       </span>
                       {i === cheapestIndex && <span class="shop-link-badge">最安</span>}
                     </a>
