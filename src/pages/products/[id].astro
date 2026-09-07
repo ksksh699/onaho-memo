@@ -29,7 +29,9 @@ const stockLabels = {
   maker_stock: '取り寄せ',
 };
 const stock = rawData.stock;
-const stockLabel = stockLabels[stock] ?? stock;
+// FANZA側のstock値には日本語ラベルを用意していない値("empty"や"order"など)も
+// 存在するため、マッピングが無い場合は英語の生値をそのまま出さず非表示にする
+const stockLabel = stockLabels[stock] ?? null;
 const imageUrlSmall = rawData.imageURL?.list ?? product.image_url;
 // 一覧用サムネイル(90x120程度)は詳細ページで引き伸ばすとぼやけるため、
 // DMMの命名規則(...pt.jpg → ...pl.jpg)で高解像度版を推測して優先表示する。
@@ -283,7 +285,7 @@ const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
             <span class="site-rating-value">
               {productRating
                 ? `${'★'.repeat(Math.round(productRating.avg_rating))}${'☆'.repeat(5 - Math.round(productRating.avg_rating))} ${productRating.avg_rating}点(${productRating.rating_count}件)`
-                : 'まだ評価がありません。タップして記録する'}
+                : '☆☆☆☆☆(0)'}
             </span>
           </button>
 
@@ -295,7 +297,7 @@ const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
             </ul>
           )}
 
-          {stock && (
+          {stockLabel && (
             <p class="stock">
               {stockLabel}
             </p>
@@ -753,7 +755,8 @@ const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
         );
 
         widget.innerHTML = `
-          <h3 class="check-title">記録する</h3>
+          <h3 class="check-title">${existing ? '記録を編集する' : '記録する'}</h3>
+          ${existing ? '<p class="check-edit-hint">前回保存した内容を編集できます。書き足して保存すると上書きされます。</p>' : ''}
 
           <div class="status-buttons">
             ${Object.entries(STATUS_LABELS)
@@ -867,7 +870,7 @@ const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
           </label>
 
           <div class="check-actions">
-            <button type="button" id="save-btn" class="btn-primary">保存する</button>
+            <button type="button" id="save-btn" class="btn-primary">${existing ? '更新する' : '保存する'}</button>
             ${existing ? '<button type="button" id="delete-btn" class="btn-outline">記録を削除</button>' : ''}
           </div>
           <p id="save-status" class="save-status"></p>

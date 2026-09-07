@@ -632,7 +632,7 @@ const RANKINGS = [
 
       <div class="pager" id="pager" data-total={count} data-page-size={PAGE_SIZE}>
         <button id="prev-page" disabled>← 前へ</button>
-        <span id="page-indicator">1 / -</span>
+        <div class="pager-numbers" id="pager-numbers"></div>
         <button id="next-page">次へ →</button>
       </div>
     </main>
@@ -687,7 +687,7 @@ const RANKINGS = [
       const pager = document.getElementById('pager');
       const prevBtn = document.getElementById('prev-page');
       const nextBtn = document.getElementById('next-page');
-      const pageIndicator = document.getElementById('page-indicator');
+      const pagerNumbers = document.getElementById('pager-numbers');
       const authArea = document.getElementById('auth-area');
       const heroActions = document.getElementById('hero-actions');
 
@@ -700,10 +700,34 @@ const RANKINGS = [
         return Math.max(1, Math.ceil(currentTotal / pageSize));
       }
 
+      function pagerPageList(current, total) {
+        // 1, 最後, 現在ページの前後を表示し、間が空く箇所は「…」でつなぐ
+        // スマホ幅では横に収まりきらずスクロールが必要になりやすいため、表示件数を絞る
+        const isNarrow = window.matchMedia('(max-width: 480px)').matches;
+        const radius = isNarrow ? 1 : 2;
+        const pages = new Set([1, total]);
+        for (let p = current - radius; p <= current + radius; p++) {
+          if (p >= 1 && p <= total) pages.add(p);
+        }
+        return [...pages].sort((a, b) => a - b);
+      }
+
       function updatePagerUI() {
-        pageIndicator.textContent = `${currentPage} / ${totalPages()}`;
+        const total = totalPages();
         prevBtn.disabled = currentPage <= 1;
-        nextBtn.disabled = currentPage >= totalPages();
+        nextBtn.disabled = currentPage >= total;
+
+        let html = '';
+        let prevShown = 0;
+        for (const p of pagerPageList(currentPage, total)) {
+          if (prevShown && p - prevShown > 1) {
+            html += `<span class="pager-ellipsis">…</span>`;
+          }
+          const isActive = p === currentPage;
+          html += `<button type="button" class="pager-number${isActive ? ' active' : ''}" data-page="${p}"${isActive ? ' aria-current="page"' : ''}>${p}</button>`;
+          prevShown = p;
+        }
+        pagerNumbers.innerHTML = html;
       }
 
       function statusBadgeText(productId) {
@@ -1095,6 +1119,15 @@ const RANKINGS = [
       prevBtn.addEventListener('click', () => {
         if (currentPage > 1) {
           currentPage -= 1;
+          reload();
+        }
+      });
+      pagerNumbers.addEventListener('click', (e) => {
+        const btn = e.target.closest('.pager-number');
+        if (!btn) return;
+        const page = Number(btn.dataset.page);
+        if (page && page !== currentPage) {
+          currentPage = page;
           reload();
         }
       });

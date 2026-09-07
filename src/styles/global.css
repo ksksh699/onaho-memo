@@ -543,6 +543,19 @@ main {
   overflow: hidden;
   box-shadow: var(--shadow-card);
   transition: border-color 0.15s ease;
+  /* グリッドの行の高さいっぱいまで伸ばし、縦並びにする。
+     これにより、FANZA/オナホめもの評価行の有無でカードごとの本文の高さが変わっても、
+     下部の「記録」ボタンの位置がカードごとにズレないようにする */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 画像+本文をまとめているリンク。flex:1で余った縦スペースをすべて吸収し、
+   下の.quick-checkを常にカードの最下部に固定する */
+.card > a {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .card:hover {
@@ -973,6 +986,7 @@ main {
   justify-content: center;
   gap: 1.2rem;
   margin: 2.5rem 0 1rem;
+  max-width: 100%;
 }
 
 .pager button {
@@ -983,6 +997,8 @@ main {
   padding: 0.6rem 1.2rem;
   font-size: 0.85rem;
   cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .pager button:hover:not(:disabled) {
@@ -994,9 +1010,71 @@ main {
   cursor: not-allowed;
 }
 
-.pager #page-indicator {
+.pager-numbers {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.pager-numbers::-webkit-scrollbar {
+  display: none;
+}
+
+.pager-numbers .pager-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 2.2rem;
+  height: 2.2rem;
+  padding: 0 0.4rem;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
   font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.pager-numbers .pager-number:hover:not(.active) {
+  border-color: var(--accent);
+}
+
+.pager-numbers .pager-number.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  cursor: default;
+}
+
+.pager-ellipsis {
+  flex-shrink: 0;
   color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 0 0.2rem;
+}
+
+@media (max-width: 480px) {
+  .pager {
+    gap: 0.4rem;
+  }
+
+  .pager button {
+    padding: 0.5rem 0.7rem;
+    font-size: 0.78rem;
+  }
+
+  .pager-numbers .pager-number {
+    min-width: 1.8rem;
+    height: 1.8rem;
+    font-size: 0.78rem;
+  }
 }
 .login-main {
   max-width: 400px;
@@ -1309,6 +1387,12 @@ main {
   font-size: 0.85rem;
   color: var(--text-muted);
   margin: 0 0 0.8rem;
+}
+
+.check-edit-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: -0.4rem 0 0.8rem;
 }
 
 .status-buttons,
@@ -1659,6 +1743,7 @@ main {
 .quick-check {
   position: relative;
   margin-top: 0.6rem;
+  flex-shrink: 0;
 }
 
 .quick-check-btn {
