@@ -7,6 +7,25 @@ import SiteFooter from '../../components/SiteFooter.astro';
 // 商品数が非常に多い(4000件超)ため、ビルド時に全ページを事前生成すると
 // デプロイに膨大な時間がかかる。そのため事前生成はせず、リクエストごとに
 // その場でSupabaseから該当商品を取得する(SSR)方式にしている。
+//
+// このページのサーバー側レンダリング結果はログイン状態に依存しない
+// (自分のレビュー編集・いいね済み判定・コメント削除ボタン等の個人向け処理は
+// すべてブラウザ側スクリプトで行っている)ため、トップページと同様に
+// VercelのCDN(エッジキャッシュ)にキャッシュさせる。
+//   - s-maxage=60: CDNは1分間、同じHTMLをそのまま返す(この間はSupabaseへの問い合わせがゼロ)
+//   - stale-while-revalidate=600: 1分を過ぎても最大10分は古いHTMLを即座に返しつつ、裏で再生成する
+// 商品ページはレビュー・コメントなど利用者の投稿がそのまま載るページなので、
+// トップページ(5分)より短めにして「投稿したのに表示されない」時間を最小限にしている。
+// 注意: 他の人のレビュー・評価・コメントが公開一覧に載るのは最大1分程度遅れる
+// (投稿者本人の入力欄はブラウザ側で即座に描き直されるため影響なし)。
+//
+// Vary: Cookie … 年齢確認ゲート(src/middleware.js)の素通り防止(index.astroの説明を参照)。
+Astro.response.headers.set('Vary', 'Cookie');
+Astro.response.headers.set(
+  'Cache-Control',
+  'public, max-age=0, s-maxage=60, stale-while-revalidate=600'
+);
+
 const { id } = Astro.params;
 const { data: product } = await supabase
   .from('products')
@@ -65,48 +84,72 @@ const [publicReviewsResult, ratingResult, onakingLinkResult] = await Promise.all
 
 const { data: publicReviews } = publicReviewsResult;
 
-// レビューへの「いいね」数(誰が押したかはクライアント側でセッションを見て判定する)
+// 公開レビューに紐づく追加情報(いいね数・コメント・投稿者ニックネーム)は、
+// どれも「公開レビューのID一覧」さえ分かれば取れるので、1つずつ順番に待たず
+// Promise.allでまとめて並列に問い合わせる。
+// (以前は いいね数→コメント→ニックネーム と3回直列に往復していたため、
+//  その分だけ表示までの待ち時間が積み上がっていた)
 const reviewIds = (publicReviews ?? []).map((r) => r.id);
-let reviewLikeCounts = {};
-if (reviewIds.length > 0) {
-  const { data: likeCountRows } = await supabase.rpc('get_review_like_counts', {
-    check_ids: reviewIds,
-  });
-  for (const row of likeCountRows ?? []) {
-    reviewLikeCounts[row.check_id] = row.like_count;
-  }
-}
+const reviewerIds = [...new Set((publicReviews ?? []).map((r) => r.user_id).filter(Boolean))];
 
-// レビューへのコメント(質問・回答用)。公開レビューにのみ紐づく
-let commentsByCheckId = {};
-if (reviewIds.length > 0) {
-  const { data: commentRows } = await supabase
-    .from('review_comments')
-    .select('id, check_id, user_id, body, created_at')
-    .in('check_id', reviewIds)
-    .order('created_at', { ascending: true });
-  for (const c of commentRows ?? []) {
-    if (!commentsByCheckId[c.check_id]) commentsByCheckId[c.check_id] = [];
-    commentsByCheckId[c.check_id].push(c);
-  }
-}
-
-// レビュー投稿者・コメント投稿者のニックネームは、プロフィールを公開設定にしている人の分だけ表示する
+// ニックネームは、プロフィールを公開設定にしている人の分だけ表示する
 // (checksとprofilesの間に外部キー関係がないため、埋め込みselectではなく手動で結合する)
-const reviewerIds = (publicReviews ?? []).map((r) => r.user_id);
-const commentUserIds = Object.values(commentsByCheckId)
-  .flat()
-  .map((c) => c.user_id);
-const allUserIds = [...new Set([...reviewerIds, ...commentUserIds].filter(Boolean))];
+const fetchPublicNicknames = (userIds) =>
+  userIds.length > 0
+    ? supabase
+        .from('profiles')
+        .select('id, nickname')
+        .in('id', userIds)
+        .eq('is_public', true)
+        .not('nickname', 'is', null)
+    : Promise.resolve({ data: [] });
+
+const [likeCountResult, commentResult, reviewerProfileResult] = await Promise.all([
+  // レビューへの「いいね」数(誰が押したかはクライアント側でセッションを見て判定する)
+  reviewIds.length > 0
+    ? supabase.rpc('get_review_like_counts', { check_ids: reviewIds })
+    : Promise.resolve({ data: [] }),
+  // レビューへのコメント(質問・回答用)。公開レビューにのみ紐づく
+  reviewIds.length > 0
+    ? supabase
+        .from('review_comments')
+        .select('id, check_id, user_id, body, created_at')
+        .in('check_id', reviewIds)
+        .order('created_at', { ascending: true })
+    : Promise.resolve({ data: [] }),
+  // レビュー投稿者のニックネーム(コメント投稿者の分はコメント取得後に不足分だけ追加取得)
+  fetchPublicNicknames(reviewerIds),
+]);
+
+let reviewLikeCounts = {};
+for (const row of likeCountResult.data ?? []) {
+  reviewLikeCounts[row.check_id] = row.like_count;
+}
+
+let commentsByCheckId = {};
+for (const c of commentResult.data ?? []) {
+  if (!commentsByCheckId[c.check_id]) commentsByCheckId[c.check_id] = [];
+  commentsByCheckId[c.check_id].push(c);
+}
+
 let reviewerNicknames = {};
-if (allUserIds.length > 0) {
-  const { data: reviewerProfiles } = await supabase
-    .from('profiles')
-    .select('id, nickname')
-    .in('id', allUserIds)
-    .eq('is_public', true)
-    .not('nickname', 'is', null);
-  for (const p of reviewerProfiles ?? []) {
+for (const p of reviewerProfileResult.data ?? []) {
+  reviewerNicknames[p.id] = p.nickname;
+}
+
+// コメント投稿者のうち、レビュー投稿者として既に取得済みでない人の分だけ追加で取得する
+// (コメントが無い商品ページでは、この問い合わせ自体が発生しない)
+const commentUserIds = [
+  ...new Set(
+    Object.values(commentsByCheckId)
+      .flat()
+      .map((c) => c.user_id)
+      .filter((uid) => uid && !reviewerIds.includes(uid))
+  ),
+];
+if (commentUserIds.length > 0) {
+  const { data: commentProfiles } = await fetchPublicNicknames(commentUserIds);
+  for (const p of commentProfiles ?? []) {
     reviewerNicknames[p.id] = p.nickname;
   }
 }
