@@ -19,8 +19,8 @@ import SiteFooter from '../../components/SiteFooter.astro';
 // 注意: 他の人のレビュー・評価・コメントが公開一覧に載るのは最大1分程度遅れる
 // (投稿者本人の入力欄はブラウザ側で即座に描き直されるため影響なし)。
 //
-// Vary: Cookie … 年齢確認ゲート(src/middleware.js)の素通り防止(index.astroの説明を参照)。
-Astro.response.headers.set('Vary', 'Cookie');
+// 年齢確認ゲートの素通り防止は middlewareMode: 'edge'(CDNキャッシュより手前で判定)で
+// 行っているため、Vary: Cookie は付けない(理由は index.astro の説明を参照)。
 Astro.response.headers.set(
   'Cache-Control',
   'public, max-age=0, s-maxage=60, stale-while-revalidate=600'
