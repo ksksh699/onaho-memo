@@ -602,8 +602,16 @@ const moneyComparisons = moneyComparisonPicks(totalSpentAll).map(formatMoneyComp
 // 別のURLとして取り直される(2026-09-08に実際に古いカードが出続けたため追加)。
 const pageUrl = profile ? `${Astro.url.origin}/users/${encodeURIComponent(profile.nickname)}` : '';
 const shareText = profile ? `${profile.nickname}のオナホめも(マイベストTOP3・使った記録) #オナホ #オナホめも` : '';
+// 2026-09-08: v= はTOP3の中身から作る版番号にした(マイページの profileShareVersion() と同じ計算)。
+// TOP3を変えると別URLになるので、Xのキャッシュに古いカードが残らない。
+function profileShareVersion(p) {
+  const key = [p.best_product_id_1, p.best_product_id_2, p.best_product_id_3].map((v) => v ?? '-').join(',');
+  let h = 7;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return 'v' + h.toString(36);
+}
 const xShareUrl = profile
-  ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(`${pageUrl}?utm_source=x&v=2`)}`
+  ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(`${pageUrl}?utm_source=x&v=${profileShareVersion(profile)}`)}`
   : '';
 // 合計使用金額のシェアは専用ページ(/share/spend)へ。金額・本数・ニックネーム入りのカード画像が出る
 const spendShareParams = profile

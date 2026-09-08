@@ -3,14 +3,16 @@
 // トップページのJS版と同じ見た目(.pager / .pager-numbers)を、<a> リンクで再現している。
 import { pagerPages, pageHref } from '../lib/listing.js';
 
-const { basePath, current, total } = Astro.props;
+// filters / defaultSort を渡すと、ページ送りリンクに絞り込み条件(クエリ)を引き継ぐ
+const { basePath, current, total, filters = null, defaultSort = 'new' } = Astro.props;
+const href = (p) => pageHref(basePath, p, filters, { defaultSort });
 const pages = pagerPages(current, total);
 ---
 
 {total > 1 && (
   <nav class="pager listing-pager" aria-label="ページ送り">
     {current > 1 ? (
-      <a class="pager-link" href={pageHref(basePath, current - 1)} rel="prev">← 前へ</a>
+      <a class="pager-link" href={href(current - 1)} rel="prev">← 前へ</a>
     ) : (
       <span class="pager-link is-disabled">← 前へ</span>
     )}
@@ -21,12 +23,12 @@ const pages = pagerPages(current, total);
         ) : p === current ? (
           <span class="pager-number active" aria-current="page">{p}</span>
         ) : (
-          <a class="pager-number" href={pageHref(basePath, p)}>{p}</a>
+          <a class="pager-number" href={href(p)}>{p}</a>
         )
       )}
     </div>
     {current < total ? (
-      <a class="pager-link" href={pageHref(basePath, current + 1)} rel="next">次へ →</a>
+      <a class="pager-link" href={href(current + 1)} rel="next">次へ →</a>
     ) : (
       <span class="pager-link is-disabled">次へ →</span>
     )}

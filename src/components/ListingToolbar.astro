@@ -1,0 +1,121 @@
+---
+// 一覧ページ(/sale/ /makers/{maker}/ /tags/{tag}/)の絞り込み・並び替えフォーム(2026-09-08)。
+// トップページの .toolbar と同じ項目・同じ見た目だが、こちらはサーバー側描画なので
+// GETフォームで送信し、ページごと描き直す(条件はURLのクエリに残るので共有・ブックマークできる)。
+//   filters:  parseListingFilters() の結果
+//   options:  fetchListingFilterOptions() の結果 { makers, years }
+//   basePath: フォームの送信先(そのページ自身)
+//   hideMaker: メーカー別ページではメーカー選択を出さない
+//   hideSale:  セールページでは「セール対象のみ」を出さない
+//   defaultSort: そのページの既定の並び順(選択肢の先頭に「おすすめ順」として出す)
+import { LISTING_SORT_OPTIONS, hasActiveFilters } from '../lib/listing.js';
+
+const {
+  filters,
+  options = { makers: [], years: [] },
+  basePath,
+  hideMaker = false,
+  hideSale = false,
+  defaultSort = 'new',
+  resultCount = null,
+} = Astro.props;
+const active = hasActiveFilters(filters) || filters.sort !== defaultSort;
+---
+
+<form class="toolbar listing-toolbar" method="get" action={basePath} role="search" data-default-sort={defaultSort}>
+  <input
+    type="search"
+    name="q"
+    class="search-input"
+    placeholder="商品名で検索..."
+    value={filters.q}
+    maxlength="60"
+    autocomplete="off"
+  />
+
+  {!hideSale && (
+    <label class="sale-filter-label">
+      <input type="checkbox" name="sale" value="1" checked={filters.sale} />
+      セール対象のみ
+    </label>
+  )}
+  <label class="sale-filter-label">
+    <input type="checkbox" name="onaking" value="1" checked={filters.onaking} />
+    オナ王レビュー済み
+  </label>
+
+  <label>
+    並び替え
+    <select name="sort">
+      {LISTING_SORT_OPTIONS.map((o) => (
+        <option value={o.value} selected={o.value === filters.sort}>
+          {o.value === defaultSort && defaultSort !== 'new' ? `${o.label}(標準)` : o.label}
+        </option>
+      ))}
+    </select>
+  </label>
+
+  {!hideMaker && (
+    <label>
+      メーカー
+      <select name="maker">
+        <option value="">すべて</option>
+        {filters.maker && !options.makers.some((m) => m.maker === filters.maker) && (
+          <option value={filters.maker} selected>{filters.maker}</option>
+        )}
+        {options.makers.map((m) => (
+          <option value={m.maker} selected={m.maker === filters.maker}>
+            {m.maker} ({Number(m.cnt).toLocaleString('ja-JP')})
+          </option>
+        ))}
+      </select>
+    </label>
+  )}
+
+  <label class="range-filter-label">
+    発売年
+    <select name="year_from">
+      <option value="">指定なし</option>
+      {options.years.map((y) => (
+        <option value={y} selected={y === filters.yearFrom}>{y}</option>
+      ))}
+    </select>
+    〜
+    <select name="year_to">
+      <option value="">指定なし</option>
+      {options.years.map((y) => (
+        <option value={y} selected={y === filters.yearTo}>{y}</option>
+      ))}
+    </select>
+  </label>
+
+  <label class="range-filter-label">
+    価格
+    <input type="number" name="price_min" class="range-number-input" placeholder="下限" min="0" value={filters.priceMin} />
+    〜
+    <input type="number" name="price_max" class="range-number-input" placeholder="上限" min="0" value={filters.priceMax} />
+  </label>
+
+  <div class="listing-toolbar-actions">
+    <button type="submit" class="btn-primary listing-toolbar-submit">絞り込む</button>
+    {active && <a href={basePath} class="listing-toolbar-reset">条件をクリア</a>}
+    {resultCount !== null && <span class="listing-toolbar-count">{Number(resultCount).toLocaleString('ja-JP')}件</span>}
+  </div>
+</form>
+
+<script>
+  // 選択・チェックを変えたら即送信(トップページの挙動に合わせる)。文字入力はEnter/ボタンで送信。
+  document.querySelectorAll('form.listing-toolbar').forEach((form) => {
+    form.querySelectorAll('select, input[type="checkbox"]').forEach((el) => {
+      el.addEventListener('change', () => form.requestSubmit());
+    });
+    // 空の項目は送信しない(URLを短く保つ)
+    form.addEventListener('submit', () => {
+      form.querySelectorAll('input, select').forEach((el) => {
+        if (el.type === 'checkbox') return;
+        if (!el.value) el.disabled = true;
+        if (el.name === 'sort' && el.value === form.dataset.defaultSort) el.disabled = true;
+      });
+    });
+  });
+</script>

@@ -58,9 +58,137 @@ export function setListingCacheHeaders(response) {
   response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=600, stale-while-revalidate=3600');
 }
 
-// ページ番号付きURLを作る(1ページ目は ?page を付けない = 正規URL)
-export function pageHref(basePath, page) {
-  return page <= 1 ? basePath : `${basePath}?page=${page}`;
+// ---- 絞り込み・並び替え(2026-09-08 追加。トップページの toolbar と同じ項目) ----
+// 一覧ページはサーバー側描画なので、絞り込み条件はURLのクエリ(?q=&sort=&maker=…)で受け取り、
+// フォーム送信(GET)でページごと描き直す。JSが無くても動き、条件付きURLをそのまま共有できる。
+
+export const LISTING_SORT_OPTIONS = [
+  { value: 'new', label: '新着順' },
+  { value: 'discount_desc', label: '割引率が高い順' },
+  { value: 'price_asc', label: '価格が安い順' },
+  { value: 'price_desc', label: '価格が高い順' },
+  { value: 'dmm_rating_desc', label: 'FANZA評価が高い順' },
+  { value: 'dmm_count_desc', label: 'FANZAレビューが多い順' },
+  { value: 'site_rating_desc', label: 'オナホめも評価が高い順' },
+  { value: 'site_count_desc', label: 'オナホめもレビューが多い順' },
+  { value: 'want_count_desc', label: '気になる人気順' },
+];
+const SORT_VALUES = new Set(LISTING_SORT_OPTIONS.map((o) => o.value));
+
+function cleanText(v, max) {
+  return String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+function cleanInt(v, min, max) {
+  const n = Number.parseInt(String(v ?? ''), 10);
+  if (!Number.isFinite(n) || n < min || n > max) return '';
+  return n;
+}
+
+// URLのクエリから絞り込み条件を取り出す(不正な値は無視して空にする)
+export function parseListingFilters(searchParams, { defaultSort = 'new' } = {}) {
+  const sort = searchParams.get('sort') ?? '';
+  return {
+    q: cleanText(searchParams.get('q'), 60),
+    sort: SORT_VALUES.has(sort) ? sort : defaultSort,
+    maker: cleanText(searchParams.get('maker'), 60),
+    yearFrom: cleanInt(searchParams.get('year_from'), 1990, 2100),
+    yearTo: cleanInt(searchParams.get('year_to'), 1990, 2100),
+    priceMin: cleanInt(searchParams.get('price_min'), 0, 9999999),
+    priceMax: cleanInt(searchParams.get('price_max'), 0, 9999999),
+    sale: searchParams.get('sale') === '1',
+    onaking: searchParams.get('onaking') === '1',
+  };
+}
+
+export function hasActiveFilters(f) {
+  return Boolean(f.q || f.maker || f.yearFrom || f.yearTo || f.priceMin !== '' || f.priceMax !== '' || f.sale || f.onaking);
+}
+
+// 絞り込み条件をクエリ文字列に戻す(ページ送りリンクや canonical に使う)
+export function filterParams(f, { defaultSort = 'new' } = {}) {
+  const p = new URLSearchParams();
+  if (f.q) p.set('q', f.q);
+  if (f.sort && f.sort !== defaultSort) p.set('sort', f.sort);
+  if (f.maker) p.set('maker', f.maker);
+  if (f.yearFrom) p.set('year_from', String(f.yearFrom));
+  if (f.yearTo) p.set('year_to', String(f.yearTo));
+  if (f.priceMin !== '') p.set('price_min', String(f.priceMin));
+  if (f.priceMax !== '') p.set('price_max', String(f.priceMax));
+  if (f.sale) p.set('sale', '1');
+  if (f.onaking) p.set('onaking', '1');
+  return p;
+}
+
+// v_products_listing への問い合わせに絞り込み条件を足す(件数取得と本体取得の両方で使う)。
+// 商品名検索の % _ は PostgREST のパターン文字なのでエスケープしておく。
+export function applyListingFilters(query, f, { campaignTags = [] } = {}) {
+  if (f.q) query = query.ilike('name', `%${f.q.replace(/[%_\\]/g, '\\$&')}%`);
+  if (f.maker) query = query.eq('maker', f.maker);
+  if (f.sale && campaignTags.length > 0) query = query.overlaps('genre_tags', campaignTags);
+  if (f.onaking) query = query.eq('is_onaking_reviewed', true);
+  if (f.yearFrom) query = query.gte('release_date', `${f.yearFrom}-01-01`);
+  if (f.yearTo) query = query.lte('release_date', `${f.yearTo}-12-31`);
+  if (f.priceMin !== '') query = query.gte('price', f.priceMin);
+  if (f.priceMax !== '') query = query.lte('price', f.priceMax);
+  return query;
+}
+
+// 並び替え(同順位は新着→ID順で安定させる)
+export function applyListingSort(query, sort) {
+  switch (sort) {
+    case 'discount_desc':
+      query = query.order('discount_percent', { ascending: false });
+      break;
+    case 'price_asc':
+      query = query.order('price', { ascending: true, nullsFirst: false });
+      break;
+    case 'price_desc':
+      query = query.order('price', { ascending: false, nullsFirst: false });
+      break;
+    case 'dmm_rating_desc':
+      query = query.order('dmm_review_average', { ascending: false, nullsFirst: false });
+      break;
+    case 'dmm_count_desc':
+      query = query.order('dmm_review_count', { ascending: false, nullsFirst: false });
+      break;
+    case 'site_rating_desc':
+      query = query.order('site_rating_avg', { ascending: false });
+      break;
+    case 'site_count_desc':
+      query = query.order('site_rating_count', { ascending: false });
+      break;
+    case 'want_count_desc':
+      query = query.order('want_count', { ascending: false });
+      break;
+    default:
+      break;
+  }
+  return query.order('release_date', { ascending: false, nullsFirst: false }).order('dmm_content_id', { ascending: true });
+}
+
+// 一覧ページの絞り込みフォームに出す選択肢(メーカー上位・発売年)。
+// トップページと同じく集計済みRPCを使う。失敗しても空配列で続行する。
+export async function fetchListingFilterOptions() {
+  const [makersResult, minResult, maxResult] = await Promise.all([
+    supabase.rpc('get_maker_counts'),
+    supabase.from('products').select('release_date').eq('is_onahole', true).not('release_date', 'is', null).order('release_date', { ascending: true }).limit(1),
+    supabase.from('products').select('release_date').eq('is_onahole', true).not('release_date', 'is', null).order('release_date', { ascending: false }).limit(1),
+  ]);
+  const makers = (makersResult.data ?? []).filter((m) => m.maker && Number(m.cnt) > 0).slice(0, 60);
+  const minYear = minResult.data?.[0]?.release_date ? new Date(minResult.data[0].release_date).getFullYear() : null;
+  const maxYear = maxResult.data?.[0]?.release_date ? new Date(maxResult.data[0].release_date).getFullYear() : null;
+  const years = [];
+  if (minYear && maxYear) for (let y = maxYear; y >= minYear; y--) years.push(y);
+  return { makers, years };
+}
+
+// ページ番号付きURLを作る(1ページ目は ?page を付けない = 正規URL)。
+// filters を渡すと絞り込み条件のクエリも引き継ぐ。
+export function pageHref(basePath, page, filters = null, opts = {}) {
+  const p = filters ? filterParams(filters, opts) : new URLSearchParams();
+  if (page > 1) p.set('page', String(page));
+  const qs = p.toString();
+  return qs ? `${basePath}?${qs}` : basePath;
 }
 
 // ページネーションに表示するページ番号(1・最後・現在の前後2つ、間は null=「…」)

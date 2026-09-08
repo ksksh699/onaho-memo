@@ -41,7 +41,8 @@ const description = `オナホールのメーカー${makers.length}社の一覧�
       <nav class="breadcrumb" aria-label="パンくず"><a href="/">ホーム</a><span>›</span><span>メーカー一覧</span></nav>
       <h1 class="listing-title">オナホのメーカー一覧</h1>
       <p class="listing-lead">{makers.length}社・{total.toLocaleString('ja-JP')}商品。メーカー名をタップすると、そのメーカーの商品一覧(価格比較・レビュー付き)が開きます。</p>
-      <ul class="term-list">
+      <input type="search" id="maker-search" class="search-input term-search" placeholder="メーカー名で絞り込み..." autocomplete="off" aria-label="メーカー名で絞り込み" />
+      <ul class="term-list" id="maker-list">
         {makers.map((m) => (
           <li>
             <a href={`/makers/${encodeURIComponent(m.maker)}/`} class="term-chip">
@@ -51,7 +52,26 @@ const description = `オナホールのメーカー${makers.length}社の一覧�
           </li>
         ))}
       </ul>
+      <p class="listing-lead" id="maker-search-empty" hidden>一致するメーカーがありません。</p>
     </main>
+    <script>
+      // メーカー名の絞り込み(ページ内の一覧を文字入力でフィルター。大小・全角半角の違いは吸収する)
+      const input = document.getElementById('maker-search');
+      const items = [...document.querySelectorAll('#maker-list > li')];
+      const empty = document.getElementById('maker-search-empty');
+      const norm = (t) => t.normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+      const names = items.map((li) => norm(li.querySelector('.term-name')?.textContent ?? ''));
+      input.addEventListener('input', () => {
+        const q = norm(input.value);
+        let shown = 0;
+        items.forEach((li, i) => {
+          const hit = !q || names[i].includes(q);
+          li.hidden = !hit;
+          if (hit) shown++;
+        });
+        empty.hidden = shown > 0;
+      });
+    </script>
     <SiteFooter />
   </body>
 </html>

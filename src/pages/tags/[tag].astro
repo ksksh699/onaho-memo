@@ -5,7 +5,11 @@ import SiteHeader from '../../components/SiteHeader.astro';
 import SiteFooter from '../../components/SiteFooter.astro';
 import ProductCards from '../../components/ProductCards.astro';
 import ListingPager from '../../components/ListingPager.astro';
-import { LISTING_SELECT, parsePage, pageRange, totalPages, setListingCacheHeaders, pageHref, isCampaignTag } from '../../lib/listing.js';
+import ListingToolbar from '../../components/ListingToolbar.astro';
+import {
+  LISTING_SELECT, parsePage, pageRange, totalPages, setListingCacheHeaders, pageHref, isCampaignTag, fetchCampaignTags,
+  parseListingFilters, applyListingFilters, applyListingSort, fetchListingFilterOptions, hasActiveFilters,
+} from '../../lib/listing.js';
 
 // ジャンル(タグ)別の商品一覧(2026-09-08)。URL: /tags/{タグ名}/?page=N
 const tag = Astro.params.tag ?? '';
@@ -17,25 +21,31 @@ if (isCampaignTag(tag)) {
   return Astro.redirect('/sale/', 302);
 }
 
-const { data: products, count } = await supabase
-  .from('v_products_listing')
-  .select(LISTING_SELECT, { count: 'exact' })
-  .contains('genre_tags', [tag])
-  .order('release_date', { ascending: false, nullsFirst: false })
-  .order('dmm_content_id', { ascending: true })
-  .range(from, to);
+// 絞り込み(2026-09-08): トップページと同じ条件をクエリで受け取る
+const filters = parseListingFilters(Astro.url.searchParams);
+const filtered = hasActiveFilters(filters) || filters.sort !== 'new';
+const [campaignTags, filterOptions] = await Promise.all([
+  filters.sale ? fetchCampaignTags() : Promise.resolve([]),
+  fetchListingFilterOptions(),
+]);
 
-if (!count) {
-  return Astro.redirect('/tags/', 302);
+let query = supabase.from('v_products_listing').select(LISTING_SELECT, { count: 'exact' }).contains('genre_tags', [tag]);
+query = applyListingFilters(query, filters, { campaignTags });
+query = applyListingSort(query, filters.sort).range(from, to);
+const { data: products, count } = await query;
+
+if (!count && !filtered) {
+  return Astro.redirect('/', 302);
 }
+const total = count ?? 0;
 
 setListingCacheHeaders(Astro.response);
 
 const pages = totalPages(count);
 const basePath = `/tags/${encodeURIComponent(tag)}/`;
 const canonical = `https://onahomemo.com${pageHref(basePath, page)}`;
-const title = `「${tag}」のオナホ一覧(${count}件)${page > 1 ? ` ${page}ページ目` : ''} | オナホめも`;
-const description = `「${tag}」に分類されるオナホール${count}件の一覧。新着順に、価格・FANZAレビュー・オナホめもユーザーの評価を表示。各商品ページで8ショップの価格を比較できます。`;
+const title = `「${tag}」のオナホ一覧(${total}件)${page > 1 ? ` ${page}ページ目` : ''} | オナホめも`;
+const description = `「${tag}」に分類されるオナホール${total}件の一覧。新着順に、価格・FANZAレビュー・オナホめもユーザーの評価を表示。各商品ページで8ショップの価格を比較できます。`;
 ---
 
 <html lang="ja">
@@ -48,6 +58,7 @@ const description = `「${tag}」に分類されるオナホール${count}件の
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
+    {filtered && <meta name="robots" content="noindex, follow" />}
     {page > 1 && <link rel="prev" href={`https://onahomemo.com${pageHref(basePath, page - 1)}`} />}
     {page < pages && <link rel="next" href={`https://onahomemo.com${pageHref(basePath, page + 1)}`} />}
     <meta property="og:type" content="website" />
@@ -62,11 +73,13 @@ const description = `「${tag}」に分類されるオナホール${count}件の
   <body>
     <SiteHeader />
     <main class="listing-page">
-      <nav class="breadcrumb" aria-label="パンくず"><a href="/">ホーム</a><span>›</span><a href="/tags/">ジャンル一覧</a><span>›</span><span>{tag}</span></nav>
+      <nav class="breadcrumb" aria-label="パンくず"><a href="/">ホーム</a><span>›</span><span>ジャンル</span><span>›</span><span>{tag}</span></nav>
       <h1 class="listing-title">「{tag}」のオナホ一覧</h1>
-      <p class="listing-lead">{count.toLocaleString('ja-JP')}件を新着順に表示{page > 1 ? `(${page} / ${pages}ページ)` : ''}。各商品ページで8ショップの価格を比較できます。</p>
+      <p class="listing-lead">{total.toLocaleString('ja-JP')}件を{filtered ? '表示' : '新着順に表示'}{page > 1 ? `(${page} / ${pages}ページ)` : ''}。各商品ページで8ショップの価格を比較できます。</p>
+      <ListingToolbar filters={filters} options={filterOptions} basePath={basePath} resultCount={filtered ? total : null} />
+      {filtered && total === 0 && <p class="listing-lead">条件に合う商品がありません。</p>}
       <ProductCards products={products ?? []} />
-      <ListingPager basePath={basePath} current={page} total={pages} />
+      <ListingPager basePath={basePath} current={page} total={pages} filters={filters} />
     </main>
     <SiteFooter />
   </body>

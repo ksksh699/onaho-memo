@@ -135,6 +135,32 @@ import SiteFooter from '../components/SiteFooter.astro';
         if (savedTab === 'used' || savedTab === 'interested' || savedTab === 'folders') currentStatusTab = savedTab;
       } catch (e) {}
       let currentUsedTier = 'all';
+      // 記録一覧の絞り込み・並び替え・段階表示(2026-09-08)。
+      // 本数が多い人が最下部まで延々スクロールしなくて済むよう、一覧は24件ずつ出して
+      // 「もっと見る」で追加し、記録の中を商品名・メーカーで検索できるようにした。
+      // TOP3を設定・変更した直後に「Xでシェアしませんか」カードを出すためのフラグ(2026-09-08)
+      let top3ShareNudge = false;
+
+      // 公開プロフィールのシェアURLに付ける版番号。X はシェア画像を URL ごとに約1週間キャッシュするので、
+      // TOP3 の中身が変わったら別のURLになるようにして、常に最新のカードが出るようにする。
+      // (utm_* は X 側で取り除かれるため、v= という別パラメータにしている)
+      function profileShareVersion() {
+        const key = currentTop3.map((s) => s?.productId ?? '-').join(',');
+        let h = 7;
+        for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+        return 'v' + h.toString(36);
+      }
+      function profileShareUrl() {
+        return `${location.origin}/users/${encodeURIComponent(currentNickname)}?utm_source=x&v=${profileShareVersion()}`;
+      }
+      function profileShareIntent(text) {
+        return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(profileShareUrl())}`;
+      }
+
+      const MP_LIST_PAGE = 24;
+      let mpListQuery = '';
+      let mpListSort = 'updated';
+      let mpListShown = MP_LIST_PAGE;
       const ADMIN_USER_ID = '278377ee-a457-41bc-ab79-c1be9f4b768e';
 
       const STATUS_LABELS = {
@@ -752,10 +778,46 @@ import SiteFooter from '../components/SiteFooter.astro';
           })
           .join('');
 
+        const filledCount = slots.filter(Boolean).length;
+        let nudgeHtml = '';
+        if (top3ShareNudge && filledCount > 0) {
+          const slotNames = slots
+            .filter(Boolean)
+            .map((sl, i) => `${i + 1}位 ${sl.check.products?.name ?? ''}`)
+            .join(' / ');
+          if (currentIsPublic && currentNickname) {
+            const shareText = `${currentNickname}のマイベストTOP3を更新しました🏆 ${slotNames} #オナホ #オナホめも`;
+            nudgeHtml = `
+              <div class="share-card share-card-compact top3-share-nudge">
+                <p class="share-card-title">マイベストTOP3を更新しました。Xでシェアしませんか?</p>
+                <div class="share-card-row">
+                  <img class="share-card-preview" src="/og/user/${encodeURIComponent(currentNickname)}.png?${profileShareVersion()}" alt="プロフィールのシェア画像" width="600" height="315" loading="lazy" />
+                  <div class="share-card-actions">
+                    <a href="${profileShareIntent(shareText)}" target="_blank" rel="noopener noreferrer" class="share-card-btn">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
+                      TOP3をXでシェア
+                    </a>
+                    <button type="button" class="share-card-dismiss top3-share-dismiss">あとで</button>
+                  </div>
+                </div>
+              </div>
+            `;
+          } else {
+            nudgeHtml = `
+              <div class="share-card share-card-compact top3-share-nudge">
+                <p class="share-card-title">マイベストTOP3を更新しました</p>
+                <p class="share-card-note">プロフィールを公開設定にすると、TOP3入りのプロフィールカードをXでシェアできます。</p>
+                <button type="button" class="share-card-dismiss top3-share-dismiss">閉じる</button>
+              </div>
+            `;
+          }
+        }
+
         return `
           <div class="top3-section">
             <h2 class="top3-title">マイベストTOP3</h2>
             <div class="top3-grid">${slotsHtml}</div>
+            ${nudgeHtml}
           </div>
         `;
       }
@@ -791,6 +853,7 @@ import SiteFooter from '../components/SiteFooter.astro';
           const emptyIdx = currentTop3.findIndex((s) => !s);
           if (emptyIdx === -1) return;
           currentTop3[emptyIdx] = { productId, reason: null };
+          top3ShareNudge = true;
         }
         await saveTop3();
         init();
@@ -903,6 +966,7 @@ import SiteFooter from '../components/SiteFooter.astro';
 
           item.disabled = true;
           closeTop3Picker();
+          top3ShareNudge = true;
           await saveTop3();
           init();
         });
@@ -2118,9 +2182,9 @@ import SiteFooter from '../components/SiteFooter.astro';
             <div class="share-card share-card-compact">
               <p class="share-card-title">公開プロフィール(マイベストTOP3)をXでシェア</p>
               <div class="share-card-row">
-                <img class="share-card-preview" src="/og/user/${encodeURIComponent(currentNickname)}.png" alt="プロフィールのシェア画像" width="600" height="315" loading="lazy" />
+                <img class="share-card-preview" src="/og/user/${encodeURIComponent(currentNickname)}.png?${profileShareVersion()}" alt="プロフィールのシェア画像" width="600" height="315" loading="lazy" />
                 <div class="share-card-actions">
-                  <a href="https://twitter.com/intent/tweet?text=${encodeURIComponent(`${currentNickname}のオナホめも(マイベストTOP3・使った記録) #オナホ #オナホめも`)}&url=${encodeURIComponent(`${location.origin}/users/${encodeURIComponent(currentNickname)}?utm_source=x&v=2`)}" target="_blank" rel="noopener noreferrer" class="share-card-btn">
+                  <a href="${profileShareIntent(`${currentNickname}のオナホめも(マイベストTOP3・使った記録) #オナホ #オナホめも`)}" target="_blank" rel="noopener noreferrer" class="share-card-btn">
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
                     プロフィールをXでシェア
                   </a>
@@ -2248,11 +2312,89 @@ import SiteFooter from '../components/SiteFooter.astro';
           isUsedTab && currentUsedTier !== 'all' ? usedByTier[currentUsedTier] ?? [] : grouped[currentStatusTab] ?? [];
 
         const emptyLabel = isUsedTab && currentUsedTier !== 'all' ? TIER_LABELS[currentUsedTier] : STATUS_LABELS[currentStatusTab];
-        const listHtml = activeList.length
-          ? `<ul class="${listTag}">${activeList.map(renderItem).join('')}</ul>`
-          : `<p class="mp-empty-tab">まだ${emptyLabel}の商品がありません。</p>`;
+        if (activeList.length === 0) {
+          content.innerHTML = tabsHtml + `<p class="mp-empty-tab">まだ${emptyLabel}の商品がありません。</p>`;
+          return;
+        }
 
-        content.innerHTML = tabsHtml + listHtml;
+        // 一覧が長いときだけ検索・並び替え欄を出す(少ないうちは邪魔なので隠す)
+        const showListTools = activeList.length > 8;
+        const toolsHtml = showListTools
+          ? `<div class="mp-list-tools">
+              <input type="search" id="mp-list-search" class="mp-list-search" placeholder="記録の中を検索(商品名・メーカー)" value="${escapeHtmlText(mpListQuery)}" autocomplete="off" />
+              <select id="mp-list-sort" class="mp-list-sort" aria-label="並び替え">
+                <option value="updated" ${mpListSort === 'updated' ? 'selected' : ''}>記録が新しい順</option>
+                <option value="name" ${mpListSort === 'name' ? 'selected' : ''}>商品名順</option>
+                <option value="maker" ${mpListSort === 'maker' ? 'selected' : ''}>メーカー順</option>
+                <option value="rating" ${mpListSort === 'rating' ? 'selected' : ''}>自分の評価が高い順</option>
+                <option value="price_desc" ${mpListSort === 'price_desc' ? 'selected' : ''}>価格が高い順</option>
+                <option value="price_asc" ${mpListSort === 'price_asc' ? 'selected' : ''}>価格が安い順</option>
+              </select>
+            </div>`
+          : '';
+
+        content.innerHTML = tabsHtml + toolsHtml + `<div id="mp-list-area"></div>`;
+        renderProductListArea(activeList, renderItem, listTag);
+
+        if (showListTools) {
+          const searchEl = document.getElementById('mp-list-search');
+          const sortEl = document.getElementById('mp-list-sort');
+          let timer;
+          searchEl.addEventListener('input', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+              mpListQuery = searchEl.value;
+              mpListShown = MP_LIST_PAGE;
+              renderProductListArea(activeList, renderItem, listTag);
+            }, 200);
+          });
+          sortEl.addEventListener('change', () => {
+            mpListSort = sortEl.value;
+            mpListShown = MP_LIST_PAGE;
+            renderProductListArea(activeList, renderItem, listTag);
+          });
+        }
+      }
+
+      // 検索・並び替えを適用した一覧を、24件ずつ段階的に描画する(タブ・検索欄は描き直さない)
+      function renderProductListArea(activeList, renderItem, listTag) {
+        const area = document.getElementById('mp-list-area');
+        if (!area) return;
+        const q = mpListQuery.trim().toLowerCase();
+        let items = q
+          ? activeList.filter((c) => `${c.products?.name ?? ''} ${c.products?.maker ?? ''}`.toLowerCase().includes(q))
+          : [...activeList];
+        const byName = (a, b) => String(a.products?.name ?? '').localeCompare(String(b.products?.name ?? ''), 'ja');
+        if (mpListSort === 'name') items.sort(byName);
+        else if (mpListSort === 'maker') items.sort((a, b) => String(a.products?.maker ?? '').localeCompare(String(b.products?.maker ?? ''), 'ja') || byName(a, b));
+        else if (mpListSort === 'rating') items.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1) || byName(a, b));
+        else if (mpListSort === 'price_desc') items.sort((a, b) => (b.products?.price ?? -1) - (a.products?.price ?? -1));
+        else if (mpListSort === 'price_asc') items.sort((a, b) => (a.products?.price ?? Infinity) - (b.products?.price ?? Infinity));
+        // 'updated' は lastChecks の並び(updated_at 降順)のまま
+
+        if (items.length === 0) {
+          area.innerHTML = `<p class="mp-empty-tab">「${escapeHtmlText(mpListQuery.trim())}」に一致する記録がありません。</p>`;
+          return;
+        }
+        const visible = items.slice(0, mpListShown);
+        const rest = items.length - visible.length;
+        area.innerHTML =
+          `<ul class="${listTag}">${visible.map(renderItem).join('')}</ul>` +
+          (rest > 0
+            ? `<div class="mp-list-more">
+                <p class="mp-list-more-count">${visible.length} / ${items.length}件を表示</p>
+                <button type="button" class="btn-secondary mp-list-more-btn" data-more="page">さらに${Math.min(rest, MP_LIST_PAGE)}件を表示</button>
+                ${rest > MP_LIST_PAGE ? `<button type="button" class="mp-list-more-all" data-more="all">すべて表示(${items.length}件)</button>` : ''}
+              </div>`
+            : items.length > MP_LIST_PAGE
+              ? `<p class="mp-list-more-count">${items.length}件すべて表示中</p>`
+              : '');
+        area.querySelectorAll('[data-more]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            mpListShown = btn.dataset.more === 'all' ? items.length : mpListShown + MP_LIST_PAGE;
+            renderProductListArea(activeList, renderItem, listTag);
+          });
+        });
       }
 
       async function init() {
@@ -2390,6 +2532,7 @@ import SiteFooter from '../components/SiteFooter.astro';
         if (statusTabBtn) {
           currentStatusTab = statusTabBtn.dataset.status;
           currentUsedTier = 'all';
+          mpListShown = MP_LIST_PAGE;
           try {
             localStorage.setItem('onahole_status_tab', currentStatusTab);
           } catch (err) {}
@@ -2400,11 +2543,19 @@ import SiteFooter from '../components/SiteFooter.astro';
         const tierTabBtn = e.target.closest('.mp-tier-tab');
         if (tierTabBtn) {
           currentUsedTier = tierTabBtn.dataset.tier;
+          mpListShown = MP_LIST_PAGE;
           renderProductLists();
         }
       });
 
       top3Container.addEventListener('click', async (e) => {
+        const dismissBtn = e.target.closest('.top3-share-dismiss');
+        if (dismissBtn) {
+          top3ShareNudge = false;
+          renderTop3Section();
+          return;
+        }
+
         const pickBtn = e.target.closest('.top3-pick-btn, .top3-change-btn');
         if (pickBtn) {
           e.preventDefault();
@@ -2513,6 +2664,27 @@ import SiteFooter from '../components/SiteFooter.astro';
       });
 
       init();
+    </script>
+    <button type="button" id="mp-back-top" class="back-to-top" aria-label="ページの先頭へ戻る" title="先頭へ">▲</button>
+    <script>
+      // 記録一覧が長いとき用の「上へ戻る」ボタン(一定量スクロールしたら表示)
+      const backTop = document.getElementById('mp-back-top');
+      if (backTop) {
+        let ticking = false;
+        window.addEventListener(
+          'scroll',
+          () => {
+            if (ticking) return;
+            ticking = true;
+            requestAnimationFrame(() => {
+              backTop.classList.toggle('is-visible', window.scrollY > 900);
+              ticking = false;
+            });
+          },
+          { passive: true }
+        );
+        backTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+      }
     </script>
     <SiteFooter />
   </body>

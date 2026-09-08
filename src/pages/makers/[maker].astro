@@ -5,25 +5,35 @@ import SiteHeader from '../../components/SiteHeader.astro';
 import SiteFooter from '../../components/SiteFooter.astro';
 import ProductCards from '../../components/ProductCards.astro';
 import ListingPager from '../../components/ListingPager.astro';
-import { LISTING_SELECT, parsePage, pageRange, totalPages, setListingCacheHeaders, pageHref } from '../../lib/listing.js';
+import ListingToolbar from '../../components/ListingToolbar.astro';
+import {
+  LISTING_SELECT, parsePage, pageRange, totalPages, setListingCacheHeaders, pageHref, fetchCampaignTags,
+  parseListingFilters, applyListingFilters, applyListingSort, fetchListingFilterOptions, hasActiveFilters,
+} from '../../lib/listing.js';
 
 // メーカー別の商品一覧(2026-09-08)。URL: /makers/{メーカー名}/?page=N
 // 「メーカー名 オナホ」「メーカー名 最安値」といった検索の入口にする。
 const maker = Astro.params.maker ?? '';
 const page = parsePage(Astro.url.searchParams);
 const [from, to] = pageRange(page);
+// 絞り込み(2026-09-08): トップページと同じ条件をクエリで受け取る(メーカーはこのページで固定)
+const filters = parseListingFilters(Astro.url.searchParams);
+filters.maker = '';
+const filtered = hasActiveFilters(filters) || filters.sort !== 'new';
+const [campaignTags, filterOptions] = await Promise.all([
+  filters.sale ? fetchCampaignTags() : Promise.resolve([]),
+  fetchListingFilterOptions(),
+]);
 
-const { data: products, count } = await supabase
-  .from('v_products_listing')
-  .select(LISTING_SELECT, { count: 'exact' })
-  .eq('maker', maker)
-  .order('release_date', { ascending: false, nullsFirst: false })
-  .order('dmm_content_id', { ascending: true })
-  .range(from, to);
+let query = supabase.from('v_products_listing').select(LISTING_SELECT, { count: 'exact' }).eq('maker', maker);
+query = applyListingFilters(query, filters, { campaignTags });
+query = applyListingSort(query, filters.sort).range(from, to);
+const { data: products, count } = await query;
 
-if (!count) {
+if (!count && !filtered) {
   return Astro.redirect('/makers/', 302);
 }
+const total = count ?? 0;
 
 setListingCacheHeaders(Astro.response);
 
@@ -31,8 +41,8 @@ const pages = totalPages(count);
 const basePath = `/makers/${encodeURIComponent(maker)}/`;
 const canonical = `https://onahomemo.com${pageHref(basePath, page)}`;
 const rated = (products ?? []).filter((p) => p.site_rating_count > 0).length;
-const title = `${maker}のオナホ一覧(${count}件)${page > 1 ? ` ${page}ページ目` : ''} | オナホめも`;
-const description = `${maker}のオナホール${count}件の一覧。新着順に、価格・FANZAレビュー・オナホめもユーザーの評価を表示。各商品ページでFANZA・NLS・大魔王など8ショップの価格を比較できます。`;
+const title = `${maker}のオナホ一覧(${total}件)${page > 1 ? ` ${page}ページ目` : ''} | オナホめも`;
+const description = `${maker}のオナホール${total}件の一覧。新着順に、価格・FANZAレビュー・オナホめもユーザーの評価を表示。各商品ページでFANZA・NLS・大魔王など8ショップの価格を比較できます。`;
 ---
 
 <html lang="ja">
@@ -45,6 +55,7 @@ const description = `${maker}のオナホール${count}件の一覧。新着順�
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
+    {filtered && <meta name="robots" content="noindex, follow" />}
     {page > 1 && <link rel="prev" href={`https://onahomemo.com${pageHref(basePath, page - 1)}`} />}
     {page < pages && <link rel="next" href={`https://onahomemo.com${pageHref(basePath, page + 1)}`} />}
     <meta property="og:type" content="website" />
@@ -62,12 +73,14 @@ const description = `${maker}のオナホール${count}件の一覧。新着順�
       <nav class="breadcrumb" aria-label="パンくず"><a href="/">ホーム</a><span>›</span><a href="/makers/">メーカー一覧</a><span>›</span><span>{maker}</span></nav>
       <h1 class="listing-title">{maker}のオナホ一覧</h1>
       <p class="listing-lead">
-        {count.toLocaleString('ja-JP')}件を新着順に表示{page > 1 ? `(${page} / ${pages}ページ)` : ''}。
+        {total.toLocaleString('ja-JP')}件を{filtered ? '表示' : '新着順に表示'}{page > 1 ? `(${page} / ${pages}ページ)` : ''}。
         {rated > 0 && `このページの${rated}件にはオナホめもユーザーの評価があります。`}
         各商品ページで8ショップの価格を比較できます。
       </p>
+      <ListingToolbar filters={filters} options={filterOptions} basePath={basePath} hideMaker resultCount={filtered ? total : null} />
+      {filtered && total === 0 && <p class="listing-lead">条件に合う商品がありません。</p>}
       <ProductCards products={products ?? []} />
-      <ListingPager basePath={basePath} current={page} total={pages} />
+      <ListingPager basePath={basePath} current={page} total={pages} filters={filters} />
     </main>
     <SiteFooter />
   </body>
