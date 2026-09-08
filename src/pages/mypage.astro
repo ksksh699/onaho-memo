@@ -2096,6 +2096,40 @@ import SiteFooter from '../components/SiteFooter.astro';
             </div>
           </div>
           <div class="mp-spend-compare" id="mp-spend-compare" hidden></div>
+          ${
+            currentIsPublic && currentNickname
+              ? `
+            <div class="share-card share-card-compact">
+              <p class="share-card-title">公開プロフィール(マイベストTOP3)をXでシェア</p>
+              <div class="share-card-row">
+                <img class="share-card-preview" src="/og/user/${encodeURIComponent(currentNickname)}.png" alt="プロフィールのシェア画像" width="600" height="315" loading="lazy" />
+                <div class="share-card-actions">
+                  <a href="https://twitter.com/intent/tweet?text=${encodeURIComponent(`${currentNickname}のオナホめも(マイベストTOP3・使った記録) #オナホ #オナホめも`)}&url=${encodeURIComponent(`${location.origin}/users/${encodeURIComponent(currentNickname)}?utm_source=x`)}" target="_blank" rel="noopener noreferrer" class="share-card-btn">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
+                    プロフィールをXでシェア
+                  </a>
+                  <a href="${spendShareHref}" target="_blank" rel="noopener noreferrer" class="share-card-btn secondary">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
+                    合計使用金額をXでシェア
+                  </a>
+                </div>
+              </div>
+            </div>`
+              : `
+            <div class="share-card share-card-compact">
+              <p class="share-card-title">合計使用金額をXでシェア</p>
+              <div class="share-card-row">
+                <img class="share-card-preview" src="/og/spend.png?a=${totalSpent}&n=${grouped.used.length}" alt="合計使用金額のシェア画像" width="600" height="315" loading="lazy" />
+                <div class="share-card-actions">
+                  <a href="${spendShareHref}" target="_blank" rel="noopener noreferrer" class="share-card-btn">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
+                    合計使用金額をXでシェア
+                  </a>
+                  <p class="share-card-note">プロフィールを公開設定にすると、マイベストTOP3入りのプロフィールカードもシェアできます。</p>
+                </div>
+              </div>
+            </div>`
+          }
         `;
 
         function jumpToStat(kind) {

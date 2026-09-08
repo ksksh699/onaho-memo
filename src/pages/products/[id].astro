@@ -277,6 +277,9 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
 // カードとして表示されるようにする(レビュー保存後のシェアボタンは
 // products/[id].astroのクライアント側スクリプト側でlocation.hrefから作る)。
 const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
+// 商品ページ常設の「この商品をXでシェア」ボタン(シェア画像は /og/product/{id}.png)
+const productShareText = `「${product.name}」${product.maker ? `(${product.maker})` : ''} のレビュー・8ショップ価格比較 #オナホ #オナホめも`;
+const productShareHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(productShareText)}&url=${encodeURIComponent(`${pageUrl}?utm_source=x`)}`;
 // ジャンルタグ(FANZA由来)をタグ別一覧ページへのリンクとして表示する。
 // セール系タグ(超特価祭など)は /sale/ に集約しているので、そちらへ向ける
 const CAMPAIGN_KEYWORDS_DETAIL = ['セール', '特価', '祭', 'キャンペーン', 'OFF', '割引'];
@@ -392,6 +395,10 @@ const metaDescription = [
 
           <div class="shop-links">
               <p class="shop-links-title">購入サイトを比較(価格は税込)</p>
+              <a href={productShareHref} target="_blank" rel="noopener noreferrer" class="x-share-btn product-share-btn">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
+                この商品をXでシェア
+              </a>
               {hasDiscount && (
                 <p class="shop-links-ref-price">
                   参考価格: <span class="shop-links-ref-price-value">¥{listPrice.toLocaleString()}</span>
@@ -1262,7 +1269,7 @@ const metaDescription = [
 
           const hasItemRatings = Object.values(currentItemRatings).some((v) => v);
 
-          const { error } = await supabase.from('checks').upsert(
+          const { data: savedCheck, error } = await supabase.from('checks').upsert(
             {
               user_id: session.user.id,
               product_id: productId,
@@ -1282,7 +1289,7 @@ const metaDescription = [
               similar_products: similarProductsValue || null,
             },
             { onConflict: 'user_id,product_id' }
-          );
+          ).select('id, is_public').maybeSingle();
 
           if (error) {
             console.error(error);
@@ -1301,16 +1308,32 @@ const metaDescription = [
             const freshStatusEl = document.getElementById('save-status');
             if (freshStatusEl) freshStatusEl.textContent = '保存しました';
 
+            // レビュー(ひとこと/詳細)か星評価を付けた場合、シェアカードを出す。
+            // 公開レビューなら専用ページ(/share/review/{id}: 星・タイトル・本文冒頭入りの画像カードが出る)、
+            // 非公開レビューなら商品ページのURLをシェアする(本文は表に出さない)。
             const shareArea = document.getElementById('review-share-area');
-            if (shareArea && wroteReview) {
-              const shareText = `「${productName}」のレビューを書きました - オナホめも`;
-              const shareUrl = location.origin + location.pathname;
+            const wroteSomething = wroteReview || Boolean(currentRating);
+            if (shareArea && wroteSomething) {
+              const isPublicReview = Boolean(savedCheck?.is_public && savedCheck?.id);
+              const stars = currentRating ? `${'★'.repeat(currentRating)}${'☆'.repeat(5 - currentRating)} ` : '';
+              const shareText = `「${productName}」のレビューを書きました ${stars}#オナホ #オナホめも`;
+              const shareUrl = isPublicReview
+                ? `${location.origin}/share/review/${savedCheck.id}?utm_source=x`
+                : `${location.origin}${location.pathname}?utm_source=x`;
               const shareHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+              const previewSrc = isPublicReview
+                ? `/og/review/${savedCheck.id}.png?t=${Date.now()}`
+                : `/og/product/${location.pathname.split('/')[2]}.png`;
               shareArea.innerHTML = `
-                <a href="${shareHref}" target="_blank" rel="noopener noreferrer" class="x-share-btn review-share-btn">
-                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
-                  このレビューをXでシェアする
-                </a>
+                <div class="share-card">
+                  <p class="share-card-title">レビューを投稿しました。Xでシェアして広めませんか？</p>
+                  <img class="share-card-preview" src="${previewSrc}" alt="シェア画像のプレビュー" width="600" height="315" loading="lazy" />
+                  <a href="${shareHref}" target="_blank" rel="noopener noreferrer" class="share-card-btn">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
+                    このレビューをXでシェアする
+                  </a>
+                  <p class="share-card-note">${isPublicReview ? 'シェアするとこの画像付きで投稿されます。' : '非公開レビューのため、商品ページのカードでシェアされます。'}</p>
+                </div>
               `;
             }
           }

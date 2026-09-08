@@ -1,0 +1,78 @@
+---
+import '../../../styles/global.css';
+import SiteHeader from '../../../components/SiteHeader.astro';
+import SiteFooter from '../../../components/SiteFooter.astro';
+import { loadPublicReview } from '../../../lib/reviewShare.js';
+
+// 「レビューを書きました」のシェア用ページ(2026-09-08)。
+// 商品ページでレビューを保存すると、このURL(/share/review/{check_id})をXでシェアできる。
+// XやLINEはこのページの og:image(/og/review/{id}.png)を読んでカード画像を出し、
+// 開いた人にはレビュー本文と、商品ページ(価格比較)・投稿者プロフィールへの導線を見せる。
+// 商品ページと内容が重なるので検索エンジンには載せない(noindex)。
+const data = await loadPublicReview(Astro.params.id);
+if (!data) {
+  return Astro.redirect('/', 302);
+}
+const { product, review, nickname } = data;
+
+// 内容はログイン状態に依存しないのでCDNに10分キャッシュ(Vary: Cookie は年齢確認ゲート対策)
+Astro.response.headers.set('Vary', 'Cookie');
+Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=600, stale-while-revalidate=3600');
+
+const pageUrl = `${Astro.url.origin}/share/review/${review.id}`;
+const imageUrl = `${Astro.url.origin}/og/review/${review.id}.png`;
+const productHref = `/products/${product.dmm_content_id}/`;
+const title = review.detail_review_title || review.review_title || '';
+const text = review.detail_review_text || review.review_text || '';
+const rating = review.rating ? Number(review.rating) : null;
+const stars = rating ? `${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}` : '';
+const who = nickname ? `${nickname}さん` : 'オナホめもユーザー';
+const ogTitle = `${who}が「${product.name}」のレビューを書きました - オナホめも`;
+const description = (title ? `${title}。` : '') + (text ? text.replace(/\s+/g, ' ').slice(0, 90) : `${product.name}のレビューと8ショップの価格比較。`);
+const dateStr = review.updated_at ? new Date(review.updated_at).toLocaleDateString('ja-JP') : '';
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="theme-color" content="#2b5fad" />
+    <meta name="robots" content="noindex" />
+    <title>{who}の「{product.name}」レビュー | オナホめも</title>
+    <meta name="description" content={description} />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content={ogTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={pageUrl} />
+    <meta property="og:site_name" content="オナホめも" />
+    <meta property="og:image" content={imageUrl} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@onahomemo" />
+  </head>
+  <body>
+    <SiteHeader />
+    <main class="share-review">
+      <p class="share-review-eyebrow">{who}のレビュー{dateStr && `(${dateStr})`}</p>
+      <a href={productHref} class="share-review-product">
+        <img src={product.image_url} alt={product.name} loading="lazy" />
+        <span class="share-review-product-body">
+          <span class="mp-maker">{product.maker ?? ''}</span>
+          <span class="share-review-product-name">{product.name}</span>
+        </span>
+      </a>
+      {stars && <p class="share-review-stars">{stars} <span>{rating}.0</span></p>}
+      {title && <h1 class="share-review-title">{title}</h1>}
+      {text && <p class="share-review-text">{text}</p>}
+      <div class="share-spend-actions">
+        <a href={productHref} class="share-spend-btn primary">この商品のレビュー・8ショップの価格比較を見る</a>
+        {nickname && <a href={`/users/${encodeURIComponent(nickname)}`} class="share-spend-btn">{nickname}さんのプロフィールを見る</a>}
+        <a href="/" class="share-spend-btn">オナホめもで自分の記録をつける</a>
+      </div>
+      <p class="share-spend-note">オナホめもは、使ったオナホールを記録・レビューして、8ショップの価格を比較できるWebサービスです。</p>
+    </main>
+    <SiteFooter />
+  </body>
+</html>
