@@ -766,11 +766,15 @@ import SiteFooter from '../components/SiteFooter.astro';
             const slot = slots[i];
 
             if (!slot) {
+              // 空の枠はそのままボタンにして、タップすると「使った」商品の一覧から選べるようにする
+              // (以前は「使った」タブの商品カード側からしか設定できず、分かりにくかった)
               return `
-                <div class="top3-slot empty">
+                <button type="button" class="top3-slot empty top3-pick-btn" data-rank="${rank}">
                   <span class="top3-rank">${rank}位</span>
-                  <p class="badge-empty">「使った」の商品カードから選べます</p>
-                </div>
+                  <span class="top3-pick-plus" aria-hidden="true">＋</span>
+                  <span class="top3-pick-label">タップして選ぶ</span>
+                  <span class="top3-pick-hint">「使った」商品の一覧から選べます</span>
+                </button>
               `;
             }
 
@@ -800,7 +804,10 @@ import SiteFooter from '../components/SiteFooter.astro';
                   </div>
                 </a>
                 ${reasonHtml}
-                <button class="top3-clear-btn" data-rank="${rank}">解除</button>
+                <div class="top3-slot-actions">
+                  <button class="top3-change-btn" data-rank="${rank}">変更</button>
+                  <button class="top3-clear-btn" data-rank="${rank}">解除</button>
+                </div>
               </div>
             `;
           })
@@ -848,6 +855,121 @@ import SiteFooter from '../components/SiteFooter.astro';
         }
         await saveTop3();
         init();
+      }
+
+      // ---- マイベストTOP3 の選択モーダル ----
+      // 空の枠(または「変更」)をタップすると、「使った」商品の一覧を重ねて表示し、
+      // その中から1つ選ぶとその順位に設定される。検索欄で商品名・メーカー名の絞り込みができる。
+      const escapeHtmlText = (value) =>
+        String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+
+      function closeTop3Picker() {
+        const overlay = document.getElementById('top3-picker-overlay');
+        if (overlay) overlay.remove();
+        document.removeEventListener('keydown', onTop3PickerKeydown);
+      }
+
+      function onTop3PickerKeydown(e) {
+        if (e.key === 'Escape') closeTop3Picker();
+      }
+
+      function top3PickerItemsHtml(rank, keyword) {
+        const kw = (keyword ?? '').trim().toLowerCase();
+        const usedChecks = lastChecks
+          .filter((c) => c.status === 'used' && c.products)
+          .sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? ''));
+
+        const items = usedChecks.filter((c) => {
+          if (!kw) return true;
+          const p = c.products;
+          return `${p.name ?? ''} ${p.maker ?? ''}`.toLowerCase().includes(kw);
+        });
+
+        if (usedChecks.length === 0) {
+          return `<p class="top3-picker-empty">「使った」に記録した商品がまだありません。<br />商品ページで「使った」を記録すると、ここから選べるようになります。</p>`;
+        }
+        if (items.length === 0) {
+          return `<p class="top3-picker-empty">「${escapeHtmlText(keyword)}」に一致する商品がありません。</p>`;
+        }
+
+        return items
+          .map((c) => {
+            const p = c.products;
+            const inRank = currentTop3.findIndex((s) => s && s.productId === p.id) + 1;
+            const isThisRank = inRank === rank;
+            const isOtherRank = inRank > 0 && !isThisRank;
+            const badge = isThisRank
+              ? `<span class="top3-picker-badge current">現在${rank}位</span>`
+              : isOtherRank
+              ? `<span class="top3-picker-badge">${inRank}位に設定済み</span>`
+              : '';
+            return `
+              <button type="button" class="top3-picker-item${isThisRank ? ' is-current' : ''}" data-product-id="${escapeHtmlText(p.id)}" ${isThisRank ? 'disabled' : ''}>
+                <img src="${escapeHtmlText(p.image_url ?? '')}" alt="" loading="lazy" />
+                <span class="top3-picker-item-body">
+                  <span class="mp-maker">${escapeHtmlText(p.maker ?? '')}</span>
+                  <span class="top3-picker-item-name">${escapeHtmlText(p.name ?? '')}</span>
+                </span>
+                ${badge}
+              </button>
+            `;
+          })
+          .join('');
+      }
+
+      function openTop3Picker(rank) {
+        closeTop3Picker();
+        const overlay = document.createElement('div');
+        overlay.id = 'top3-picker-overlay';
+        overlay.className = 'top3-picker-overlay';
+        overlay.innerHTML = `
+          <div class="top3-picker" role="dialog" aria-modal="true" aria-labelledby="top3-picker-title">
+            <div class="top3-picker-head">
+              <h3 id="top3-picker-title">${rank}位にする商品を選ぶ</h3>
+              <button type="button" class="top3-picker-close" aria-label="閉じる">×</button>
+            </div>
+            <input type="search" class="top3-picker-search nickname-input" placeholder="商品名・メーカー名で絞り込み" autocomplete="off" />
+            <div class="top3-picker-list">${top3PickerItemsHtml(rank, '')}</div>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+        document.addEventListener('keydown', onTop3PickerKeydown);
+
+        const searchEl = overlay.querySelector('.top3-picker-search');
+        const listEl = overlay.querySelector('.top3-picker-list');
+        searchEl.addEventListener('input', () => {
+          listEl.innerHTML = top3PickerItemsHtml(rank, searchEl.value);
+        });
+
+        overlay.addEventListener('click', async (e) => {
+          // 背景(モーダルの外側)か × を押したら閉じる
+          if (e.target === overlay || e.target.closest('.top3-picker-close')) {
+            closeTop3Picker();
+            return;
+          }
+          const item = e.target.closest('.top3-picker-item');
+          if (!item || item.disabled) return;
+
+          const productId = item.dataset.productId;
+          // 他の順位に入っていた商品を選んだ場合は、その順位を空にして入れ替える
+          const prevIdx = currentTop3.findIndex((s) => s && s.productId === productId);
+          if (prevIdx >= 0 && prevIdx !== rank - 1) currentTop3[prevIdx] = null;
+          const prevReason = currentTop3[rank - 1]?.productId === productId ? currentTop3[rank - 1].reason : null;
+          currentTop3[rank - 1] = { productId, reason: prevReason };
+
+          item.disabled = true;
+          closeTop3Picker();
+          await saveTop3();
+          init();
+        });
+
+        // スマホではキーボードが出て一覧が隠れやすいので、自動フォーカスはPC幅のときだけ
+        if (window.matchMedia('(min-width: 768px)').matches) searchEl.focus();
       }
 
       function bestReviewSectionHtml(bestReviewCheck) {
@@ -2293,6 +2415,13 @@ import SiteFooter from '../components/SiteFooter.astro';
       });
 
       top3Container.addEventListener('click', async (e) => {
+        const pickBtn = e.target.closest('.top3-pick-btn, .top3-change-btn');
+        if (pickBtn) {
+          e.preventDefault();
+          openTop3Picker(Number(pickBtn.dataset.rank));
+          return;
+        }
+
         const reasonTextEl = e.target.closest('.top3-reason-text');
         if (reasonTextEl) {
           top3EditingRank = Number(reasonTextEl.dataset.rank);
