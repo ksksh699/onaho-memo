@@ -593,11 +593,20 @@ function formatMoneyComparison(it) {
 
 const moneyComparisons = moneyComparisonPicks(totalSpentAll).map(formatMoneyComparison);
 
-// Xでシェアするためのリンク(プロフィールが見つかった場合のみ)
+// Xでシェアするためのリンク(プロフィールが見つかった場合のみ)。
+// シェアするURLには utm_source=x を付ける(アクセス計測でX経由を判別するため。
+// あわせて、Xが以前の小さなカードをキャッシュしていても新しいURLとして取り直される)。
 const pageUrl = profile ? `${Astro.url.origin}/users/${encodeURIComponent(profile.nickname)}` : '';
-const shareText = profile ? `${profile.nickname}さんのコレクション - オナホめも` : '';
+const shareText = profile ? `${profile.nickname}のオナホめも(マイベストTOP3・使った記録) #オナホ #オナホめも` : '';
 const xShareUrl = profile
-  ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(pageUrl)}`
+  ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(`${pageUrl}?utm_source=x`)}`
+  : '';
+// 合計使用金額のシェアは専用ページ(/share/spend)へ。金額・本数・ニックネーム入りのカード画像が出る
+const spendShareParams = profile
+  ? new URLSearchParams({ a: String(totalSpentAll), n: String(groupedAll.used.length), u: profile.nickname })
+  : null;
+const spendShareUrl = profile
+  ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(`合計使用金額 ¥${totalSpentAll.toLocaleString()} - オナホめも`)}&url=${encodeURIComponent(`${Astro.url.origin}/share/spend?${spendShareParams.toString()}`)}`
   : '';
 ---
 
@@ -702,7 +711,7 @@ const xShareUrl = profile
                 </ul>
                 <p class="mp-spend-compare-note">※価格はあくまで目安です</p>
                 <a
-                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`合計使用金額 ¥${totalSpentAll.toLocaleString()} - オナホめも`)}&url=${encodeURIComponent(pageUrl)}`}
+                  href={spendShareUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   class="x-share-btn mp-spend-share-btn"
