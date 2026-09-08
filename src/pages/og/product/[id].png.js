@@ -28,8 +28,10 @@ export async function GET({ params, url }) {
       .maybeSingle(),
   ]);
 
+  const debug = url.searchParams.get('debug') === '1';
   const product = productResult.data;
   if (!product) {
+    if (debug) return new Response(`product not found: ${JSON.stringify(productResult.error ?? null)}`, { status: 500 });
     // 存在しない商品はサイト共通のOGP画像へ
     return Response.redirect(new URL('/ogp.png', url.origin), 302);
   }
@@ -43,6 +45,7 @@ export async function GET({ params, url }) {
     return pngResponse(png);
   } catch (err) {
     console.error('[og/product] 生成に失敗:', err);
+    if (debug) return new Response(`${err?.name}: ${err?.message}\n${(err?.stack ?? '').split('\n').slice(0, 6).join('\n')}`, { status: 500 });
     return Response.redirect(new URL('/ogp.png', url.origin), 302);
   }
 }

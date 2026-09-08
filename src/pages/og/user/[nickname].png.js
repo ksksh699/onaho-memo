@@ -15,14 +15,16 @@ const REVIEW_FILTER =
 
 export async function GET({ params, url }) {
   const nickname = decodeURIComponent(params.nickname ?? '');
-  const fallback = () => Response.redirect(new URL('/ogp.png', url.origin), 302);
+  const debug = url.searchParams.get('debug') === '1';
+  const fallback = (reason) =>
+    debug ? new Response(`fallback: ${reason}`, { status: 500 }) : Response.redirect(new URL('/ogp.png', url.origin), 302);
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('id, nickname, avatar_url, oshi_maker, best_product_id_1, best_product_id_2, best_product_id_3, is_public')
     .eq('nickname', nickname)
     .maybeSingle();
-  if (!profile || profile.is_public === false) return fallback();
+  if (!profile || profile.is_public === false) return fallback('profile not found or private');
 
   const top3Ids = [profile.best_product_id_1, profile.best_product_id_2, profile.best_product_id_3];
   const validIds = top3Ids.filter(Boolean);
@@ -70,6 +72,6 @@ export async function GET({ params, url }) {
     return pngResponse(png, { maxAgeSeconds: 3600 });
   } catch (err) {
     console.error('[og/user] 生成に失敗:', err);
-    return fallback();
+    return fallback(`${err?.name}: ${err?.message}\n${(err?.stack ?? '').split('\n').slice(0, 6).join('\n')}`);
   }
 }
