@@ -379,6 +379,12 @@ a {
   color: var(--accent);
 }
 
+.site-footer-links .site-footer-x {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
 .hero {
   padding: 4rem 1.5rem 3rem;
   border-bottom: 1px solid var(--border);
