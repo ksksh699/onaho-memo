@@ -1,0 +1,80 @@
+---
+import { supabase } from '../../lib/supabase.js';
+import '../../styles/global.css';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+import ProductCards from '../../components/ProductCards.astro';
+import ListingPager from '../../components/ListingPager.astro';
+import { LISTING_SELECT, parsePage, pageRange, totalPages, setListingCacheHeaders, pageHref, fetchCampaignTags } from '../../lib/listing.js';
+
+// セール中の商品一覧(2026-09-08)。URL: /sale/?page=N
+// 条件はトップページの「セール対象のみ」フィルターと同じ(セール系タグが付いている商品)。
+// 割引率の高い順に並べる(割引率が同じなら新着順)。
+const page = parsePage(Astro.url.searchParams);
+const [from, to] = pageRange(page);
+const campaignTags = await fetchCampaignTags();
+
+let products = [];
+let count = 0;
+if (campaignTags.length > 0) {
+  const result = await supabase
+    .from('v_products_listing')
+    .select(LISTING_SELECT, { count: 'exact' })
+    .overlaps('genre_tags', campaignTags)
+    .order('discount_percent', { ascending: false })
+    .order('release_date', { ascending: false, nullsFirst: false })
+    .order('dmm_content_id', { ascending: true })
+    .range(from, to);
+  products = result.data ?? [];
+  count = result.count ?? 0;
+}
+
+// セールは入れ替わりが早いので、他の一覧より短め(5分)にキャッシュ
+setListingCacheHeaders(Astro.response);
+Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=1800');
+
+const pages = totalPages(count);
+const basePath = '/sale/';
+const canonical = `https://onahomemo.com${pageHref(basePath, page)}`;
+const maxDiscount = products[0]?.discount_percent ?? 0;
+const title = `セール中のオナホ一覧(${count}件・割引率順)${page > 1 ? ` ${page}ページ目` : ''} | オナホめも`;
+const description = `いまセール中のオナホール${count}件を割引率の高い順に表示${maxDiscount ? `(最大${maxDiscount}%OFF)` : ''}。価格・定価・レビューを確認して、各商品ページで8ショップの価格を比較できます。`;
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#2b5fad" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {page > 1 && <link rel="prev" href={`https://onahomemo.com${pageHref(basePath, page - 1)}`} />}
+    {page < pages && <link rel="next" href={`https://onahomemo.com${pageHref(basePath, page + 1)}`} />}
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="セール中のオナホ一覧 | オナホめも" />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content="オナホめも" />
+    <meta property="og:image" content="https://onahomemo.com/ogp.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@onahomemo" />
+  </head>
+  <body>
+    <SiteHeader />
+    <main class="listing-page">
+      <nav class="breadcrumb" aria-label="パンくず"><a href="/">ホーム</a><span>›</span><span>セール中</span></nav>
+      <h1 class="listing-title">セール中のオナホ一覧</h1>
+      <p class="listing-lead">
+        {count > 0
+          ? `${count.toLocaleString('ja-JP')}件を割引率の高い順に表示${page > 1 ? `(${page} / ${pages}ページ)` : ''}。価格はFANZAの現在価格です。各商品ページで8ショップの価格を比較できます。`
+          : 'いまセール中の商品はありません。'}
+      </p>
+      <ProductCards products={products} />
+      <ListingPager basePath={basePath} current={page} total={pages} />
+    </main>
+    <SiteFooter />
+  </body>
+</html>

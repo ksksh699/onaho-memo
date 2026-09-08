@@ -12,10 +12,15 @@ import { supabase } from '../lib/supabase.js';
 export const prerender = false;
 
 const SITE_ORIGIN = 'https://onahomemo.com';
+// セール系タグ(タグ別ページではなく /sale/ に集約するので除外)
+const CAMPAIGN_KEYWORDS = ['セール', '特価', '祭', 'キャンペーン', 'OFF', '割引'];
 
 // 商品以外の固定ページ。ログインが必要なページや個人向けページは載せない
 const STATIC_PAGES = [
   { path: '/', changefreq: 'daily', priority: '1.0' },
+  { path: '/sale/', changefreq: 'daily', priority: '0.8' },
+  { path: '/makers/', changefreq: 'weekly', priority: '0.6' },
+  { path: '/tags/', changefreq: 'weekly', priority: '0.6' },
   { path: '/board/', changefreq: 'daily', priority: '0.6' },
   { path: '/terms', changefreq: 'yearly', priority: '0.1' },
   { path: '/privacy', changefreq: 'yearly', priority: '0.1' },
@@ -82,6 +87,17 @@ export async function GET() {
     });
   }
 
+  // メーカー別・ジャンル別の一覧ページ(集計RPCから)。失敗しても商品ページの出力は続ける
+  let makerRows = [];
+  let tagRows = [];
+  try {
+    const [m, t] = await Promise.all([supabase.rpc('get_maker_counts'), supabase.rpc('get_genre_tag_stats')]);
+    makerRows = (m.data ?? []).filter((r) => r.maker && Number(r.cnt) > 0);
+    tagRows = (t.data ?? []).filter((r) => r.tag && Number(r.cnt) >= 3 && !CAMPAIGN_KEYWORDS.some((k) => r.tag.includes(k)));
+  } catch (err) {
+    console.error('[sitemap.xml] メーカー/タグ一覧の取得に失敗:', err);
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -91,6 +107,17 @@ export async function GET() {
   for (const p of STATIC_PAGES) {
     lines.push(
       `<url><loc>${SITE_ORIGIN}${p.path}</loc><lastmod>${today}</lastmod><changefreq>${p.changefreq}</changefreq><priority>${p.priority}</priority></url>`
+    );
+  }
+
+  for (const r of makerRows) {
+    lines.push(
+      `<url><loc>${SITE_ORIGIN}/makers/${escapeXml(encodeURIComponent(r.maker))}/</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>0.5</priority></url>`
+    );
+  }
+  for (const r of tagRows) {
+    lines.push(
+      `<url><loc>${SITE_ORIGIN}/tags/${escapeXml(encodeURIComponent(r.tag))}/</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>0.4</priority></url>`
     );
   }
 

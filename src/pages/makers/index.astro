@@ -1,0 +1,57 @@
+---
+import { supabase } from '../../lib/supabase.js';
+import '../../styles/global.css';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+import { setListingCacheHeaders } from '../../lib/listing.js';
+
+// メーカー一覧ページ(2026-09-08)。「メーカー名 オナホ」で検索する人の入口。
+// 件数は get_maker_counts()(DB側で集計済み・件数降順)。
+setListingCacheHeaders(Astro.response);
+
+const { data: makerRows } = await supabase.rpc('get_maker_counts');
+const makers = (makerRows ?? []).filter((m) => m.maker && m.cnt > 0);
+const total = makers.reduce((s, m) => s + Number(m.cnt), 0);
+const pageUrl = 'https://onahomemo.com/makers/';
+const description = `オナホールのメーカー${makers.length}社の一覧。メーカーごとの商品数・レビュー・8ショップの価格比較をまとめて確認できます。`;
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#2b5fad" />
+    <title>オナホのメーカー一覧({makers.length}社) | オナホめも</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={pageUrl} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="オナホのメーカー一覧 | オナホめも" />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={pageUrl} />
+    <meta property="og:site_name" content="オナホめも" />
+    <meta property="og:image" content="https://onahomemo.com/ogp.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@onahomemo" />
+  </head>
+  <body>
+    <SiteHeader />
+    <main class="listing-page">
+      <nav class="breadcrumb" aria-label="パンくず"><a href="/">ホーム</a><span>›</span><span>メーカー一覧</span></nav>
+      <h1 class="listing-title">オナホのメーカー一覧</h1>
+      <p class="listing-lead">{makers.length}社・{total.toLocaleString('ja-JP')}商品。メーカー名をタップすると、そのメーカーの商品一覧(価格比較・レビュー付き)が開きます。</p>
+      <ul class="term-list">
+        {makers.map((m) => (
+          <li>
+            <a href={`/makers/${encodeURIComponent(m.maker)}/`} class="term-chip">
+              <span class="term-name">{m.maker}</span>
+              <span class="term-count">{Number(m.cnt).toLocaleString('ja-JP')}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </main>
+    <SiteFooter />
+  </body>
+</html>

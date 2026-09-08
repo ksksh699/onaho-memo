@@ -1,0 +1,48 @@
+---
+// 一覧ページ用の商品カード(サーバー側描画)。
+// トップページ(index.astro)のブラウザ側テンプレート renderCards() と同じクラス名・構造にして
+// 見た目を揃えている。トップにある「☰ 記録」ボタン(ログイン機能)は、一覧ページでは省略している。
+import { isNewArrival, isPreorder, isCampaignTag } from '../lib/listing.js';
+
+const { products = [] } = Astro.props;
+---
+
+<ul class="grid listing-grid">
+  {products.map((p) => {
+    const isCampaign = (p.genre_tags ?? []).some((t) => isCampaignTag(t));
+    const hasDiscount = isCampaign && p.discount_percent > 0;
+    return (
+      <li class="card">
+        {hasDiscount && <span class="sale-ribbon">SALE</span>}
+        {isPreorder(p.release_date) ? (
+          <span class="new-badge preorder-badge">予約受付中</span>
+        ) : isNewArrival(p.release_date) ? (
+          <span class="new-badge">NEW</span>
+        ) : null}
+        <a href={`/products/${p.dmm_content_id}/`}>
+          <img src={p.image_url} alt={p.name} loading="lazy" width="180" height="240" />
+          <div class="body">
+            <p class="maker">{p.maker ?? 'メーカー不明'}</p>
+            <h3>{p.name}</h3>
+            <p class="price">
+              {p.price ? `¥${Number(p.price).toLocaleString('ja-JP')}` : '価格情報なし'}
+              {hasDiscount && <span class="discount-badge-small">{p.discount_percent}%OFF</span>}
+            </p>
+            <div class="card-ratings">
+              {p.dmm_review_average && (
+                <p class="card-rating dmm">
+                  <span class="rating-label">FANZA</span>★{p.dmm_review_average}({p.dmm_review_count})
+                </p>
+              )}
+              {p.site_rating_count > 0 && (
+                <p class="card-rating site">
+                  <span class="rating-label">オナホめも</span>★{p.site_rating_avg}({p.site_rating_count})
+                </p>
+              )}
+            </div>
+          </div>
+        </a>
+      </li>
+    );
+  })}
+</ul>

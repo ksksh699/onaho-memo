@@ -277,6 +277,13 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
 // カードとして表示されるようにする(レビュー保存後のシェアボタンは
 // products/[id].astroのクライアント側スクリプト側でlocation.hrefから作る)。
 const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
+// ジャンルタグ(FANZA由来)をタグ別一覧ページへのリンクとして表示する。
+// セール系タグ(超特価祭など)は /sale/ に集約しているので、そちらへ向ける
+const CAMPAIGN_KEYWORDS_DETAIL = ['セール', '特価', '祭', 'キャンペーン', 'OFF', '割引'];
+const detailTags = (product.genre_tags ?? [])
+  .filter((t) => typeof t === 'string' && t.trim())
+  .map((t) => ({ tag: t, sale: CAMPAIGN_KEYWORDS_DETAIL.some((k) => t.includes(k)) }))
+  .slice(0, 12);
 // 検索結果に表示される説明文(メタディスクリプション)。長すぎると省略されるので160文字以内に収める
 const metaDescription = [
   `${product.name}${product.maker ? `(${product.maker})` : ''}のレビュー・評価と価格比較。`,
@@ -324,7 +331,7 @@ const metaDescription = [
         <div class="detail-info">
           <p class="maker">
             {product.maker ? (
-              <a href={`/?maker=${encodeURIComponent(product.maker)}`} class="maker-link">
+              <a href={`/makers/${encodeURIComponent(product.maker)}/`} class="maker-link">
                 {product.maker}
               </a>
             ) : (
@@ -361,6 +368,15 @@ const metaDescription = [
             </p>
           )}
           {releaseDateDisplay && <p>発売日: {releaseDateDisplay}</p>}
+          {detailTags.length > 0 && (
+            <div class="detail-tags">
+              {detailTags.map((t) => (
+                <a href={t.sale ? '/sale/' : `/tags/${encodeURIComponent(t.tag)}/`} class={`term-chip ${t.sale ? 'sale' : ''}`}>
+                  {t.sale ? `セール中(${t.tag})` : t.tag}
+                </a>
+              ))}
+            </div>
+          )}
           {product.dmm_review_average && (
             <p>
               <a href={product.affiliate_url} target="_blank" rel="noopener nofollow" class="fanza-review-link" data-shop="fanza" data-listing="1">

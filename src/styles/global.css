@@ -5551,3 +5551,135 @@ main {
   margin-top: 1.4rem;
   line-height: 1.7;
 }
+
+/* ---- 一覧ページ(メーカー別・ジャンル別・セール) ---- */
+.listing-page {
+  max-width: 1100px;
+}
+
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.breadcrumb a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  color: var(--accent);
+}
+
+.listing-title {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
+}
+
+.listing-lead {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin: 0 0 1.5rem;
+}
+
+.listing-lead a {
+  color: var(--accent);
+}
+
+.term-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.term-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: border-color 0.15s ease;
+}
+
+.term-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.term-count {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: var(--bg);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+}
+
+/* 商品ページのタグ行 */
+.detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.8rem 0 0;
+}
+
+.detail-tags .term-chip {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.75rem;
+}
+
+.detail-tags .term-chip.sale {
+  border-color: var(--sale);
+  color: var(--sale);
+}
+
+/* リンク版ページネーション(一覧ページ用) */
+.pager-link {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.85rem;
+  text-decoration: none;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.pager-link:hover:not(.is-disabled) {
+  border-color: var(--accent);
+}
+
+.pager-link.is-disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pager-numbers a.pager-number {
+  text-decoration: none;
+}
+
+@media (max-width: 480px) {
+  .pager-link {
+    padding: 0.5rem 0.7rem;
+    font-size: 0.78rem;
+  }
+}

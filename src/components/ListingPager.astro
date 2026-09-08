@@ -1,0 +1,34 @@
+---
+// 一覧ページ用のページネーション(サーバー側描画・リンク版)。
+// トップページのJS版と同じ見た目(.pager / .pager-numbers)を、<a> リンクで再現している。
+import { pagerPages, pageHref } from '../lib/listing.js';
+
+const { basePath, current, total } = Astro.props;
+const pages = pagerPages(current, total);
+---
+
+{total > 1 && (
+  <nav class="pager listing-pager" aria-label="ページ送り">
+    {current > 1 ? (
+      <a class="pager-link" href={pageHref(basePath, current - 1)} rel="prev">← 前へ</a>
+    ) : (
+      <span class="pager-link is-disabled">← 前へ</span>
+    )}
+    <div class="pager-numbers">
+      {pages.map((p) =>
+        p === null ? (
+          <span class="pager-ellipsis">…</span>
+        ) : p === current ? (
+          <span class="pager-number active" aria-current="page">{p}</span>
+        ) : (
+          <a class="pager-number" href={pageHref(basePath, p)}>{p}</a>
+        )
+      )}
+    </div>
+    {current < total ? (
+      <a class="pager-link" href={pageHref(basePath, current + 1)} rel="next">次へ →</a>
+    ) : (
+      <span class="pager-link is-disabled">次へ →</span>
+    )}
+  </nav>
+)}
