@@ -277,6 +277,14 @@ const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
 // カードとして表示されるようにする(レビュー保存後のシェアボタンは
 // products/[id].astroのクライアント側スクリプト側でlocation.hrefから作る)。
 const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
+// 検索結果に表示される説明文(メタディスクリプション)。長すぎると省略されるので160文字以内に収める
+const metaDescription = [
+  `${product.name}${product.maker ? `(${product.maker})` : ''}のレビュー・評価と価格比較。`,
+  product.price ? `FANZA価格 ¥${Number(product.price).toLocaleString()}。` : '',
+  'FANZA・NLS・大魔王・信長トイズ・ホットパワーズ・エムズ・M-ZAKKA・ぴゅあらばの購入先を比較できます。',
+]
+  .join('')
+  .slice(0, 160);
 ---
 
 <html lang="ja">
@@ -287,8 +295,11 @@ const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#2b5fad" />
-    <title>{product.name}</title>
+    <title>{product.name} | オナホめも</title>
+    <meta name="description" content={metaDescription} />
+    <link rel="canonical" href={pageUrl} />
     <meta property="og:type" content="product" />
+    <meta property="og:description" content={metaDescription} />
     <meta property="og:title" content={product.name} />
     <meta property="og:url" content={pageUrl} />
     {imageUrl && <meta property="og:image" content={imageUrl} />}

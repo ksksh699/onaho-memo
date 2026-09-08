@@ -1,0 +1,14 @@
+# オナホめも クローラー向け設定
+# 商品ページ・トップ・掲示板などは検索エンジンに載せる。
+# ログイン後の個人向けページやAPIは検索結果に出す意味がないので除外する。
+User-agent: *
+Allow: /
+Disallow: /mypage
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /following
+Disallow: /api/
+
+Sitemap: https://onahomemo.com/sitemap.xml
