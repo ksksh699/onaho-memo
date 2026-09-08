@@ -9,5 +9,9 @@ export default defineConfig({
   // 注意: middlewareMode: 'edge' は使わないこと。Astroのエッジミドルウェアは全ページを
   // 同じ内部URL(/_render)経由で取得するため、ページ側の s-maxage(CDNキャッシュ)と
   // 組み合わさると「全ページが同じ内容になる」重大な不具合が起きる(2026-09-08に本番で発生)。
-  adapter: vercel(),
+  adapter: vercel({
+    // シェア画像(OGP)の自動生成(src/lib/ogImage.js)で使う日本語フォントを、
+    // Vercelのサーバー関数にも同梱する(public/ に置いてあるだけでは関数から読めない)
+    includeFiles: ['./public/fonts/NotoSansJP-Regular.ttf', './public/fonts/NotoSansJP-Bold.ttf'],
+  }),
 });

@@ -611,9 +611,11 @@ const xShareUrl = profile
         <meta property="og:type" content="profile" />
         <meta property="og:title" content={`${profile.nickname}さんのプロフィール - オナホめも`} />
         <meta property="og:url" content={pageUrl} />
-        {profile.avatar_url && <meta property="og:image" content={profile.avatar_url} />}
+        <meta property="og:image" content={`${Astro.url.origin}/og/user/${encodeURIComponent(profile.nickname)}.png`} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         <meta property="og:site_name" content="オナホめも" />
-        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:site" content="@onahomemo" />
       </>
     )}
