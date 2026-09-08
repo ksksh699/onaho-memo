@@ -17,13 +17,28 @@ import { supabase } from './supabase.js';
 //   follow          … 自分が誰かにフォローされた
 //   sale            … 自分が「気になる」に登録している商品がセールになった
 //                      (sale_watchテーブルへのinsertトリガーで検知。1時間ごとのバッチ)
+//   price_drop      … 自分が「気になる」に登録している商品が値下がりした
+//                      (price_historyへのinsertトリガーで検知。5%以上の値下がりで、かつ
+//                       全ショップ中の最安値になったとき。metaに shop/old_price/new_price)
 
 const NOTIFY_LIMIT = 20;
+
+// 値下がり通知に表示するショップ名(price_history.shop のキー → 表示名)
+const PRICE_DROP_SHOP_NAMES = {
+  fanza: 'FANZA',
+  nls: 'NLS',
+  daimaoh: '大魔王',
+  nobunagatoys: '信長トイズ',
+  hotpowers: 'ホットパワーズ',
+  ems: 'エムズ',
+  pyuarabu: 'ぴゅあらば',
+  mzakka: 'M-ZAKKA',
+};
 
 async function fetchRawNotifications(userId) {
   const { data, error } = await supabase
     .from('notifications')
-    .select('id, actor_id, type, thread_id, check_id, product_id, is_read, created_at')
+    .select('id, actor_id, type, thread_id, check_id, product_id, is_read, created_at, meta')
     .eq('recipient_id', userId)
     .order('created_at', { ascending: false })
     .limit(NOTIFY_LIMIT);
@@ -86,7 +101,7 @@ async function enrichNotifications(rows) {
     productIdSet.add(c.product_id);
   }
   for (const r of rows) {
-    if (r.type === 'sale' && r.product_id) productIdSet.add(r.product_id);
+    if ((r.type === 'sale' || r.type === 'price_drop') && r.product_id) productIdSet.add(r.product_id);
   }
 
   let productById = {};
@@ -114,6 +129,17 @@ async function enrichNotifications(rows) {
       const product = productById[r.product_id];
       const productName = product?.name ?? '気になる商品';
       text = `「${productName}」がセール中です`;
+      href = product?.dmm_content_id ? `/products/${product.dmm_content_id}/` : '/mypage';
+    } else if (r.type === 'price_drop') {
+      const product = productById[r.product_id];
+      const productName = product?.name ?? '気になる商品';
+      const meta = r.meta ?? {};
+      const shopName = PRICE_DROP_SHOP_NAMES[meta.shop] ?? '';
+      const priceText =
+        meta.old_price && meta.new_price
+          ? `(${shopName ? `${shopName} ` : ''}¥${Number(meta.old_price).toLocaleString()} → ¥${Number(meta.new_price).toLocaleString()})`
+          : '';
+      text = `「${productName}」が値下がりしました${priceText}`;
       href = product?.dmm_content_id ? `/products/${product.dmm_content_id}/` : '/mypage';
     } else {
       const productId = productIdByCheckId[r.check_id];
