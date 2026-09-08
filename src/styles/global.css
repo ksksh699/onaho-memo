@@ -5467,3 +5467,87 @@ main {
     width: 100%;
   }
 }
+/* ---- 合計使用金額のシェアページ(/share/spend) ---- */
+.share-spend {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2.5rem 1.2rem 4rem;
+  text-align: center;
+}
+
+.share-spend-eyebrow {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin: 0 0 0.3rem;
+}
+
+.share-spend-amount {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0;
+  line-height: 1.1;
+}
+
+.share-spend-count {
+  font-size: 1rem;
+  margin: 0.5rem 0 1.4rem;
+}
+
+.share-spend-compare {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.2rem;
+  text-align: left;
+  margin-bottom: 1.4rem;
+}
+
+.share-spend-compare-title {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.share-spend-compare ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.95rem;
+  line-height: 1.8;
+}
+
+.share-spend-image {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  margin-bottom: 1.4rem;
+}
+
+.share-spend-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.share-spend-btn {
+  display: block;
+  padding: 0.8rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.share-spend-btn.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.share-spend-note {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 1.4rem;
+  line-height: 1.7;
+}

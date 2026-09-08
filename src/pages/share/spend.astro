@@ -1,0 +1,70 @@
+---
+import '../../styles/global.css';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+import { parseSpendParams, pickForCard } from '../../lib/shareSpend.js';
+import { formatMoneyComparison } from '../../lib/moneyComparison.js';
+
+// 「合計使用金額」のシェア用ページ(2026-09-08)。
+// マイページの「この金額をXでシェア」から /share/spend?a=金額&n=本数&u=ニックネーム が投稿され、
+// XやLINEはこのページの og:image(/og/spend.png)を読んでカード画像を出す。
+// 人が開いたときは金額と換算例を見せつつ、サイト(プロフィール or トップ)へ誘導する。
+// 検索結果には出したくないので noindex。
+
+const { amount, count, nickname } = parseSpendParams(Astro.url.searchParams);
+const picks = pickForCard(amount);
+const query = Astro.url.searchParams.toString();
+const imageUrl = `${Astro.url.origin}/og/spend.png${query ? `?${query}` : ''}`;
+const pageUrl = `${Astro.url.origin}/share/spend${query ? `?${query}` : ''}`;
+const title = nickname ? `${nickname}さんの合計使用金額 ¥${amount.toLocaleString('ja-JP')}` : `合計使用金額 ¥${amount.toLocaleString('ja-JP')}`;
+const description = `オナホめもで記録した「使ったオナホ」${count.toLocaleString('ja-JP')}本の合計金額。あなたも使った記録をつけてみませんか。`;
+const profileHref = nickname ? `/users/${encodeURIComponent(nickname)}` : '/';
+
+// このページ自体はパラメータで内容が決まるだけなので、CDNに長めにキャッシュさせてよい
+Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=604800, stale-while-revalidate=604800');
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="theme-color" content="#2b5fad" />
+    <meta name="robots" content="noindex" />
+    <title>{title} | オナホめも</title>
+    <meta name="description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={`${title} - オナホめも`} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={pageUrl} />
+    <meta property="og:site_name" content="オナホめも" />
+    <meta property="og:image" content={imageUrl} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@onahomemo" />
+  </head>
+  <body>
+    <SiteHeader />
+    <main class="share-spend">
+      <p class="share-spend-eyebrow">{nickname ? `${nickname}さんの` : ''}合計使用金額</p>
+      <p class="share-spend-amount">¥{amount.toLocaleString('ja-JP')}</p>
+      <p class="share-spend-count">使ったオナホ {count.toLocaleString('ja-JP')}本</p>
+      {picks.length > 0 && (
+        <div class="share-spend-compare">
+          <p class="share-spend-compare-title">その金額で買えたかもしれないもの(目安)</p>
+          <ul>
+            {picks.map((it) => <li>{formatMoneyComparison(it)}</li>)}
+          </ul>
+        </div>
+      )}
+      <img class="share-spend-image" src={imageUrl} alt={title} width="600" height="315" loading="lazy" />
+      <div class="share-spend-actions">
+        {nickname && <a href={profileHref} class="share-spend-btn primary">{nickname}さんのプロフィールを見る</a>}
+        <a href="/" class={`share-spend-btn ${nickname ? '' : 'primary'}`}>オナホめもで自分の記録をつける</a>
+      </div>
+      <p class="share-spend-note">オナホめもは、使ったオナホールを記録・レビューして、8ショップの価格を比較できるWebサービスです。</p>
+    </main>
+    <SiteFooter />
+  </body>
+</html>
