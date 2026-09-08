@@ -4892,10 +4892,13 @@ main {
 
 .profile-header-top {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 0.8rem;
-  margin-top: -34px;
+  /* アイコンだけをヘッダー画像に34px重ねる。名前・ボタンは画像の下(cover-overlap分下げる)に置く
+     (以前は align-items: flex-end で名前がヘッダー画像の上に乗ってしまっていた。2026-09-08修正) */
+  --cover-overlap: 34px;
+  margin-top: calc(-1 * var(--cover-overlap));
 }
 
 .profile-header-avatar-wrap {
@@ -4920,6 +4923,7 @@ main {
   flex: 1 1 auto;
   min-width: 160px;
   padding-bottom: 0.2rem;
+  margin-top: calc(var(--cover-overlap) + 0.45rem);
 }
 
 .profile-header-name {
@@ -4953,6 +4957,19 @@ main {
   gap: 0.5rem;
   flex-shrink: 0;
   padding-bottom: 0.2rem;
+  margin-top: calc(var(--cover-overlap) + 0.45rem);
+}
+
+/* スマホ幅ではアイコンの下に名前・ボタンを縦に並べる(常に折り返す)ので、余分な上マージンは付けない */
+@media (max-width: 640px) {
+  .profile-header-meta {
+    flex-basis: 100%;
+    margin-top: 0;
+  }
+  .profile-header-actions {
+    margin-top: 0;
+    width: 100%;
+  }
 }
 
 .profile-header-btn {
