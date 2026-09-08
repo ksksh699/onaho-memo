@@ -140,7 +140,7 @@ function publicCardHtml(check) {
   const stars = starString(check.rating);
   const starsHtml = stars ? '<p class="mp-mobile-stars">' + stars + '</p>' : '';
   return `
-    <li class="mp-card ${isTop3 ? 'mp-card-best' : ''}" data-tier="${check.tier ?? ''}">
+    <li class="mp-card ${isTop3 ? 'mp-card-best' : ''}" data-tier="${check.tier ?? ''}" data-name="${escapeHtml(p.name ?? '')}" data-maker="${escapeHtml(p.maker ?? '')}" data-price="${p.price ?? ''}" data-rating="${check.rating ?? ''}">
       <a href="/products/${p.dmm_content_id}/">
         <img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy" />
         <div class="mp-card-body">
@@ -160,7 +160,7 @@ function publicRowHtml(check) {
   if (!meta) return '';
   const { p, isTop3, subInfo } = meta;
   return `
-    <li class="mp-row ${isTop3 ? 'mp-row-best' : ''}" data-tier="${check.tier ?? ''}">
+    <li class="mp-row ${isTop3 ? 'mp-row-best' : ''}" data-tier="${check.tier ?? ''}" data-name="${escapeHtml(p.name ?? '')}" data-maker="${escapeHtml(p.maker ?? '')}" data-price="${p.price ?? ''}" data-rating="${check.rating ?? ''}">
       <a href="/products/${p.dmm_content_id}/" class="mp-row-link">
         <img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name)}" loading="lazy" />
         <div class="mp-row-body">
@@ -763,6 +763,19 @@ const spendShareUrl = profile
               </div>
             </div>
 
+            <!-- 記録の中の検索・並び替え(2026-09-08。一覧が9件以上のときだけ表示。マイページと同じ) -->
+            <div class="mp-list-tools" id="profile-list-tools" hidden>
+              <input type="search" id="profile-list-search" class="mp-list-search" placeholder="記録の中を検索(商品名・メーカー)" autocomplete="off" />
+              <select id="profile-list-sort" class="mp-list-sort" aria-label="並び替え">
+                <option value="updated">記録が新しい順</option>
+                <option value="name">商品名順</option>
+                <option value="maker">メーカー順</option>
+                <option value="rating">評価が高い順</option>
+                <option value="price_desc">価格が高い順</option>
+                <option value="price_asc">価格が安い順</option>
+              </select>
+            </div>
+
             <div class="mp-status-panel" data-status-panel="interested">
               {groupedPublic.interested.length === 0 ? (
                 <p class="mp-empty-tab">まだ気になるの商品がありません。</p>
@@ -770,6 +783,8 @@ const spendShareUrl = profile
                 <>
                   <ul class="mp-grid mp-grid-compact" data-view-variant="grid" set:html={interestedCardsHtml} />
                   <ul class="mp-list" data-view-variant="list" hidden set:html={interestedRowsHtml} />
+                  <p class="mp-empty-tab" data-list-empty hidden>一致する記録がありません。</p>
+                  <div class="mp-list-more" data-list-more hidden></div>
                 </>
               )}
             </div>
@@ -787,7 +802,8 @@ const spendShareUrl = profile
                   </div>
                   <ul class="mp-grid mp-grid-compact" data-view-variant="grid" set:html={usedCardsHtml} />
                   <ul class="mp-list" data-view-variant="list" hidden set:html={usedRowsHtml} />
-                  <p class="mp-empty-tab" id="profile-tier-empty" hidden>この絞り込みに該当する商品がありません。</p>
+                  <p class="mp-empty-tab" data-list-empty hidden>この絞り込みに該当する商品がありません。</p>
+                  <div class="mp-list-more" data-list-more hidden></div>
                 </>
               )}
             </div>
@@ -1047,24 +1063,122 @@ const spendShareUrl = profile
 
         const tierTabsNav = document.getElementById('profile-tier-tabs');
 
-        applyTierFilter = (tier) => {
-          if (!tierTabsNav) return;
-          tierTabsNav.querySelectorAll('.mp-tier-tab').forEach((btn) => {
-            btn.classList.toggle('mp-tier-tab-active', btn.dataset.tier === tier);
+        // ---- 記録一覧の絞り込み・検索・並び替え・段階表示(2026-09-08、マイページと同じ仕組み) ----
+        // サーバー側で全件のカードを出力しているので、ここでは要素の表示/非表示と並び順だけを制御する。
+        // 24件ずつ表示し「さらに表示」で増やす。検索・並び替えは data-name / data-maker / data-price / data-rating を使う。
+        const LIST_PAGE = 24;
+        let currentTier = 'all';
+        let listQuery = '';
+        let listSort = 'updated';
+        const shownByStatus = { interested: LIST_PAGE, used: LIST_PAGE };
+        const listTools = document.getElementById('profile-list-tools');
+        const listSearch = document.getElementById('profile-list-search');
+        const listSortEl = document.getElementById('profile-list-sort');
+
+        // 元の並び(記録が新しい順)を覚えておく
+        document.querySelectorAll('.mp-status-panel [data-view-variant]').forEach((ul) => {
+          [...ul.children].forEach((li, i) => (li.dataset.idx = String(i)));
+        });
+
+        const sorters = {
+          updated: (a, b) => Number(a.dataset.idx) - Number(b.dataset.idx),
+          name: (a, b) => a.dataset.name.localeCompare(b.dataset.name, 'ja'),
+          maker: (a, b) => a.dataset.maker.localeCompare(b.dataset.maker, 'ja') || a.dataset.name.localeCompare(b.dataset.name, 'ja'),
+          rating: (a, b) => (Number(b.dataset.rating) || -1) - (Number(a.dataset.rating) || -1) || Number(a.dataset.idx) - Number(b.dataset.idx),
+          price_desc: (a, b) => (Number(b.dataset.price) || -1) - (Number(a.dataset.price) || -1),
+          price_asc: (a, b) => (a.dataset.price === '' ? Infinity : Number(a.dataset.price)) - (b.dataset.price === '' ? Infinity : Number(b.dataset.price)),
+        };
+
+        const refreshList = (status) => {
+          const panel = document.querySelector(`.mp-status-panel[data-status-panel="${status}"]`);
+          if (!panel) return;
+          const q = listQuery.trim().toLowerCase();
+          const shown = shownByStatus[status] ?? LIST_PAGE;
+          let matched = 0;
+          let visibleCount = 0;
+          panel.querySelectorAll('[data-view-variant]').forEach((ul) => {
+            const sorted = [...ul.children].sort(sorters[listSort] ?? sorters.updated);
+            sorted.forEach((li) => ul.appendChild(li));
+            let n = 0;
+            let v = 0;
+            sorted.forEach((li) => {
+              const tierOk = status !== 'used' || currentTier === 'all' || li.dataset.tier === currentTier;
+              const qOk = !q || `${li.dataset.name} ${li.dataset.maker}`.toLowerCase().includes(q);
+              const ok = tierOk && qOk;
+              if (ok) n++;
+              const show = ok && n <= shown;
+              if (show) v++;
+              li.hidden = !show;
+            });
+            matched = n;
+            visibleCount = v;
           });
-          document.querySelectorAll('.mp-status-panel[data-status-panel="used"] li[data-tier]').forEach((el) => {
-            el.hidden = tier !== 'all' && el.dataset.tier !== tier;
-          });
-          const emptyEl = document.getElementById('profile-tier-empty');
-          if (emptyEl) {
-            const visibleVariant = document.querySelector(
-              '.mp-status-panel[data-status-panel="used"] [data-view-variant]:not([hidden])'
-            );
-            const hasVisible = visibleVariant
-              ? visibleVariant.querySelectorAll('li[data-tier]:not([hidden])').length > 0
-              : true;
-            emptyEl.hidden = hasVisible;
+          const emptyEl = panel.querySelector('[data-list-empty]');
+          if (emptyEl) emptyEl.hidden = matched > 0;
+          const moreEl = panel.querySelector('[data-list-more]');
+          if (moreEl) {
+            const rest = matched - visibleCount;
+            if (rest > 0) {
+              moreEl.hidden = false;
+              moreEl.innerHTML =
+                `<p class="mp-list-more-count">${visibleCount} / ${matched}件を表示</p>` +
+                `<button type="button" class="mp-list-more-btn" data-more="page">さらに${Math.min(rest, LIST_PAGE)}件を表示</button>` +
+                (rest > LIST_PAGE ? `<button type="button" class="mp-list-more-all" data-more="all">すべて表示(${matched}件)</button>` : '');
+            } else if (matched > LIST_PAGE) {
+              moreEl.hidden = false;
+              moreEl.innerHTML = `<p class="mp-list-more-count">${matched}件すべて表示中</p>`;
+            } else {
+              moreEl.hidden = true;
+              moreEl.innerHTML = '';
+            }
           }
+          if (listTools) {
+            const total = panel.querySelector('[data-view-variant]')?.children.length ?? 0;
+            listTools.hidden = status === 'folders' || total <= 8;
+          }
+        };
+
+        document.querySelectorAll('[data-list-more]').forEach((moreEl) => {
+          moreEl.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-more]');
+            if (!btn) return;
+            const status = moreEl.closest('.mp-status-panel')?.dataset.statusPanel;
+            if (!status) return;
+            shownByStatus[status] = btn.dataset.more === 'all' ? Number.MAX_SAFE_INTEGER : (shownByStatus[status] ?? LIST_PAGE) + LIST_PAGE;
+            refreshList(status);
+          });
+        });
+
+        if (listSearch) {
+          let timer;
+          listSearch.addEventListener('input', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+              listQuery = listSearch.value;
+              shownByStatus.interested = LIST_PAGE;
+              shownByStatus.used = LIST_PAGE;
+              refreshList(currentStatus);
+            }, 200);
+          });
+        }
+        if (listSortEl) {
+          listSortEl.addEventListener('change', () => {
+            listSort = listSortEl.value;
+            shownByStatus.interested = LIST_PAGE;
+            shownByStatus.used = LIST_PAGE;
+            refreshList(currentStatus);
+          });
+        }
+
+        applyTierFilter = (tier) => {
+          currentTier = tier;
+          if (tierTabsNav) {
+            tierTabsNav.querySelectorAll('.mp-tier-tab').forEach((btn) => {
+              btn.classList.toggle('mp-tier-tab-active', btn.dataset.tier === tier);
+            });
+          }
+          shownByStatus.used = LIST_PAGE;
+          refreshList('used');
         };
 
         if (tierTabsNav) {
@@ -1085,6 +1199,7 @@ const spendShareUrl = profile
           });
           if (viewToggle) viewToggle.style.display = status === 'folders' ? 'none' : '';
           if (status !== 'used') applyTierFilter('all');
+          refreshList(status);
           try {
             localStorage.setItem('onahole_profile_status_tab', status);
           } catch (e) {}
@@ -1122,6 +1237,7 @@ const spendShareUrl = profile
         applyStatusTab(currentStatus);
         applyView(currentView);
         applyTierFilter('all');
+        refreshList('interested');
       }
 
       const statJumpCards = document.querySelectorAll('.mp-stat-jump');
@@ -1255,6 +1371,27 @@ const spendShareUrl = profile
       }
 
       initFollow();
+    </script>
+    <button type="button" id="profile-back-top" class="back-to-top" aria-label="ページの先頭へ戻る" title="先頭へ">▲</button>
+    <script>
+      // 記録一覧が長いとき用の「上へ戻る」ボタン
+      const backTop = document.getElementById('profile-back-top');
+      if (backTop) {
+        let ticking = false;
+        window.addEventListener(
+          'scroll',
+          () => {
+            if (ticking) return;
+            ticking = true;
+            requestAnimationFrame(() => {
+              backTop.classList.toggle('is-visible', window.scrollY > 900);
+              ticking = false;
+            });
+          },
+          { passive: true }
+        );
+        backTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+      }
     </script>
   </body>
 </html>
