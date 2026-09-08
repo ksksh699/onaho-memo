@@ -57,12 +57,29 @@ function toDate(value) {
 }
 
 export async function GET() {
-  let products = [];
-  try {
-    products = await fetchAllProducts();
-  } catch (err) {
-    console.error('[sitemap.xml] 商品一覧の取得に失敗:', err);
-    // DB障害時でも固定ページだけのサイトマップを返し、クローラーにエラーを見せない
+  // 2026-09-08 デプロイ直後の初回呼び出しでSupabaseへの問い合わせが一時的に失敗し、
+  // 「固定ページ5件だけのサイトマップ」がCDNに1日キャッシュされてしまった。
+  // 一時的な失敗は1回だけ少し待って再試行し、それでも駄目なときは中途半端な内容を
+  // 200で返さず(=Googleに「このサイトは5ページ」と教えてしまわない)、
+  // キャッシュ禁止の503を返してクローラーに後で取り直してもらう。
+  let products = null;
+  for (let attempt = 1; attempt <= 2 && products === null; attempt++) {
+    try {
+      products = await fetchAllProducts();
+    } catch (err) {
+      console.error(`[sitemap.xml] 商品一覧の取得に失敗(${attempt}回目):`, err);
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  }
+  if (products === null) {
+    return new Response('sitemap temporarily unavailable', {
+      status: 503,
+      headers: {
+        'Content-Type': 'text/plain; charset=UTF-8',
+        'Cache-Control': 'private, no-store',
+        'Retry-After': '600',
+      },
+    });
   }
 
   const today = new Date().toISOString().slice(0, 10);
