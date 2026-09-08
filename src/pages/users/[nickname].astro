@@ -1,6 +1,7 @@
 ---
 import { supabase } from '../../lib/supabase.js';
 import '../../styles/global.css';
+import { isSafeHttpUrl } from '../../lib/safeUrl.js';
 
 // 商品ページと同様、ビルド時の事前生成(prerender)はせず、リクエストごとに
 // その場でSupabaseから該当プロフィールを取得する(SSR)方式にしている。
@@ -21,7 +22,8 @@ if (profile && profile.is_public === false) {
   profile = null;
 }
 
-const snsLinks = Array.isArray(profile?.sns_links) ? profile.sns_links.filter((l) => l?.url) : [];
+// SNSリンクは http(s) のURLだけ表示する(javascript: 等を href に入れさせない。DB側にも制約あり)
+const snsLinks = Array.isArray(profile?.sns_links) ? profile.sns_links.filter((l) => l?.url && isSafeHttpUrl(l.url)) : [];
 
 // checksは「そのユーザーのチェック全件」(公開・非公開を問わず)を取得しておき、
 // 一覧表示には公開分だけを絞り込んで使う。TOP3・ベストな口コミ・バッジ/称号・

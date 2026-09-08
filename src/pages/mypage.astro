@@ -85,6 +85,7 @@ import SiteFooter from '../components/SiteFooter.astro';
       import { supabase } from '../lib/supabase.js';
       import { compressImage } from '../lib/imageCompress.js';
       import { moneyComparisonPicks, formatMoneyComparison } from '../lib/moneyComparison.js';
+      import { normalizeHttpUrl, isSafeHttpUrl } from '../lib/safeUrl.js';
 
       const content = document.getElementById('mypage-content');
       const statsContainer = document.getElementById('mp-stats-container');
@@ -1743,8 +1744,8 @@ import SiteFooter from '../components/SiteFooter.astro';
       function snsRowHtml(link, idx) {
         return `
           <div class="profile-sns-row" data-idx="${idx}">
-            <input type="text" class="nickname-input profile-sns-label" placeholder="ラベル(例: X)" maxlength="20" value="${link.label ?? ''}" />
-            <input type="text" class="nickname-input profile-sns-url" placeholder="URL" maxlength="300" value="${link.url ?? ''}" />
+            <input type="text" class="nickname-input profile-sns-label" placeholder="ラベル(例: X)" maxlength="20" value="${escapeHtmlText(link.label ?? '')}" />
+            <input type="url" class="nickname-input profile-sns-url" placeholder="URL(https://〜)" maxlength="300" value="${escapeHtmlText(link.url ?? '')}" />
             <button type="button" class="profile-sns-remove-btn" data-idx="${idx}">削除</button>
           </div>
         `;
@@ -1756,9 +1757,10 @@ import SiteFooter from '../components/SiteFooter.astro';
           ? `
             <ul class="profile-sns-links">
               ${currentSnsLinks
+                .filter((l) => isSafeHttpUrl(l.url))
                 .map(
                   (l) =>
-                    `<li><a class="profile-sns-link" href="${l.url}" target="_blank" rel="noopener noreferrer nofollow">${l.label || l.url}</a></li>`
+                    `<li><a class="profile-sns-link" href="${escapeHtmlText(l.url)}" target="_blank" rel="noopener noreferrer nofollow">${escapeHtmlText(l.label || l.url)}</a></li>`
                 )
                 .join('')}
             </ul>
@@ -1876,13 +1878,24 @@ import SiteFooter from '../components/SiteFooter.astro';
         const headerFile = document.getElementById('profile-header-input').files[0];
         const bio = document.getElementById('profile-bio-input').value.trim();
 
+        // SNSリンクは http(s) のURLだけ受け付ける(javascript: 等によるXSS防止。DB側にも同じ制約あり)
         const rows = [...document.querySelectorAll('#profile-sns-list .profile-sns-row')];
-        const snsLinks = rows
-          .map((row) => ({
-            label: row.querySelector('.profile-sns-label').value.trim(),
-            url: row.querySelector('.profile-sns-url').value.trim(),
-          }))
-          .filter((l) => l.url);
+        const snsLinks = [];
+        for (const row of rows) {
+          const rawUrl = row.querySelector('.profile-sns-url').value.trim();
+          if (!rawUrl) continue;
+          const url = normalizeHttpUrl(rawUrl);
+          if (!url) {
+            statusEl.textContent = `SNSリンクのURLが正しくありません(https:// で始まるURLを入れてください): ${rawUrl.slice(0, 40)}`;
+            row.querySelector('.profile-sns-url').focus();
+            return;
+          }
+          snsLinks.push({ label: row.querySelector('.profile-sns-label').value.trim().slice(0, 40), url });
+        }
+        if (snsLinks.length > 10) {
+          statusEl.textContent = 'SNSリンクは10件までです';
+          return;
+        }
 
         let avatarUrl = currentAvatarUrl;
         if (avatarFile) {
@@ -1926,6 +1939,9 @@ import SiteFooter from '../components/SiteFooter.astro';
         if (error) {
           if (error.code === '23505') {
             statusEl.textContent = 'そのニックネームは既に使われています';
+          } else if (error.code === '23514') {
+            // DB側の CHECK 制約(profiles_sns_links_safe)に弾かれた
+            statusEl.textContent = 'SNSリンクのURLが正しくありません(https:// で始まるURLを入れてください)';
           } else {
             console.error(error);
             statusEl.textContent = '保存に失敗しました';
