@@ -23,6 +23,9 @@ function isExempt(context) {
 
   if (ASSET_PATH_RE.test(pathname)) return true;
   if (pathname.startsWith('/_astro/')) return true;
+  // /api/ はJSONを返すだけ(アダルトなHTMLページではない)。オナ王など別サイトからの fetch には
+  // Cookieが付かないため、ゲートの対象にすると常にゲートのHTMLが返ってしまう(2026-09-08)
+  if (pathname.startsWith('/api/')) return true;
   if (context.request.method !== 'GET') return true;
 
   const ua = context.request.headers.get('user-agent') ?? '';
