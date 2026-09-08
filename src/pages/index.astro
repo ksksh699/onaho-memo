@@ -14,14 +14,19 @@ import SiteFooter from '../components/SiteFooter.astro';
 // 無料プランのDBが混み合う瞬間に当たっても、訪問者はキャッシュ済みのHTMLを待たずに受け取れる。
 // 注意: ランキング(気になる数・使った人数など)への反映は最大5分遅れる。
 //
-// 年齢確認ゲート(src/middleware.js)との関係:
-//   ゲートはCookie(age_verified)の有無で「ゲート画面」か「このページ」かを出し分けている。
-//   以前は「Vary: Cookie」を付けてCookieごとにCDNキャッシュを分けることで素通りを防いでいたが、
-//   Googleアナリティクス導入後は _ga 系Cookieが訪問者ごと・アクセスごとに変わるため、
-//   実質的に全員がキャッシュMISSになってしまった(2026-09-08に実測で確認)。
-//   現在は astro.config.mjs の middlewareMode: 'edge' により、ゲート判定をCDNキャッシュより
-//   手前(Vercel Routing Middleware)で行っているので、Varyは不要。未認証の人にはキャッシュを
-//   参照する前にゲート画面が返り、認証済みの人にはCookieの中身に関係なく同じキャッシュが使われる。
+// Vary: Cookie … 年齢確認ゲート(src/middleware.js)はCookie(age_verified)の有無で
+// 「ゲート画面」か「このページ」かを出し分けている。Varyを付けないと、CDNが
+// 「誰か1人が認証後に見たこのページのキャッシュ」をCookie無しの初回訪問者にも
+// そのまま返してしまい、年齢確認が素通りされてしまう。CookieごとにCDNのキャッシュを
+// 分けることで、その事故を防いでいる。
+//
+// 既知の課題(2026-09-08): Googleアナリティクス導入後は _ga 系Cookieが訪問者ごと・
+// アクセスごとに変わるため、このVaryによってCDNキャッシュがほぼ効かなくなっている。
+// 対策として astro.config.mjs で middlewareMode: 'edge' を試したが、Astroのエッジ
+// ミドルウェアは全ページを同じ内部URL(/_render)経由で取得する実装のため、そこにCDN
+// キャッシュが効いて「全ページが同じ商品ページになる」重大な不具合が起きたので撤回した。
+// ※ middlewareMode: 'edge' と s-maxage の組み合わせは二度と使わないこと。
+Astro.response.headers.set('Vary', 'Cookie');
 Astro.response.headers.set(
   'Cache-Control',
   'public, max-age=0, s-maxage=300, stale-while-revalidate=3600'

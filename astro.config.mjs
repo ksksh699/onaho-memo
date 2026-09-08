@@ -6,11 +6,8 @@ import vercel from '@astrojs/vercel';
 // https://astro.build/config
 export default defineConfig({
   output: 'server',
-  adapter: vercel({
-    // 年齢確認ゲート(src/middleware.js)を、VercelのCDNキャッシュより手前の
-    // Routing Middleware(エッジ)で実行する。これにより、ページ側で「Vary: Cookie」を
-    // 付けなくてもゲートが素通りされず、認証済みの訪問者は全員同じCDNキャッシュを共有できる
-    // (Googleアナリティクスの _ga Cookieが訪問者ごとに違ってもキャッシュが効く)。
-    middlewareMode: 'edge',
-  }),
+  // 注意: middlewareMode: 'edge' は使わないこと。Astroのエッジミドルウェアは全ページを
+  // 同じ内部URL(/_render)経由で取得するため、ページ側の s-maxage(CDNキャッシュ)と
+  // 組み合わさると「全ページが同じ内容になる」重大な不具合が起きる(2026-09-08に本番で発生)。
+  adapter: vercel(),
 });
