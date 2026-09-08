@@ -1124,6 +1124,35 @@ main {
   color: var(--danger) !important;
 }
 
+/* パスワード条件のチェックリスト(signup / reset-password。src/lib/passwordRules.js が描画) */
+.pw-rules {
+  list-style: none;
+  margin: 0.15rem 0 0.6rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.pw-rule {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pw-rule-mark {
+  display: inline-block;
+  width: 1em;
+  text-align: center;
+  font-weight: 700;
+}
+
+.pw-rule.ok {
+  color: #2e8b57;
+}
+
 .auth-area {
   margin-top: 1.5rem;
 }

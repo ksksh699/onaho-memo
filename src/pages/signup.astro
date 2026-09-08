@@ -24,11 +24,12 @@ import SiteFooter from '../components/SiteFooter.astro';
         <label class="profile-edit-label" for="signup-email">メールアドレス</label>
         <input type="email" id="signup-email" class="nickname-input" required autocomplete="email" />
 
-        <label class="profile-edit-label" for="signup-password">パスワード(6文字以上)</label>
-        <input type="password" id="signup-password" class="nickname-input" required autocomplete="new-password" minlength="6" />
+        <label class="profile-edit-label" for="signup-password">パスワード</label>
+        <input type="password" id="signup-password" class="nickname-input" required autocomplete="new-password" minlength="8" aria-describedby="signup-password-rules" />
+        <ul id="signup-password-rules" class="pw-rules" aria-label="パスワードの条件"></ul>
 
         <label class="profile-edit-label" for="signup-password-confirm">パスワード(確認)</label>
-        <input type="password" id="signup-password-confirm" class="nickname-input" required autocomplete="new-password" minlength="6" />
+        <input type="password" id="signup-password-confirm" class="nickname-input" required autocomplete="new-password" minlength="8" />
 
         <button type="submit" class="btn-primary">登録する</button>
       </form>
@@ -39,9 +40,14 @@ import SiteFooter from '../components/SiteFooter.astro';
 
     <script>
       import { supabase } from '../lib/supabase.js';
+      import { validatePassword, translateAuthPasswordError, mountPasswordRules } from '../lib/passwordRules.js';
 
       const form = document.getElementById('signup-form');
       const statusEl = document.getElementById('signup-status');
+      const passwordInput = document.getElementById('signup-password');
+
+      // パスワード条件(8文字以上・英字と数字を含む)のチェックリストを入力欄の下に出す
+      mountPasswordRules(passwordInput, document.getElementById('signup-password-rules'));
 
       function setStatus(message, isError) {
         statusEl.textContent = message;
@@ -52,8 +58,15 @@ import SiteFooter from '../components/SiteFooter.astro';
         e.preventDefault();
 
         const email = document.getElementById('signup-email').value.trim();
-        const password = document.getElementById('signup-password').value;
+        const password = passwordInput.value;
         const passwordConfirm = document.getElementById('signup-password-confirm').value;
+
+        const ruleError = validatePassword(password);
+        if (ruleError) {
+          setStatus(ruleError, true);
+          passwordInput.focus();
+          return;
+        }
 
         if (password !== passwordConfirm) {
           setStatus('パスワードが一致しません。', true);
@@ -71,8 +84,8 @@ import SiteFooter from '../components/SiteFooter.astro';
         if (error) {
           if (error.message.includes('already registered') || error.message.includes('User already registered')) {
             setStatus('このメールアドレスは既に登録されています。', true);
-          } else if (error.message.includes('Password should be')) {
-            setStatus('パスワードは6文字以上で入力してください。', true);
+          } else if (translateAuthPasswordError(error.message)) {
+            setStatus(translateAuthPasswordError(error.message), true);
           } else {
             setStatus('登録に失敗しました。しばらくしてから再度お試しください。', true);
             console.error(error);
