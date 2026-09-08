@@ -297,7 +297,7 @@ const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
   </head>
   <body>
     <SiteHeader />
-    <main class="detail">
+    <main class="detail" data-track-product={product.dmm_content_id}>
       <h1 class="detail-title">{product.name}</h1>
       <div class="detail-grid">
         <img
@@ -348,7 +348,7 @@ const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
           {releaseDateDisplay && <p>発売日: {releaseDateDisplay}</p>}
           {product.dmm_review_average && (
             <p>
-              <a href={product.affiliate_url} target="_blank" rel="noopener nofollow" class="fanza-review-link">
+              <a href={product.affiliate_url} target="_blank" rel="noopener nofollow" class="fanza-review-link" data-shop="fanza" data-listing="1">
                 FANZAレビュー: {product.dmm_review_average}点({product.dmm_review_count}件)
               </a>
             </p>
@@ -369,7 +369,7 @@ const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
               <ul class="shop-links-list">
                 {visibleShopLinks.map((s, i) => (
                   <li class={`shop-link-item ${i === cheapestIndex ? 'cheapest' : ''}`}>
-                    <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link">
+                    <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link" data-shop={s.key} data-listing={s.hasListing ? '1' : '0'}>
                       <span class="shop-link-name">{s.name}</span>
                       <span class="shop-link-price">
                         {s.hasListing ? (s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし') : '不明'}
@@ -388,7 +388,7 @@ const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
                   <ul class="shop-links-list">
                     {moreShopLinks.map((s, i) => (
                       <li class={`shop-link-item ${i + visibleShopLinks.length === cheapestIndex ? 'cheapest' : ''}`}>
-                        <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link">
+                        <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link" data-shop={s.key} data-listing={s.hasListing ? '1' : '0'}>
                           <span class="shop-link-name">{s.name}</span>
                           <span class="shop-link-price">
                             {s.hasListing ? (s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし') : '不明'}

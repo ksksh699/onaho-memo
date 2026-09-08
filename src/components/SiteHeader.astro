@@ -8,7 +8,29 @@
 // ヘッダー自体はposition: stickyにした上で、スクロール方向に応じて
 // 表示/非表示を切り替える(下にスクロール中は隠す、上にスクロールしたり
 // 止まったりしたら再表示する)。ホームに戻れなくなる問題への対応。
+//
+// このコンポーネントは全ページに置かれているため、サイト全体の計測もここで行う:
+//   1. Googleアナリティクス(GA4): 下の GA_MEASUREMENT_ID に測定ID(G-XXXXXXXXXX)を
+//      入れると全ページに計測タグが入る。空文字のままなら何も出力しない。
+//   2. 自前アクセス計測: ページ表示とショップリンクのクリックを /api/track に送り、
+//      Supabaseの access_logs に記録する(週次のアクセス分析に使う)。
+//      詳細は src/pages/api/track.js を参照。
+const GA_MEASUREMENT_ID = '';
 ---
+
+{GA_MEASUREMENT_ID && (
+  <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}></script>
+)}
+{GA_MEASUREMENT_ID && (
+  <script is:inline define:vars={{ GA_MEASUREMENT_ID }}>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() {
+      dataLayer.push(arguments);
+    }
+    gtag('js', new Date());
+    gtag('config', GA_MEASUREMENT_ID);
+  </script>
+)}
 
 <header class="site-header">
   <a href="/" class="site-logo">オナホめも</a>
@@ -104,4 +126,60 @@
       { passive: true }
     );
   }
+
+  // ---- 自前アクセス計測 ----
+  // ページ表示(pageview)と、商品ページのショップリンククリック(shop_click)を /api/track に送る。
+  // sendBeaconは「ページを離れる途中でも送信が完了する」仕組みなので、
+  // 外部ショップへ遷移するクリックでも取りこぼしにくい。
+  // 計測が失敗しても閲覧には一切影響しないよう、全体を try で包んでいる。
+  (function trackAccess() {
+    try {
+      if (navigator.webdriver) return; // 自動操作ブラウザ(テスト等)は除外
+      if (localStorage.getItem('om_notrack') === '1') return; // 自分の閲覧を除外したいとき用のスイッチ
+
+      let sid = sessionStorage.getItem('om_sid');
+      if (!sid) {
+        sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        sessionStorage.setItem('om_sid', sid);
+      }
+
+      // 商品ページでは <main data-track-product="hole1234"> から商品IDを拾う
+      const productEl = document.querySelector('[data-track-product]');
+      const productId = productEl ? productEl.getAttribute('data-track-product') : null;
+
+      const send = (payload) => {
+        const body = JSON.stringify({
+          ...payload,
+          sid,
+          product: productId,
+          path: location.pathname + location.search,
+          referrer: document.referrer || '',
+        });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/track', new Blob([body], { type: 'application/json' }));
+        } else {
+          fetch('/api/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body,
+            keepalive: true,
+          }).catch(() => {});
+        }
+      };
+
+      send({ event: 'pageview' });
+
+      document.addEventListener('click', (e) => {
+        const link = e.target.closest('a[data-shop]');
+        if (!link) return;
+        send({
+          event: 'shop_click',
+          shop: link.getAttribute('data-shop'),
+          listing: link.getAttribute('data-listing') === '1',
+        });
+      });
+    } catch (_) {
+      /* 計測は失敗しても無視 */
+    }
+  })();
 </script>
