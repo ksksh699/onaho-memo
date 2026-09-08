@@ -594,12 +594,14 @@ function formatMoneyComparison(it) {
 const moneyComparisons = moneyComparisonPicks(totalSpentAll).map(formatMoneyComparison);
 
 // Xでシェアするためのリンク(プロフィールが見つかった場合のみ)。
-// シェアするURLには utm_source=x を付ける(アクセス計測でX経由を判別するため。
-// あわせて、Xが以前の小さなカードをキャッシュしていても新しいURLとして取り直される)。
+// シェアするURLには utm_source=x(アクセス計測でX経由を判別するため)と v=2 を付ける。
+// Xはカードを約1週間URL単位でキャッシュし、その際 utm_ 系のパラメータは取り除いて同じURLとみなすため、
+// 以前の小さなカード(アイコン画像)が残っている。v=2 のように utm_ 以外のパラメータを付けると
+// 別のURLとして取り直される(2026-09-08に実際に古いカードが出続けたため追加)。
 const pageUrl = profile ? `${Astro.url.origin}/users/${encodeURIComponent(profile.nickname)}` : '';
 const shareText = profile ? `${profile.nickname}のオナホめも(マイベストTOP3・使った記録) #オナホ #オナホめも` : '';
 const xShareUrl = profile
-  ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(`${pageUrl}?utm_source=x`)}`
+  ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(`${pageUrl}?utm_source=x&v=2`)}`
   : '';
 // 合計使用金額のシェアは専用ページ(/share/spend)へ。金額・本数・ニックネーム入りのカード画像が出る
 const spendShareParams = profile
