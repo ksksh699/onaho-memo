@@ -198,7 +198,8 @@ export function buildUserCard({ profile, avatarDataUrl, top3, usedCount, reviewC
         position: 'relative',
       },
     },
-    h('div', { style: { display: 'flex', gap: 40, padding: '56px 56px 0 56px', width: OG_WIDTH, height: 558 } }, left, right),
+    // 高さ 558 = 630 - ブランド帯72。下の統計行が帯に触れないよう、余白を 24px 取る
+    h('div', { style: { display: 'flex', gap: 40, padding: '56px 56px 24px 56px', width: OG_WIDTH, height: 558 } }, left, right),
     brandBar('onahomemo.com')
   );
 }
