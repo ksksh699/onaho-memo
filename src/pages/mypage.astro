@@ -1522,13 +1522,52 @@ import SiteFooter from '../components/SiteFooter.astro';
         `;
       }
 
+      // 手動追加商品の販売サイト(2026-09-10)。商品ページ(products/[id].astro の SHOP_DEFS)と同じ並び。
+      // FANZA を選ぶと従来どおり affiliate_url / price に、他のショップは {shop}_url / {shop}_price に保存する。
+      const MANUAL_SHOPS = [
+        { key: 'fanza', name: 'FANZA', urlField: 'affiliate_url', priceField: 'price' },
+        { key: 'pyuarabu', name: 'ぴゅあらばショップ', urlField: 'pyuarabu_url', priceField: 'pyuarabu_price' },
+        { key: 'nls', name: 'NLS', urlField: 'nls_url', priceField: 'nls_price' },
+        { key: 'daimaoh', name: '大魔王', urlField: 'daimaoh_url', priceField: 'daimaoh_price' },
+        { key: 'mzakka', name: 'M-ZAKKA', urlField: 'mzakka_url', priceField: 'mzakka_price' },
+        { key: 'hotpowers', name: 'ホットパワーズ', urlField: 'hotpowers_url', priceField: 'hotpowers_price' },
+        { key: 'nobunagatoys', name: '信長トイズ', urlField: 'nobunagatoys_url', priceField: 'nobunagatoys_price' },
+        { key: 'ems', name: 'エムズ', urlField: 'ems_url', priceField: 'ems_price' },
+      ];
+      const MANUAL_SHOP_SELECT_FIELDS = MANUAL_SHOPS.flatMap((s) => [s.urlField, s.priceField]).join(', ');
+
+      function manualShopRowHtml(row) {
+        const options = MANUAL_SHOPS.map(
+          (s) => `<option value="${s.key}" ${row?.key === s.key ? 'selected' : ''}>${s.name}</option>`
+        ).join('');
+        return `
+          <div class="mp-shop-row">
+            <select class="nickname-input mp-shop-key" aria-label="販売サイト">${options}</select>
+            <input type="url" class="nickname-input mp-shop-url" placeholder="商品ページのURL" value="${escapeHtmlText(row?.url ?? '')}" />
+            <input type="number" class="nickname-input mp-shop-price" placeholder="価格(税込)" min="0" value="${row?.price ?? ''}" />
+            <button type="button" class="mp-shop-remove-btn" aria-label="この販売サイトを削除">×</button>
+          </div>
+        `;
+      }
+
+      // 既存商品の各ショップ列から行を作る(URLが入っているショップだけ)。新規なら空の行を1つ
+      function manualShopRowsHtml(p) {
+        const rows = p
+          ? MANUAL_SHOPS.filter((s) => p[s.urlField]).map((s) => ({ key: s.key, url: p[s.urlField], price: p[s.priceField] ?? '' }))
+          : [];
+        if (rows.length === 0) rows.push({ key: 'daimaoh', url: '', price: '' });
+        return rows.map(manualShopRowHtml).join('');
+      }
+
       function manualProductFormHtml(p) {
         return `
           <input type="text" id="mp-name" class="nickname-input" placeholder="商品名(必須)" maxlength="200" value="${p?.name ?? ''}" />
           <input type="text" id="mp-maker" class="nickname-input" placeholder="メーカー(任意)" maxlength="100" value="${p?.maker ?? ''}" />
-          <input type="number" id="mp-price" class="nickname-input" placeholder="価格(任意・数字のみ)" min="0" value="${p?.price ?? ''}" />
           <input type="text" id="mp-tags" class="nickname-input" placeholder="ジャンルタグ(任意・カンマ区切り)" value="${(p?.genre_tags ?? []).join(', ')}" />
-          <input type="text" id="mp-url" class="nickname-input" placeholder="購入先URL(任意)" value="${p?.affiliate_url ?? ''}" />
+          <label class="field-label">販売サイト(任意・複数可)</label>
+          <p class="mp-shop-hint">取り扱いのあるショップを選んで、そのショップの商品ページ(アフィリエイトリンク)と税込価格を入れてください。商品ページの価格比較にそのまま並びます。</p>
+          <div id="mp-shop-rows">${manualShopRowsHtml(p)}</div>
+          <button type="button" id="mp-shop-add-btn" class="mp-shop-add-btn">＋ 販売サイトを追加</button>
           <label class="field-label">発売日(任意)</label>
           <input
             type="text"
@@ -1555,7 +1594,7 @@ import SiteFooter from '../components/SiteFooter.astro';
         return `
           <div class="manual-product-section">
             <h2 class="manual-product-title">商品を手動追加(FANZA未掲載品)</h2>
-            <p class="onaking-links-desc">FANZAで取り扱いのない商品を、独自に登録・編集できます。</p>
+            <p class="onaking-links-desc">FANZAで取り扱いのない商品を、独自に登録・編集できます。販売サイトはショップごとに選んで登録できます(FANZA以外のショップだけでも構いません)。</p>
             ${manualProductListHtml(products, editingId)}
             <h3 class="manual-product-form-title">${editingProduct ? `「${editingProduct.name}」を編集` : '新しく追加'}</h3>
             ${manualProductFormHtml(editingProduct)}
@@ -1568,7 +1607,7 @@ import SiteFooter from '../components/SiteFooter.astro';
         const { data, error } = await supabase
           .from('products')
           .select(
-            'id, dmm_content_id, name, maker, price, image_url, genre_tags, affiliate_url, release_date, release_date_text, manual_note'
+            `id, dmm_content_id, name, maker, price, image_url, genre_tags, affiliate_url, release_date, release_date_text, manual_note, ${MANUAL_SHOP_SELECT_FIELDS}`
           )
           .eq('is_manual', true)
           .order('name');
@@ -1636,6 +1675,20 @@ import SiteFooter from '../components/SiteFooter.astro';
           return;
         }
 
+        if (e.target.closest('#mp-shop-add-btn')) {
+          const rowsEl = document.getElementById('mp-shop-rows');
+          // まだ使っていないショップを初期選択にする
+          const used = [...rowsEl.querySelectorAll('.mp-shop-key')].map((el) => el.value);
+          const next = MANUAL_SHOPS.find((s) => !used.includes(s.key)) ?? MANUAL_SHOPS[0];
+          rowsEl.insertAdjacentHTML('beforeend', manualShopRowHtml({ key: next.key, url: '', price: '' }));
+          return;
+        }
+        const shopRemoveBtn = e.target.closest('.mp-shop-remove-btn');
+        if (shopRemoveBtn) {
+          shopRemoveBtn.closest('.mp-shop-row')?.remove();
+          return;
+        }
+
         const deleteBtn = e.target.closest('.manual-product-delete-btn');
         if (deleteBtn) {
           if (!confirm('この商品を削除しますか？関連するレビュー等からも参照できなくなります。')) return;
@@ -1666,8 +1719,38 @@ import SiteFooter from '../components/SiteFooter.astro';
         statusEl.textContent = editingManualProductId ? '更新中...' : '追加中...';
 
         const maker = document.getElementById('mp-maker').value.trim() || null;
-        const priceRaw = document.getElementById('mp-price').value;
-        const price = priceRaw ? Number(priceRaw) : null;
+
+        // 販売サイトの行を読み取る(URLが空の行は無視。同じショップが2行あれば後の行を採用)
+        const shopValues = {};
+        for (const sdef of MANUAL_SHOPS) {
+          shopValues[sdef.urlField] = null;
+          shopValues[sdef.priceField] = null;
+        }
+        let shopError = null;
+        document.querySelectorAll('#mp-shop-rows .mp-shop-row').forEach((row) => {
+          const key = row.querySelector('.mp-shop-key').value;
+          const url = row.querySelector('.mp-shop-url').value.trim();
+          const priceRaw = row.querySelector('.mp-shop-price').value;
+          const sdef = MANUAL_SHOPS.find((s) => s.key === key);
+          if (!sdef || !url) return;
+          if (!/^https?:\/\//i.test(url)) {
+            shopError = `${sdef.name}のURLは https:// から始まる形で入力してください`;
+            return;
+          }
+          shopValues[sdef.urlField] = url;
+          shopValues[sdef.priceField] = priceRaw ? Number(priceRaw) : null;
+        });
+        if (shopError) {
+          statusEl.textContent = shopError;
+          return;
+        }
+        // 参考価格(price): FANZAの価格があればそれ、無ければ登録したショップの中で最安の価格。
+        // FANZA未掲載品でも一覧カード・合計使用金額・並び替えで価格を扱えるようにするため。
+        // 商品ページのFANZA欄は affiliate_url が無ければ「不明」のままなので、FANZA価格とは混同されない。
+        const shopPrices = MANUAL_SHOPS.filter((sdef) => sdef.key !== 'fanza' && shopValues[sdef.urlField] && shopValues[sdef.priceField] != null).map(
+          (sdef) => shopValues[sdef.priceField]
+        );
+        const price = shopValues.price != null ? shopValues.price : shopPrices.length ? Math.min(...shopPrices) : null;
         const tagsRaw = document.getElementById('mp-tags').value.trim();
         const genreTags = tagsRaw
           ? tagsRaw
@@ -1675,7 +1758,6 @@ import SiteFooter from '../components/SiteFooter.astro';
               .map((t) => t.trim())
               .filter(Boolean)
           : null;
-        const purchaseUrl = document.getElementById('mp-url').value.trim() || null;
         const releaseInput = document.getElementById('mp-release').value.trim();
         const releaseDateText = releaseInput || null;
         const releaseDate = parseReleaseDate(releaseInput);
@@ -1709,14 +1791,20 @@ import SiteFooter from '../components/SiteFooter.astro';
         const payload = {
           name,
           maker,
-          price,
           image_url: imageUrl,
           genre_tags: genreTags,
-          affiliate_url: purchaseUrl,
           release_date: releaseDate,
           release_date_text: releaseDateText,
           manual_note: note,
+          ...shopValues,
+          price,
         };
+        // 登録したショップには matched_at を入れておく(木曜の定期タスクが「未マッチ」として扱わないように)
+        const nowIso = new Date().toISOString();
+        for (const sdef of MANUAL_SHOPS) {
+          if (sdef.key === 'fanza') continue;
+          payload[`${sdef.key}_matched_at`] = shopValues[sdef.urlField] ? nowIso : null;
+        }
 
         if (editingManualProductId) {
           const { error } = await supabase.from('products').update(payload).eq('id', editingManualProductId);

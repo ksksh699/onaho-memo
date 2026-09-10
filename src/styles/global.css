@@ -6160,3 +6160,77 @@ main {
   padding: 0.3rem 0;
   align-self: flex-start;
 }
+
+/* ---- 手動追加商品の販売サイト行(mypage.astro、2026-09-10) ---- */
+.mp-shop-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.mp-shop-row {
+  display: grid;
+  grid-template-columns: 9.5rem 1fr 7rem auto;
+  gap: 0.4rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.manual-product-section .mp-shop-row input,
+.manual-product-section .mp-shop-row select {
+  margin-bottom: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.manual-product-section .mp-shop-row select {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.55rem 0.6rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.mp-shop-remove-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  width: 2rem;
+  height: 2rem;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.mp-shop-remove-btn:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.mp-shop-add-btn {
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--accent);
+  padding: 0.45rem 0.9rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  font-family: inherit;
+  margin-bottom: 0.8rem;
+}
+
+.mp-shop-add-btn:hover {
+  border-color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .mp-shop-row {
+    grid-template-columns: 1fr auto;
+  }
+  .mp-shop-row .mp-shop-url {
+    grid-column: 1 / -1;
+  }
+}

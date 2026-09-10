@@ -268,10 +268,19 @@ const cheapestIndex = showCheapestBadge
   ? orderedShopLinks.findIndex((s) => s.hasListing && s.price === cheapestPrice)
   : -1;
 
-// 最初はFANZAのみ表示し、タップで残り7サイトを開けるようにする
-const SHOP_LINKS_VISIBLE = 1;
-const visibleShopLinks = orderedShopLinks.slice(0, SHOP_LINKS_VISIBLE);
-const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
+// 最初はFANZAのみ表示し、タップで残り7サイトを開けるようにする。
+// ただしFANZAに取り扱いが無い商品(手動追加のFANZA未掲載品など)は、FANZAの「不明」だけを
+// 見せても意味がないので、取り扱いのあるショップをすべて先頭に出し、残りを折りたたむ(2026-09-10)。
+const fanzaListed = orderedShopLinks[0]?.hasListing;
+const visibleShopLinks = fanzaListed
+  ? orderedShopLinks.slice(0, 1)
+  : orderedShopLinks.filter((s) => s.hasListing).length > 0
+    ? orderedShopLinks.filter((s) => s.hasListing)
+    : orderedShopLinks.slice(0, 1);
+const moreShopLinks = orderedShopLinks.filter((s) => !visibleShopLinks.includes(s));
+// 「最安」バッジの位置は、表示順(visible → more)での添字で判定する
+const displayOrder = [...visibleShopLinks, ...moreShopLinks];
+const cheapestDisplayIndex = cheapestIndex >= 0 ? displayOrder.indexOf(orderedShopLinks[cheapestIndex]) : -1;
 
 // og:系タグ用のこのページの正規URL。Xなどに貼った時に商品名・画像入りの
 // カードとして表示されるようにする(レビュー保存後のシェアボタンは
@@ -290,7 +299,7 @@ const detailTags = (product.genre_tags ?? [])
 // 検索結果に表示される説明文(メタディスクリプション)。長すぎると省略されるので160文字以内に収める
 const metaDescription = [
   `${product.name}${product.maker ? `(${product.maker})` : ''}のレビュー・評価と価格比較。`,
-  product.price ? `FANZA価格 ¥${Number(product.price).toLocaleString()}。` : '',
+  product.price ? `${product.affiliate_url ? 'FANZA価格' : '参考価格'} ¥${Number(product.price).toLocaleString()}。` : '',
   'FANZA・NLS・大魔王・信長トイズ・ホットパワーズ・エムズ・M-ZAKKA・ぴゅあらばの購入先を比較できます。',
 ]
   .join('')
@@ -406,7 +415,7 @@ const metaDescription = [
               )}
               <ul class="shop-links-list">
                 {visibleShopLinks.map((s, i) => (
-                  <li class={`shop-link-item ${i === cheapestIndex ? 'cheapest' : ''}`}>
+                  <li class={`shop-link-item ${i === cheapestDisplayIndex ? 'cheapest' : ''}`}>
                     <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link" data-shop={s.key} data-listing={s.hasListing ? '1' : '0'}>
                       <span class="shop-link-name">{s.name}</span>
                       <span class="shop-link-price">
@@ -415,7 +424,7 @@ const metaDescription = [
                           <span class="discount-badge-small">{discountPercent}%OFF</span>
                         )}
                       </span>
-                      {i === cheapestIndex && <span class="shop-link-badge">最安</span>}
+                      {i === cheapestDisplayIndex && <span class="shop-link-badge">最安</span>}
                     </a>
                   </li>
                 ))}
@@ -425,13 +434,13 @@ const metaDescription = [
                   <summary>他{moreShopLinks.length}サイトを見る</summary>
                   <ul class="shop-links-list">
                     {moreShopLinks.map((s, i) => (
-                      <li class={`shop-link-item ${i + visibleShopLinks.length === cheapestIndex ? 'cheapest' : ''}`}>
+                      <li class={`shop-link-item ${i + visibleShopLinks.length === cheapestDisplayIndex ? 'cheapest' : ''}`}>
                         <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link" data-shop={s.key} data-listing={s.hasListing ? '1' : '0'}>
                           <span class="shop-link-name">{s.name}</span>
                           <span class="shop-link-price">
                             {s.hasListing ? (s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし') : '不明'}
                           </span>
-                          {i + visibleShopLinks.length === cheapestIndex && (
+                          {i + visibleShopLinks.length === cheapestDisplayIndex && (
                             <span class="shop-link-badge">最安</span>
                           )}
                         </a>
