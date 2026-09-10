@@ -6234,3 +6234,12 @@ main {
     grid-column: 1 / -1;
   }
 }
+
+/* 見出し横の件数表示(トップページ「商品一覧」など) */
+.section-count {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 0.4rem;
+  font-family: inherit;
+}

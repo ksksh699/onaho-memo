@@ -612,7 +612,10 @@ const RANKINGS = [
         </label>
       </div>
 
-      <h2 class="section-title">商品一覧</h2>
+      <h2 class="section-title">
+        商品一覧
+        <span class="section-count" id="product-list-count" data-all-total={count}>({(count ?? 0).toLocaleString('ja-JP')}件)</span>
+      </h2>
 
       <div class="grid-density-toggle" role="tablist" aria-label="表示切り替え">
         <button
@@ -852,6 +855,20 @@ const RANKINGS = [
         return map;
       }
 
+      // 見出し「商品一覧」の横の件数(2026-09-10)。絞り込み中は「(該当 N件 / 全 M件)」にする
+      const productCountEl = document.getElementById('product-list-count');
+      function updateProductCount(filters) {
+        if (!productCountEl) return;
+        const allTotal = Number(productCountEl.dataset.allTotal) || 0;
+        const filtered =
+          Boolean(filters.maker || filters.searchTerm || filters.yearFrom || filters.yearTo || filters.priceMin || filters.priceMax) ||
+          saleFilter.checked ||
+          onakingFilter.checked;
+        productCountEl.textContent = filtered
+          ? `(該当 ${currentTotal.toLocaleString('ja-JP')}件 / 全 ${allTotal.toLocaleString('ja-JP')}件)`
+          : `(${currentTotal.toLocaleString('ja-JP')}件)`;
+      }
+
       function applyFilters(q, { maker, searchTerm, yearFrom, yearTo, priceMin, priceMax }) {
         if (maker) q = q.eq('maker', maker);
         if (searchTerm) q = q.ilike('name', `%${searchTerm}%`);
@@ -883,6 +900,7 @@ const RANKINGS = [
         countQuery = applyFilters(countQuery, filters);
         const { count: newCount } = await countQuery;
         currentTotal = newCount ?? 0;
+        updateProductCount(filters);
 
         const from = (currentPage - 1) * pageSize;
         const to = from + pageSize - 1;
