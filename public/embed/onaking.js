@@ -1,21 +1,26 @@
 /*
  * オナホめも 埋め込みスクリプト(オナ王 ona-king.com 用) 2026-09-08
  *
- * オナ王側(WordPress / Luxeritas)に次の1行を入れると動く:
- *   <script src="https://onahomemo.com/embed/onaking.js" async></script>
+ * 使い方(オナ王側 = WordPress / Luxeritas):
+ *   A. 記事ごとに好きな場所へ置く(2026-09-08 じょいさんの希望でこちらが基本):
+ *        記事本文の「カスタムHTML」ブロックに次を貼る。
+ *        <div data-onahomemo="card"></div>
+ *        <script src="https://onahomemo.com/embed/onaking.js" async></script>
+ *      scriptタグは何度読み込まれても1回しか動かない(二重表示しない)。
+ *   B. トップページ等のウィジェット(カスタムHTML)にバナーを置く:
+ *        <div data-onahomemo="banner"></div>
+ *        <script src="https://onahomemo.com/embed/onaking.js" async></script>
+ *   C. 全ページ共通(フッター等)に scriptタグだけ置いた場合は、記事ページで中盤の
+ *      「■販売サイトはこちら」(見出し + ショップのボタン群)の直後に自動でカードを1つ差し込む(自動モード)。
+ *      その見出しが無い記事では、最後の「販売サイト一覧」ボックス(.item-box)の直後に1つ差し込む。
+ *      ただし、その記事に data-onahomemo="card" の置き場が1つでもあれば自動差し込みはせず、置き場だけに描画する。
  *
- * やること:
- *   1. 個別記事ページ(body.single-post)では、記事URLをオナホめものAPI(/api/onaking-card)に
- *      問い合わせ、対応する商品があれば「オナホめもで価格比較・レビュー」カードを
- *      「販売サイト一覧」ボックス(.item-box)の直後に差し込む。記事末尾にボックスが無ければ
- *      本文の末尾にも1つ足す。対応する商品が無い記事では何もしない。
- *   2. <div data-onahomemo="banner"></div> を置いた場所(トップページのウィジェット等)に、
- *      値下がり速報・人気商品つきのバナーを描画する。
- *   3. <div data-onahomemo="card"></div> を置いた場所にもカードを描画する(手動配置用)。
+ * どの場合も、記事URLに対応する商品がオナホめも側に登録されていなければ何も表示しない。
  *
  * scriptタグの data-* 属性で調整できる(省略時は括弧内の既定値):
- *   data-after="<CSSセレクタ>"   カードを直後に差し込む要素(".item-box")
- *   data-content="<CSSセレクタ>" 記事本文の入れ物(末尾追加用。"#mainEntity > .clearfix")
+ *   data-anchor-text="<文字列>"  自動モードの目印にする見出しの文字("販売サイトはこちら")
+ *   data-after="<CSSセレクタ>"   見出しが無いときの予備の差し込み先(".item-box" の最後の1つ。"" で無効)
+ *   data-content="<CSSセレクタ>" 記事本文の入れ物("#mainEntity > .clearfix")
  *   data-no-auto="1"             自動差し込みをしない(data-onahomemo の場所にだけ描画)
  *
  * 失敗しても(オナホめもが落ちている等)オナ王の表示には一切影響しないよう、全体を try で包む。
@@ -23,11 +28,17 @@
 (function () {
   'use strict';
   try {
+    // 同じscriptを複数回読み込んでも(記事内とフッターの両方など)1回だけ動かす
+    if (window.__onahomemoEmbedLoaded) return;
+    window.__onahomemoEmbedLoaded = true;
     var ORIGIN = 'https://onahomemo.com';
     var API = ORIGIN + '/api/onaking-card';
     var script = document.currentScript;
     var opts = {
-      after: (script && script.getAttribute('data-after')) || '.item-box',
+      // 自動差し込みの目印になる見出しテキスト(記事中盤の「■販売サイトはこちら」)
+      anchorText: script && script.hasAttribute('data-anchor-text') ? script.getAttribute('data-anchor-text') : '販売サイトはこちら',
+      // 見出しが無い記事での予備の差し込み先(最後の .item-box の直後)。data-after="" で無効化できる
+      after: script && script.hasAttribute('data-after') ? script.getAttribute('data-after') : '.item-box',
       content: (script && script.getAttribute('data-content')) || '#mainEntity > .clearfix',
       noAuto: !!(script && script.getAttribute('data-no-auto')),
     };
@@ -208,25 +219,58 @@
       return u.split('#')[0].split('?')[0];
     }
 
+    // 「■販売サイトはこちら」のような見出しテキストを含む段落を探し、その直後に続くボタン群
+    // (.wp-block-buttons など、リンクを含むブロック)まで含めた「差し込み位置の直前の要素」を返す。
+    // 見出しが見つからなければ null。
+    function findAnchor(text) {
+      if (!text) return null;
+      var scope = document.querySelector(opts.content) || document.body;
+      var nodes = scope.querySelectorAll('p, h2, h3, h4, h5, div, span, strong');
+      var head = null;
+      for (var i = 0; i < nodes.length; i++) {
+        var el = nodes[i];
+        var t = (el.textContent || '').replace(/\s+/g, ' ');
+        if (t.indexOf(text) === -1 || t.length > 120) continue;
+        // テキストを含む要素のうち、本文の直下に近い「段落レベル」の要素を採用する
+        while (el.parentElement && el.parentElement !== scope && /^(SPAN|STRONG|B|EM|A|BR)$/.test(el.tagName)) el = el.parentElement;
+        head = el;
+        break;
+      }
+      if (!head) return null;
+      var last = head;
+      var sib = head.nextElementSibling;
+      // 直後の要素がリンク(ショップボタン)を含むブロックなら、その後ろに置く(空の <p> は読み飛ばす)
+      for (var n = 0; sib && n < 3; n++) {
+        var isEmptyP = sib.tagName === 'P' && !(sib.textContent || '').trim() && !sib.querySelector('img, a');
+        if (isEmptyP) {
+          sib = sib.nextElementSibling;
+          continue;
+        }
+        if (sib.querySelector('a') && !/^H[1-6]$/.test(sib.tagName)) {
+          last = sib;
+          sib = sib.nextElementSibling;
+          continue;
+        }
+        break;
+      }
+      return last;
+    }
+
     function renderCards() {
       var manual = Array.prototype.slice.call(document.querySelectorAll('[data-onahomemo="card"]'));
       var isSingle = document.body && /(^|\s)single-post(\s|$)/.test(document.body.className);
       var targets = [];
-      if (!opts.noAuto && isSingle) {
-        var boxes = Array.prototype.slice.call(document.querySelectorAll(opts.after));
-        boxes.forEach(function (b) {
-          targets.push({ mode: 'after', el: b });
-        });
-        var content = document.querySelector(opts.content);
-        if (content) {
-          var lastBox = boxes[boxes.length - 1];
-          var h2s = Array.prototype.slice.call(content.querySelectorAll('h2'));
-          var needsTail =
-            !lastBox ||
-            h2s.some(function (h) {
-              return !!(lastBox.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING);
-            });
-          if (needsTail) targets.push({ mode: 'append', el: content });
+      // 手動の置き場(data-onahomemo="card")がある記事では自動差し込みをしない
+      if (!opts.noAuto && isSingle && manual.length === 0) {
+        // 2026-09-10 変更: 記事中盤の「■販売サイトはこちら」(見出しの段落 + ショップのボタン群)の直後に1つだけ差し込む。
+        // 以前の「販売サイト一覧ボックス(.item-box)の直後」は、ボックスが2つ続いて見栄えが悪いとのことで
+        // 見出しが見つからない記事でのみ、最後の .item-box の直後に1つ差し込む(それも無ければ何もしない)。
+        var anchor = findAnchor(opts.anchorText);
+        if (anchor) {
+          targets.push({ mode: 'after', el: anchor });
+        } else if (opts.after) {
+          var boxes = Array.prototype.slice.call(document.querySelectorAll(opts.after));
+          if (boxes.length) targets.push({ mode: 'after', el: boxes[boxes.length - 1] });
         }
       }
       if (!manual.length && !targets.length) return;
