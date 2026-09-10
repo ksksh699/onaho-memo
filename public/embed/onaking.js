@@ -172,7 +172,7 @@
       var sale = safeUrl(site.sale_url || site.url);
       return (
         bannerHead(site, 'オナ王の姉妹サイト') +
-        '<p class="om-title">オナホの「買う前」と「買った後」をひとつに</p>' +
+        '<p class="om-title">探す・比べる・記録する</p>' +
         '<div class="om-tiles">' +
         '<a class="om-tile" href="' + esc(home) + '" target="_blank" rel="noopener"><span class="om-ic">¥</span><b>8ショップの価格比較</b><p>FANZA・NLS・大魔王など、最安の店がひと目で分かる</p></a>' +
         '<a class="om-tile" href="' + esc(home) + '" target="_blank" rel="noopener"><span class="om-ic">✎</span><b>使った記録とレビュー</b><p>一軍・二軍・引退で整理。合計使用金額も見える</p></a>' +
