@@ -44,29 +44,29 @@
     };
 
     var CSS =
-      '.om-embed{box-sizing:border-box;margin:16px 0;padding:14px;border:1px solid #d9dfe9;border-radius:12px;background:#fff;font-family:inherit;color:#1f1f22;line-height:1.5;box-shadow:0 2px 10px rgba(43,95,173,.08)}' +
+      '.om-embed{box-sizing:border-box;margin:16px 0;padding:20px 22px;border:1px solid #d9dfe9;border-radius:12px;background:#fff;font-family:inherit;color:#1f1f22;line-height:1.5;box-shadow:0 2px 10px rgba(43,95,173,.08)}' +
       '.om-embed *{box-sizing:border-box}' +
-      '.om-head{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:13px;color:#4a4a4d}' +
+      '.om-head{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:#6b6b70}' +
       '.om-logo{display:inline-block;padding:2px 10px;border-radius:999px;background:#2b5fad;color:#fff;font-weight:700;font-size:12px;letter-spacing:.02em;text-decoration:none}' +
       '.om-logo:hover{background:#3f74c4;color:#fff}' +
-      '.om-body{display:flex;gap:12px;align-items:flex-start}' +
-      '.om-img{flex:0 0 88px;width:88px;height:88px;border-radius:8px;background:#f3f4f7;display:flex;align-items:center;justify-content:center;overflow:hidden}' +
+      '.om-body{display:flex;gap:18px;align-items:center}' +
+      '.om-img{flex:0 0 112px;width:112px;height:112px;border-radius:10px;background:#f3f4f7;display:flex;align-items:center;justify-content:center;overflow:hidden}' +
       '.om-img img{max-width:100%;max-height:100%;object-fit:contain}' +
       '.om-main{flex:1;min-width:0}' +
-      '.om-name{margin:0;font-size:15px;font-weight:700;line-height:1.35;color:#1f1f22;text-decoration:none;display:block}' +
+      '.om-name{margin:0;font-size:17px;font-weight:700;line-height:1.35;color:#1f1f22;text-decoration:none;display:block}' +
       '.om-name:hover{color:#2b5fad;text-decoration:underline}' +
-      '.om-maker{margin:2px 0 6px;font-size:12px;color:#7a7a80}' +
-      '.om-price{margin:0;font-size:13px;color:#4a4a4d}' +
-      '.om-price b{font-size:20px;color:#d0342c;margin:0 4px 0 2px}' +
-      '.om-shops{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:#4a4a4d}' +
-      '.om-shops li{white-space:nowrap}' +
-      '.om-shops li b{color:#1f1f22;font-weight:600}' +
-      '.om-stats{margin:6px 0 0;font-size:12px;color:#7a7a80}' +
+      '.om-maker{margin:3px 0 12px;font-size:12px;color:#7a7a80}' +
+      '.om-pl{margin:0;font-size:12px;color:#6b6b70}' +
+      '.om-price{margin:0;font-size:13px;color:#4a4a4d;line-height:1.15}' +
+      '.om-price b{font-size:28px;color:#d0342c;letter-spacing:-.01em;margin-right:6px}' +
+      '.om-stats{margin:10px 0 0;font-size:12px;color:#7a7a80}' +
       '.om-star{color:#e5a100}' +
-      '.om-btn{display:block;margin:12px 0 0;padding:11px 14px;border-radius:8px;background:#2b5fad;color:#fff;text-align:center;font-weight:700;font-size:15px;text-decoration:none;line-height:1.3}' +
+      '.om-btn{display:block;margin:16px 0 0;padding:13px 14px;border-radius:8px;background:#2b5fad;color:#fff;text-align:center;font-weight:700;font-size:15px;text-decoration:none;line-height:1.3}' +
       '.om-btn:hover{background:#3f74c4;color:#fff;text-decoration:none}' +
       '.om-btn small{display:block;font-weight:400;font-size:11px;opacity:.9}' +
-      '.om-off{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:4px;background:#fdecea;color:#d0342c;font-size:11px;font-weight:700}' +
+      '.om-off{display:inline-block;margin-left:6px;padding:2px 7px;border-radius:4px;background:#fdecea;color:#d0342c;font-size:12px;font-weight:700;vertical-align:middle}' +
+      '.om-banner{padding:14px}' +
+      '.om-banner .om-head{margin-bottom:10px}' +
       '.om-banner .om-title{margin:0 0 4px;font-size:15px;font-weight:700}' +
       '.om-banner .om-desc{margin:0 0 10px;font-size:12px;color:#4a4a4d}' +
       '.om-list{margin:0;padding:0;list-style:none}' +
@@ -77,7 +77,7 @@
       '.om-list .om-meta{flex:0 0 auto;font-size:12px;color:#4a4a4d;white-space:nowrap}' +
       '.om-list .om-meta b{color:#d0342c}' +
       '.om-sub{margin:10px 0 4px;font-size:12px;font-weight:700;color:#2b5fad}' +
-      '@media (max-width:480px){.om-img{flex-basis:72px;width:72px;height:72px}.om-name{font-size:14px}}';
+      '@media (max-width:480px){.om-embed{padding:16px}.om-body{gap:14px}.om-img{flex-basis:88px;width:88px;height:88px}.om-name{font-size:15px}.om-price b{font-size:24px}}';
 
     function injectCss() {
       if (document.getElementById('om-embed-css')) return;
@@ -108,44 +108,30 @@
       return '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n);
     }
 
+    // カードの中身(2026-09-10 案B「すっきり」に変更): ショップ別の価格の羅列をやめ、
+    // 最安値ひとつを大きく見せる。内訳(全ショップの価格)はオナホめも側で見てもらう。
     function cardHtml(p) {
-      var shopsHtml = '';
-      if (p.shops && p.shops.length > 1) {
-        shopsHtml =
-          '<ul class="om-shops">' +
-          p.shops
-            .slice(0, 4)
-            .map(function (s) {
-              return '<li>' + esc(s.shop) + ' <b>' + yen(s.price) + '</b></li>';
-            })
-            .join('') +
-          (p.shops.length > 4 ? '<li>ほか' + (p.shops.length - 4) + '店舗</li>' : '') +
-          '</ul>';
-      }
       var priceHtml = '';
       if (p.lowest) {
         priceHtml =
-          '<p class="om-price">' +
-          (p.shop_count > 1 ? '最安' : '価格') +
-          '<b>' +
-          yen(p.lowest.price) +
-          '</b>' +
-          esc(p.lowest.shop) +
-          (p.discount_percent ? '<span class="om-off">FANZA ' + p.discount_percent + '%OFF</span>' : '') +
+          '<p class="om-pl">' + (p.shop_count > 1 ? 'いちばん安いのは' : '価格') + '</p>' +
+          '<p class="om-price"><b>' + yen(p.lowest.price) + '</b>' + esc(p.lowest.shop) +
+          (p.discount_percent ? '<span class="om-off">' + p.discount_percent + '%OFF</span>' : '') +
           '</p>';
       }
       var stats = [];
       if (p.rating_count > 0 && p.rating_avg != null) {
-        stats.push('<span class="om-star">' + stars(p.rating_avg) + '</span> ' + Number(p.rating_avg).toFixed(1) + '(' + p.rating_count + '件)');
+        stats.push('<span class="om-star">' + stars(p.rating_avg) + '</span> ' + Number(p.rating_avg).toFixed(1) + '（' + p.rating_count + '件）');
       }
-      if (p.used_count > 0) stats.push('使った ' + p.used_count + '人');
+      if (p.used_count > 0) stats.push('使った人 ' + p.used_count + '人');
       if (p.want_count > 0) stats.push('気になる ' + p.want_count + '人');
-      var statsHtml = stats.length ? '<p class="om-stats">' + stats.join('　') + '</p>' : '';
+      var statsHtml = stats.length ? '<p class="om-stats">' + stats.join('・') + '</p>' : '';
       var url = safeUrl(p.url);
-      var btnLabel = p.shop_count > 1 ? p.shop_count + '店舗の価格を比較する' : 'オナホめもで詳しく見る';
+      var headLabel = p.shop_count > 1 ? p.shop_count + '店舗の価格を比較' : 'ショップ価格・みんなの使用記録';
+      var btnLabel = p.shop_count > 1 ? p.shop_count + '店舗の価格とレビューを見る' : 'オナホめもで詳しく見る';
       return (
         '<div class="om-head"><a class="om-logo" href="' + esc(ORIGIN + '/?utm_source=onaking&utm_medium=embed') + '" target="_blank" rel="noopener">オナホめも</a>' +
-        '<span>ショップ別の価格比較・みんなの使用記録</span></div>' +
+        '<span>' + esc(headLabel) + '</span></div>' +
         '<div class="om-body">' +
         '<a class="om-img" href="' + esc(url) + '" target="_blank" rel="noopener">' +
         (safeImg(p.image) ? '<img src="' + esc(p.image) + '" alt="" loading="lazy">' : '') +
@@ -154,12 +140,9 @@
         '<a class="om-name" href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(p.name) + '</a>' +
         (p.maker ? '<p class="om-maker">' + esc(p.maker) + '</p>' : '') +
         priceHtml +
-        shopsHtml +
         statsHtml +
         '</div></div>' +
-        '<a class="om-btn" href="' + esc(url) + '" target="_blank" rel="noopener">' +
-        esc(btnLabel) +
-        ' ▶<small>レビュー・使った人の評価も見られます</small></a>'
+        '<a class="om-btn" href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(btnLabel) + ' ▶</a>'
       );
     }
 
