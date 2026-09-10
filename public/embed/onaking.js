@@ -7,8 +7,9 @@
  *        <div data-onahomemo="card"></div>
  *        <script src="https://onahomemo.com/embed/onaking.js" async></script>
  *      scriptタグは何度読み込まれても1回しか動かない(二重表示しない)。
- *   B. トップページ等のウィジェット(カスタムHTML)にバナーを置く:
- *        <div data-onahomemo="banner"></div>
+ *   B. トップページ等のウィジェット(カスタムHTML)にバナーを置く(2種類):
+ *        <div data-onahomemo="banner"></div>   … 「できること3つ」(価格比較・使用記録・値下がり通知のタイル)
+ *        <div data-onahomemo="stats"></div>    … 「数字で見せる」(掲載数・ショップ数・セール中の数)
  *        <script src="https://onahomemo.com/embed/onaking.js" async></script>
  *   C. 全ページ共通(フッター等)に scriptタグだけ置いた場合は、記事ページで中盤の
  *      「■販売サイトはこちら」(見出し + ショップのボタン群)の直後に自動でカードを1つ差し込む(自動モード)。
@@ -65,19 +66,25 @@
       '.om-btn:hover{background:#3f74c4;color:#fff;text-decoration:none}' +
       '.om-btn small{display:block;font-weight:400;font-size:11px;opacity:.9}' +
       '.om-off{display:inline-block;margin-left:6px;padding:2px 7px;border-radius:4px;background:#fdecea;color:#d0342c;font-size:12px;font-weight:700;vertical-align:middle}' +
-      '.om-banner{padding:14px}' +
-      '.om-banner .om-head{margin-bottom:10px}' +
-      '.om-banner .om-title{margin:0 0 4px;font-size:15px;font-weight:700}' +
-      '.om-banner .om-desc{margin:0 0 10px;font-size:12px;color:#4a4a4d}' +
-      '.om-list{margin:0;padding:0;list-style:none}' +
-      '.om-list li{display:flex;gap:8px;align-items:baseline;padding:6px 0;border-top:1px dashed #e2e1de;font-size:13px}' +
-      '.om-list li:first-child{border-top:0}' +
-      '.om-list a{color:#1f1f22;text-decoration:none;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-      '.om-list a:hover{color:#2b5fad;text-decoration:underline}' +
-      '.om-list .om-meta{flex:0 0 auto;font-size:12px;color:#4a4a4d;white-space:nowrap}' +
-      '.om-list .om-meta b{color:#d0342c}' +
-      '.om-sub{margin:10px 0 4px;font-size:12px;font-weight:700;color:#2b5fad}' +
-      '@media (max-width:480px){.om-embed{padding:16px}.om-body{gap:14px}.om-img{flex-basis:88px;width:88px;height:88px}.om-name{font-size:15px}.om-price b{font-size:24px}}';
+      '.om-banner{padding:24px 26px}' +
+      '.om-banner .om-head{margin-bottom:14px}' +
+      '.om-banner .om-title{margin:0 0 16px;font-size:19px;font-weight:700;line-height:1.35;color:#1f1f22}' +
+      '.om-banner .om-title em{font-style:normal;color:#2b5fad}' +
+      '.om-banner .om-desc{margin:-8px 0 18px;font-size:13px;color:#4a4a4d}' +
+      '.om-tiles{display:flex;gap:12px;margin:0 0 18px}' +
+      '.om-tile{flex:1;min-width:0;border:1px solid #e6eaf2;border-radius:10px;padding:14px 12px;color:#1f1f22;text-decoration:none;display:block}' +
+      '.om-tile:hover{border-color:#2b5fad;text-decoration:none}' +
+      '.om-tile .om-ic{width:36px;height:36px;border-radius:10px;background:#eaf1fc;color:#2b5fad;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;margin:0 0 8px}' +
+      '.om-tile b{display:block;font-size:14px;margin:0 0 4px}' +
+      '.om-tile p{margin:0;font-size:12px;color:#6b6b70;line-height:1.5}' +
+      '.om-stats-row{display:flex;gap:12px;margin:0 0 18px}' +
+      '.om-stat{flex:1;background:#f4f7fc;border-radius:10px;padding:12px 10px;text-align:center;color:#1f1f22;text-decoration:none;display:block}' +
+      '.om-stat:hover{background:#eaf1fc;text-decoration:none}' +
+      '.om-stat b{display:block;font-size:24px;color:#2b5fad;line-height:1.1;letter-spacing:-.01em}' +
+      '.om-stat b small{font-size:13px;margin-left:2px;font-weight:700}' +
+      '.om-stat span{display:block;font-size:12px;color:#6b6b70;margin-top:4px}' +
+      '.om-banner .om-btn{margin-top:0}' +
+      '@media (max-width:480px){.om-embed{padding:16px}.om-body{gap:14px}.om-img{flex-basis:88px;width:88px;height:88px}.om-name{font-size:15px}.om-price b{font-size:24px}.om-banner{padding:18px 16px}.om-banner .om-title{font-size:17px}.om-tiles{flex-direction:column;gap:8px}.om-tile{display:grid;grid-template-columns:36px 1fr;column-gap:12px;align-items:start;padding:12px}.om-tile .om-ic{margin:0;grid-row:1/3}.om-tile b{margin-bottom:2px}.om-stat b{font-size:20px}}';
 
     function injectCss() {
       if (document.getElementById('om-embed-css')) return;
@@ -146,41 +153,57 @@
       );
     }
 
-    function bannerHtml(data) {
-      var site = data.site || {};
-      var html =
+    // トップページ用バナー(2026-09-10 デザイン変更)。2種類ある:
+    //   data-onahomemo="banner" … 案C「できること3つ」(価格比較・使用記録・値下がり通知のタイル)
+    //   data-onahomemo="stats"  … 案B「数字で見せる」(掲載数・ショップ数・セール中の数)
+    // どちらもユーザーの記録データ(気になる人数など)に依存しないので、利用者が少なくても見栄えが安定する。
+    function num(n) {
+      return Number(n || 0).toLocaleString('ja-JP');
+    }
+    function bannerHead(site, sub) {
+      return (
         '<div class="om-head"><a class="om-logo" href="' + esc(safeUrl(site.url)) + '" target="_blank" rel="noopener">オナホめも</a>' +
-        '<span>オナホの価格比較・使用記録サイト</span></div>' +
-        '<p class="om-title">8つのショップの価格を一度に比較</p>' +
-        '<p class="om-desc">FANZA・NLS・大魔王・信長トイズなどの価格を商品ごとに比較。使った記録やレビューも残せます。</p>';
-      if (data.drops && data.drops.length) {
-        html +=
-          '<p class="om-sub">値下がり速報(7日以内)</p><ul class="om-list">' +
-          data.drops
-            .map(function (d) {
-              return (
-                '<li><a href="' + esc(safeUrl(d.url)) + '" target="_blank" rel="noopener">' + esc(d.name) + '</a>' +
-                '<span class="om-meta">' + esc(d.shop) + ' <b>' + yen(d.new_price) + '</b> (' + d.drop_percent + '%↓)</span></li>'
-              );
-            })
-            .join('') +
-          '</ul>';
-      } else if (data.popular && data.popular.length) {
-        html +=
-          '<p class="om-sub">いま気になられている商品</p><ul class="om-list">' +
-          data.popular
-            .map(function (p) {
-              return (
-                '<li><a href="' + esc(safeUrl(p.url)) + '" target="_blank" rel="noopener">' + esc(p.name) + '</a>' +
-                '<span class="om-meta">気になる ' + p.want_count + '人</span></li>'
-              );
-            })
-            .join('') +
-          '</ul>';
+        '<span>' + esc(sub) + '</span></div>'
+      );
+    }
+    function featuresBannerHtml(data) {
+      var site = data.site || {};
+      var home = safeUrl(site.url);
+      var sale = safeUrl(site.sale_url || site.url);
+      return (
+        bannerHead(site, 'オナ王の姉妹サイト') +
+        '<p class="om-title">オナホの「買う前」と「買った後」をひとつに</p>' +
+        '<div class="om-tiles">' +
+        '<a class="om-tile" href="' + esc(home) + '" target="_blank" rel="noopener"><span class="om-ic">¥</span><b>8ショップの価格比較</b><p>FANZA・NLS・大魔王など、最安の店がひと目で分かる</p></a>' +
+        '<a class="om-tile" href="' + esc(home) + '" target="_blank" rel="noopener"><span class="om-ic">✎</span><b>使った記録とレビュー</b><p>一軍・二軍・引退で整理。合計使用金額も見える</p></a>' +
+        '<a class="om-tile" href="' + esc(sale) + '" target="_blank" rel="noopener"><span class="om-ic">↓</span><b>値下がり通知</b><p>気になる商品が最安値を更新したらお知らせ</p></a>' +
+        '</div>' +
+        '<a class="om-btn" href="' + esc(home) + '" target="_blank" rel="noopener">オナホめもを見る ▶<small>無料・登録なしで価格比較できます</small></a>'
+      );
+    }
+    function statsBannerHtml(data) {
+      var site = data.site || {};
+      var st = data.stats || {};
+      var home = safeUrl(site.url);
+      var sale = safeUrl(site.sale_url || site.url);
+      var statsHtml = '';
+      if (st.products) {
+        statsHtml =
+          '<div class="om-stats-row">' +
+          '<a class="om-stat" href="' + esc(home) + '" target="_blank" rel="noopener"><b>' + num(st.products) + '<small>点</small></b><span>掲載オナホ</span></a>' +
+          '<a class="om-stat" href="' + esc(home) + '" target="_blank" rel="noopener"><b>' + num(st.shops || 8) + '<small>店舗</small></b><span>価格を比較</span></a>' +
+          (st.sale_count
+            ? '<a class="om-stat" href="' + esc(sale) + '" target="_blank" rel="noopener"><b>' + num(st.sale_count) + '<small>点</small></b><span>いまセール中</span></a>'
+            : '') +
+          '</div>';
       }
-      html +=
-        '<a class="om-btn" href="' + esc(safeUrl(site.sale_url || site.url)) + '" target="_blank" rel="noopener">セール中・値下がり商品を見る ▶<small>オナホめも onahomemo.com</small></a>';
-      return html;
+      return (
+        bannerHead(site, 'オナホの価格比較・使用記録サイト') +
+        '<p class="om-title">そのオナホ、<em>いちばん安い店</em>はどこ？</p>' +
+        '<p class="om-desc">FANZA・NLS・大魔王・信長トイズなど8ショップの価格を商品ごとに比較。使った記録やレビューも残せます。</p>' +
+        statsHtml +
+        '<a class="om-btn" href="' + esc(home) + '" target="_blank" rel="noopener">オナホめもで価格を比較する ▶</a>'
+      );
     }
 
     function makeBox(extraClass) {
@@ -280,7 +303,7 @@
     }
 
     function renderBanners() {
-      var holders = Array.prototype.slice.call(document.querySelectorAll('[data-onahomemo="banner"]'));
+      var holders = Array.prototype.slice.call(document.querySelectorAll('[data-onahomemo="banner"], [data-onahomemo="stats"]'));
       if (!holders.length) return;
       getJson(API + '?type=banner')
         .then(function (data) {
@@ -289,7 +312,7 @@
           holders.forEach(function (holder) {
             holder.innerHTML = '';
             var box = makeBox('om-banner');
-            box.innerHTML = bannerHtml(data);
+            box.innerHTML = holder.getAttribute('data-onahomemo') === 'stats' ? statsBannerHtml(data) : featuresBannerHtml(data);
             holder.appendChild(box);
           });
         })

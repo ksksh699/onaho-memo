@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase.js';
+import { fetchCampaignTags } from '../../lib/listing.js';
 
 // オナ王(ona-king.com)に埋め込むカード用のAPI(2026-09-08、案1「オナ王からの導線」)。
 // オナ王側には public/embed/onaking.js を <script> 1行で読み込んでもらい、そのスクリプトが
@@ -129,8 +130,35 @@ async function cardForUrl(pageUrl) {
   return json({ found: true, product: buildCard(productResult.data, statsResult.data) });
 }
 
+// バナー用のサイト統計(2026-09-10 追加): 掲載オナホ数・比較ショップ数・セール中の商品数・最大割引率。
+// 埋め込みの「数字で見せる」バナー(data-onahomemo="stats")が使う。失敗しても他の項目は返す。
+async function siteStats() {
+  try {
+    const campaignTags = await fetchCampaignTags();
+    const [productsResult, saleResult, maxOffResult] = await Promise.all([
+      supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_onahole', true),
+      campaignTags.length
+        ? supabase.from('v_products_listing').select('*', { count: 'exact', head: true }).overlaps('genre_tags', campaignTags)
+        : Promise.resolve({ count: 0 }),
+      campaignTags.length
+        ? supabase.from('v_products_listing').select('discount_percent').overlaps('genre_tags', campaignTags).order('discount_percent', { ascending: false }).limit(1)
+        : Promise.resolve({ data: [] }),
+    ]);
+    return {
+      products: productsResult.count ?? 0,
+      shops: SHOPS.length,
+      sale_count: saleResult.count ?? 0,
+      max_discount: Number(maxOffResult.data?.[0]?.discount_percent ?? 0),
+    };
+  } catch (err) {
+    console.error('[api/onaking-card] stats', err);
+    return null;
+  }
+}
+
 async function banner() {
-  const [dropsResult, popularResult] = await Promise.all([
+  const [stats, dropsResult, popularResult] = await Promise.all([
+    siteStats(),
     supabase
       .from('v_recent_price_drops')
       .select('dmm_content_id, name, maker, drop_shop, old_price, new_price, drop_percent')
@@ -166,6 +194,7 @@ async function banner() {
   }));
   return json({
     site: { name: 'オナホめも', url: `${SITE_ORIGIN}/?${UTM}`, sale_url: `${SITE_ORIGIN}/sale/?${UTM}` },
+    stats,
     drops,
     popular,
   });
