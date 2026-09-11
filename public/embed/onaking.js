@@ -58,13 +58,16 @@
       '.om-img{flex:0 0 112px;width:112px;height:112px;border-radius:10px;background:#f3f4f7;display:flex;align-items:center;justify-content:center;overflow:hidden}' +
       '.om-img img{max-width:100%;max-height:100%;object-fit:contain}' +
       '.om-main{flex:1;min-width:0}' +
-      '.om-name{margin:0;font-size:17px;font-weight:700;line-height:1.35;color:#1f1f22!important;text-decoration:none;display:block}' +
+      // 段落(p)の margin に !important を付けているのは、オナ王のテーマ側の「本文の段落は下に大きめの余白」
+      // (#mainEntity p など)に負けて、カード内の行間が間延びしていたため(2026-09-12)。
+      // 商品名は長いと3行以上になるので、2行で切って「…」にする(詳細はリンク先で見られる)。
+      '.om-name{margin:0!important;font-size:17px;font-weight:700;line-height:1.35;color:#1f1f22!important;text-decoration:none;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}' +
       '.om-name:hover{color:#2b5fad!important;text-decoration:underline!important}' +
-      '.om-maker{margin:3px 0 12px;font-size:12px;color:#7a7a80}' +
-      '.om-pl{margin:0;font-size:12px;color:#6b6b70}' +
-      '.om-price{margin:0;font-size:13px;color:#4a4a4d;line-height:1.15}' +
+      '.om-maker{margin:3px 0 12px!important;font-size:12px;line-height:1.5!important;color:#7a7a80}' +
+      '.om-pl{margin:0!important;font-size:12px;line-height:1.5!important;color:#6b6b70}' +
+      '.om-price{margin:0!important;font-size:13px;color:#4a4a4d;line-height:1.15!important}' +
       '.om-price b{font-size:28px;color:#d0342c;letter-spacing:-.01em;margin-right:6px}' +
-      '.om-stats{margin:10px 0 0;font-size:12px;color:#7a7a80}' +
+      '.om-stats{margin:10px 0 0!important;font-size:12px;line-height:1.5!important;color:#7a7a80}' +
       '.om-star{color:#e5a100}' +
       '.om-btn{display:block;margin:16px 0 0;padding:13px 14px;border-radius:8px;background:#2b5fad;color:#fff!important;text-align:center;font-weight:700;font-size:15px;text-decoration:none;line-height:1.3}' +
       '.om-btn:hover{background:#3f74c4;color:#fff!important;text-decoration:none}' +
@@ -72,15 +75,15 @@
       '.om-off{display:inline-block;margin-left:6px;padding:2px 7px;border-radius:4px;background:#fdecea;color:#d0342c;font-size:12px;font-weight:700;vertical-align:middle}' +
       '.om-banner{padding:24px 26px}' +
       '.om-banner .om-head{margin-bottom:14px}' +
-      '.om-banner .om-title{margin:0 0 16px;font-size:19px;font-weight:700;line-height:1.35;color:#1f1f22}' +
+      '.om-banner .om-title{margin:0 0 16px!important;font-size:19px;font-weight:700;line-height:1.35;color:#1f1f22}' +
       '.om-banner .om-title em{font-style:normal;color:#2b5fad}' +
-      '.om-banner .om-desc{margin:-8px 0 18px;font-size:13px;color:#4a4a4d}' +
+      '.om-banner .om-desc{margin:-8px 0 18px!important;font-size:13px;color:#4a4a4d}' +
       '.om-tiles{display:flex;gap:12px;margin:0 0 18px}' +
       '.om-tile{flex:1;min-width:0;border:1px solid #e6eaf2;border-radius:10px;padding:14px 12px;color:#1f1f22;text-decoration:none;display:block}' +
       '.om-tile:hover{border-color:#2b5fad;text-decoration:none}' +
       '.om-tile .om-ic{width:36px;height:36px;border-radius:10px;background:#eaf1fc;color:#2b5fad;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;margin:0 0 8px}' +
       '.om-tile b{display:block;font-size:14px;margin:0 0 4px}' +
-      '.om-tile p{margin:0;font-size:12px;color:#6b6b70;line-height:1.5}' +
+      '.om-tile p{margin:0!important;font-size:12px;color:#6b6b70;line-height:1.5}' +
       '.om-stats-row{display:flex;gap:12px;margin:0 0 18px}' +
       '.om-stat{flex:1;background:#f4f7fc;border-radius:10px;padding:12px 10px;text-align:center;color:#1f1f22;text-decoration:none;display:block}' +
       '.om-stat:hover{background:#eaf1fc;text-decoration:none}' +
@@ -91,7 +94,8 @@
       // スマホ幅の商品カード(2026-09-12 案A): 画像枠をパッケージに合わせた縦長(92×124)にしてグレー背景をやめ、
       // 上下中央ではなく上揃え(商品名と頭を揃える)にする。正方形枠+上下中央だと、右のテキスト列より
       // 画像が小さいぶん上下に余白が空いて間延びして見えていたため。
-      '@media (max-width:480px){.om-embed{padding:16px}.om-body{gap:14px;align-items:flex-start}.om-img{flex-basis:92px;width:92px;height:124px;background:none;border-radius:8px}.om-img img{filter:drop-shadow(0 1px 3px rgba(0,0,0,.15))}.om-name{font-size:15px}.om-maker{margin:2px 0 8px}.om-price b{font-size:24px}.om-stats{margin:6px 0 0}.om-btn{margin-top:14px}.om-banner{padding:18px 16px}.om-banner .om-title{font-size:17px}.om-tiles{flex-direction:column;gap:8px}.om-tile{display:grid;grid-template-columns:36px 1fr;column-gap:12px;align-items:start;padding:12px}.om-tile .om-ic{margin:0;grid-row:1/3}.om-tile b{margin-bottom:2px}.om-stat b{font-size:20px}}';
+      // 画像への drop-shadow は、FANZAの商品画像が白い余白込みの長方形のため長方形の縁に線が出てしまい、やめた。
+      '@media (max-width:480px){.om-embed{padding:16px}.om-body{gap:14px;align-items:flex-start}.om-img{flex-basis:92px;width:92px;height:124px;background:none;border-radius:8px}.om-name{font-size:15px}.om-maker{margin:2px 0 8px!important}.om-price b{font-size:24px}.om-stats{margin:6px 0 0!important}.om-btn{margin-top:14px}.om-banner{padding:18px 16px}.om-banner .om-title{font-size:17px}.om-tiles{flex-direction:column;gap:8px}.om-tile{display:grid;grid-template-columns:36px 1fr;column-gap:12px;align-items:start;padding:12px}.om-tile .om-ic{margin:0;grid-row:1/3}.om-tile b{margin-bottom:2px}.om-stat b{font-size:20px}}';
 
     function injectCss() {
       if (document.getElementById('om-embed-css')) return;
