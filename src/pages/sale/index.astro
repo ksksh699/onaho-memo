@@ -36,22 +36,9 @@ if (campaignTags.length > 0) {
   count = result.count ?? 0;
 }
 
-// 直近7日間に実際に値下がりした商品(価格変更履歴 price_history から。値下がり率の大きい順)。
-// 「セール系タグ」とは別に、FANZA・各ショップの実際の価格変動を見ている。1ページ目にだけ表示する。
-const PRICE_DROP_SHOP_NAMES = {
-  fanza: 'FANZA', nls: 'NLS', daimaoh: '大魔王', nobunagatoys: '信長トイズ',
-  hotpowers: 'ホットパワーズ', ems: 'エムズ', pyuarabu: 'ぴゅあらば', mzakka: 'M-ZAKKA',
-};
-let recentDrops = [];
-if (page === 1 && !filtered) {
-  const { data } = await supabase
-    .from('v_recent_price_drops')
-    .select('dmm_content_id, name, maker, image_url, drop_shop, old_price, new_price, drop_percent, changed_at')
-    .order('drop_percent', { ascending: false })
-    .order('changed_at', { ascending: false })
-    .limit(12);
-  recentDrops = data ?? [];
-}
+// 「気になる」に登録した商品がセール中かどうかは、ログイン状態によって内容が変わる
+// (=CDNキャッシュされるこのHTMLには含められない)ため、ブラウザ側スクリプトで
+// ログイン中のユーザーだけ問い合わせて描画する(下の<script>を参照)。1ページ目にだけ表示する。
 
 // セールは入れ替わりが早いので、他の一覧より短め(5分)にキャッシュ
 setListingCacheHeaders(Astro.response);
@@ -97,30 +84,11 @@ const description = `いまセール中のオナホール${count}件を割引率
           ? `${count.toLocaleString('ja-JP')}件を割引率の高い順に表示${page > 1 ? `(${page} / ${pages}ページ)` : ''}。価格はFANZAの現在価格です。各商品ページで8ショップの価格を比較できます。`
           : 'いまセール中の商品はありません。'}
       </p>
-      {recentDrops.length > 0 && (
-        <section class="price-drops">
-          <h2 class="section-title">最近値下がりした商品(7日以内)</h2>
-          <p class="listing-lead">FANZA・各ショップの実際の価格変動から、値下がり幅の大きい順に表示しています。「気になる」に登録した商品が最安値を更新すると、通知でもお知らせします。</p>
-          <ul class="price-drop-list">
-            {recentDrops.map((d) => (
-              <li>
-                <a href={`/products/${d.dmm_content_id}/`} class="price-drop-item">
-                  <img src={d.image_url} alt={d.name} loading="lazy" width="60" height="80" />
-                  <span class="price-drop-body">
-                    <span class="mp-maker">{d.maker ?? ''}</span>
-                    <span class="price-drop-name">{d.name}</span>
-                    <span class="price-drop-prices">
-                      <span class="price-drop-shop">{PRICE_DROP_SHOP_NAMES[d.drop_shop] ?? d.drop_shop}</span>
-                      <s>¥{Number(d.old_price).toLocaleString('ja-JP')}</s>
-                      <strong>¥{Number(d.new_price).toLocaleString('ja-JP')}</strong>
-                      <span class="discount-badge-small">{d.drop_percent}%OFF</span>
-                    </span>
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
-          <h2 class="section-title">セール対象の商品</h2>
+      {page === 1 && !filtered && (
+        <section id="watchlist-sale" class="price-drops" hidden>
+          <h2 class="section-title">気になる商品がセール中</h2>
+          <p class="listing-lead">あなたが「気になる」に登録した商品のうち、いまセール中のものです。</p>
+          <ul id="watchlist-sale-list" class="grid listing-grid"></ul>
         </section>
       )}
       <ListingToolbar filters={filters} options={filterOptions} basePath={basePath} hideSale defaultSort={DEFAULT_SORT} resultCount={filtered ? count : null} />
@@ -129,5 +97,85 @@ const description = `いまセール中のオナホール${count}件を割引率
       <ListingPager basePath={basePath} current={page} total={pages} filters={filters} defaultSort={DEFAULT_SORT} />
     </main>
     <SiteFooter />
+    <script>
+      import { supabase } from '../../lib/supabase.js';
+      import { isCampaignTag, isNewArrival, isPreorder } from '../../lib/listing.js';
+
+      // 「気になる」に登録した商品のうち、いまセール中のものを表示する(2026-09-11)。
+      // ログイン状態に依存するのでサーバー側では描画できない(CDNキャッシュされるため)。
+      // ログインしていない・該当が無い場合は何も表示しない(セクションはhidden始まり)。
+      const section = document.getElementById('watchlist-sale');
+      const list = document.getElementById('watchlist-sale-list');
+      if (section && list) {
+        loadWatchlistSale();
+      }
+
+      async function loadWatchlistSale() {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const { data: interested } = await supabase
+          .from('checks')
+          .select('product_id')
+          .eq('user_id', session.user.id)
+          .eq('status', 'interested');
+        const productIds = (interested ?? []).map((r) => r.product_id);
+        if (productIds.length === 0) return;
+
+        const { data: products } = await supabase
+          .from('v_products_listing')
+          .select(
+            'id, dmm_content_id, name, maker, price, image_url, release_date, genre_tags, dmm_review_average, dmm_review_count, site_rating_avg, site_rating_count, list_price, discount_percent'
+          )
+          .in('id', productIds);
+
+        const onSale = (products ?? [])
+          .filter((p) => (p.genre_tags ?? []).some((t) => isCampaignTag(t)))
+          .sort((a, b) => (b.discount_percent ?? 0) - (a.discount_percent ?? 0));
+        if (onSale.length === 0) return;
+
+        list.innerHTML = onSale.map((p) => cardHtml(p)).join('');
+        section.hidden = false;
+      }
+
+      function cardHtml(p) {
+        const hasDiscount = p.discount_percent > 0;
+        return `
+          <li class="card">
+            ${hasDiscount ? '<span class="sale-ribbon">SALE</span>' : ''}
+            ${
+              isPreorder(p.release_date)
+                ? '<span class="new-badge preorder-badge">予約受付中</span>'
+                : isNewArrival(p.release_date)
+                  ? '<span class="new-badge">NEW</span>'
+                  : ''
+            }
+            <a href="/products/${p.dmm_content_id}/">
+              <img src="${p.image_url}" alt="${p.name}" loading="lazy" width="180" height="240" />
+              <div class="body">
+                <p class="maker">${p.maker ?? 'メーカー不明'}</p>
+                <h3>${p.name}</h3>
+                <p class="price">
+                  ${p.price ? `¥${Number(p.price).toLocaleString('ja-JP')}` : '価格情報なし'}
+                  ${hasDiscount ? `<span class="discount-badge-small">${p.discount_percent}%OFF</span>` : ''}
+                </p>
+                <div class="card-ratings">
+                  ${
+                    p.dmm_review_average
+                      ? `<p class="card-rating dmm"><span class="rating-label">FANZA</span>★${p.dmm_review_average}(${p.dmm_review_count})</p>`
+                      : ''
+                  }
+                  ${
+                    p.site_rating_count > 0
+                      ? `<p class="card-rating site"><span class="rating-label">オナホめも</span>★${p.site_rating_avg}(${p.site_rating_count})</p>`
+                      : ''
+                  }
+                </div>
+              </div>
+            </a>
+          </li>
+        `;
+      }
+    </script>
   </body>
 </html>
