@@ -48,22 +48,26 @@
       '.om-embed{box-sizing:border-box;margin:16px 0;padding:20px 22px;border:1px solid #d9dfe9;border-radius:12px;background:#fff;font-family:inherit;color:#1f1f22;line-height:1.5;box-shadow:0 2px 10px rgba(43,95,173,.08)}' +
       '.om-embed *{box-sizing:border-box}' +
       '.om-head{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:#6b6b70}' +
-      '.om-logo{display:inline-block;padding:2px 10px;border-radius:999px;background:#2b5fad;color:#fff;font-weight:700;font-size:12px;letter-spacing:.02em;text-decoration:none}' +
-      '.om-logo:hover{background:#3f74c4;color:#fff}' +
+      // text-decoration に !important を付けているのは、オナ王のテーマ側の「記事内リンクは下線」の
+      // 指定(#mainEntity a など、こちらより詳細度が高い)に負けて、ラベル・商品名・ボタンにまで
+      // 下線が付いてしまうため(2026-09-12)。
+      '.om-embed a{text-decoration:none!important}' +
+      '.om-logo{display:inline-block;padding:2px 10px;border-radius:999px;background:#2b5fad;color:#fff!important;font-weight:700;font-size:12px;letter-spacing:.02em;text-decoration:none}' +
+      '.om-logo:hover{background:#3f74c4;color:#fff!important}' +
       '.om-body{display:flex;gap:18px;align-items:center}' +
       '.om-img{flex:0 0 112px;width:112px;height:112px;border-radius:10px;background:#f3f4f7;display:flex;align-items:center;justify-content:center;overflow:hidden}' +
       '.om-img img{max-width:100%;max-height:100%;object-fit:contain}' +
       '.om-main{flex:1;min-width:0}' +
-      '.om-name{margin:0;font-size:17px;font-weight:700;line-height:1.35;color:#1f1f22;text-decoration:none;display:block}' +
-      '.om-name:hover{color:#2b5fad;text-decoration:underline}' +
+      '.om-name{margin:0;font-size:17px;font-weight:700;line-height:1.35;color:#1f1f22!important;text-decoration:none;display:block}' +
+      '.om-name:hover{color:#2b5fad!important;text-decoration:underline!important}' +
       '.om-maker{margin:3px 0 12px;font-size:12px;color:#7a7a80}' +
       '.om-pl{margin:0;font-size:12px;color:#6b6b70}' +
       '.om-price{margin:0;font-size:13px;color:#4a4a4d;line-height:1.15}' +
       '.om-price b{font-size:28px;color:#d0342c;letter-spacing:-.01em;margin-right:6px}' +
       '.om-stats{margin:10px 0 0;font-size:12px;color:#7a7a80}' +
       '.om-star{color:#e5a100}' +
-      '.om-btn{display:block;margin:16px 0 0;padding:13px 14px;border-radius:8px;background:#2b5fad;color:#fff;text-align:center;font-weight:700;font-size:15px;text-decoration:none;line-height:1.3}' +
-      '.om-btn:hover{background:#3f74c4;color:#fff;text-decoration:none}' +
+      '.om-btn{display:block;margin:16px 0 0;padding:13px 14px;border-radius:8px;background:#2b5fad;color:#fff!important;text-align:center;font-weight:700;font-size:15px;text-decoration:none;line-height:1.3}' +
+      '.om-btn:hover{background:#3f74c4;color:#fff!important;text-decoration:none}' +
       '.om-btn small{display:block;font-weight:400;font-size:11px;opacity:.9}' +
       '.om-off{display:inline-block;margin-left:6px;padding:2px 7px;border-radius:4px;background:#fdecea;color:#d0342c;font-size:12px;font-weight:700;vertical-align:middle}' +
       '.om-banner{padding:24px 26px}' +
@@ -84,7 +88,10 @@
       '.om-stat b small{font-size:13px;margin-left:2px;font-weight:700}' +
       '.om-stat span{display:block;font-size:12px;color:#6b6b70;margin-top:4px}' +
       '.om-banner .om-btn{margin-top:0}' +
-      '@media (max-width:480px){.om-embed{padding:16px}.om-body{gap:14px}.om-img{flex-basis:88px;width:88px;height:88px}.om-name{font-size:15px}.om-price b{font-size:24px}.om-banner{padding:18px 16px}.om-banner .om-title{font-size:17px}.om-tiles{flex-direction:column;gap:8px}.om-tile{display:grid;grid-template-columns:36px 1fr;column-gap:12px;align-items:start;padding:12px}.om-tile .om-ic{margin:0;grid-row:1/3}.om-tile b{margin-bottom:2px}.om-stat b{font-size:20px}}';
+      // スマホ幅の商品カード(2026-09-12 案A): 画像枠をパッケージに合わせた縦長(92×124)にしてグレー背景をやめ、
+      // 上下中央ではなく上揃え(商品名と頭を揃える)にする。正方形枠+上下中央だと、右のテキスト列より
+      // 画像が小さいぶん上下に余白が空いて間延びして見えていたため。
+      '@media (max-width:480px){.om-embed{padding:16px}.om-body{gap:14px;align-items:flex-start}.om-img{flex-basis:92px;width:92px;height:124px;background:none;border-radius:8px}.om-img img{filter:drop-shadow(0 1px 3px rgba(0,0,0,.15))}.om-name{font-size:15px}.om-maker{margin:2px 0 8px}.om-price b{font-size:24px}.om-stats{margin:6px 0 0}.om-btn{margin-top:14px}.om-banner{padding:18px 16px}.om-banner .om-title{font-size:17px}.om-tiles{flex-direction:column;gap:8px}.om-tile{display:grid;grid-template-columns:36px 1fr;column-gap:12px;align-items:start;padding:12px}.om-tile .om-ic{margin:0;grid-row:1/3}.om-tile b{margin-bottom:2px}.om-stat b{font-size:20px}}';
 
     function injectCss() {
       if (document.getElementById('om-embed-css')) return;
