@@ -89,6 +89,8 @@ const description = `いまセール中のオナホール${count}件を割引率
           <h2 class="section-title">気になる商品がセール中</h2>
           <p class="listing-lead">あなたが「気になる」に登録した商品のうち、いまセール中のものです。</p>
           <ul id="watchlist-sale-list" class="grid listing-grid"></ul>
+          <ul id="watchlist-sale-list-more" class="grid listing-grid" hidden></ul>
+          <button type="button" id="watchlist-sale-toggle" class="watchlist-sale-toggle" hidden></button>
         </section>
       )}
       <ListingToolbar filters={filters} options={filterOptions} basePath={basePath} hideSale defaultSort={DEFAULT_SORT} resultCount={filtered ? count : null} />
@@ -104,9 +106,14 @@ const description = `いまセール中のオナホール${count}件を割引率
       // 「気になる」に登録した商品のうち、いまセール中のものを表示する(2026-09-11)。
       // ログイン状態に依存するのでサーバー側では描画できない(CDNキャッシュされるため)。
       // ログインしていない・該当が無い場合は何も表示しない(セクションはhidden始まり)。
+      // 上位3件だけ表示し、それ以上あればボタンで開閉する(2026-09-11)。
+      const WATCHLIST_SALE_VISIBLE_COUNT = 3;
+
       const section = document.getElementById('watchlist-sale');
       const list = document.getElementById('watchlist-sale-list');
-      if (section && list) {
+      const moreList = document.getElementById('watchlist-sale-list-more');
+      const toggleBtn = document.getElementById('watchlist-sale-toggle');
+      if (section && list && moreList && toggleBtn) {
         loadWatchlistSale();
       }
 
@@ -134,8 +141,22 @@ const description = `いまセール中のオナホール${count}件を割引率
           .sort((a, b) => (b.discount_percent ?? 0) - (a.discount_percent ?? 0));
         if (onSale.length === 0) return;
 
-        list.innerHTML = onSale.map((p) => cardHtml(p)).join('');
+        const visible = onSale.slice(0, WATCHLIST_SALE_VISIBLE_COUNT);
+        const rest = onSale.slice(WATCHLIST_SALE_VISIBLE_COUNT);
+
+        list.innerHTML = visible.map((p) => cardHtml(p)).join('');
         section.hidden = false;
+
+        if (rest.length > 0) {
+          moreList.innerHTML = rest.map((p) => cardHtml(p)).join('');
+          toggleBtn.hidden = false;
+          toggleBtn.textContent = `もっと見る(+${rest.length}件)`;
+          toggleBtn.addEventListener('click', () => {
+            const willShow = moreList.hidden;
+            moreList.hidden = !willShow;
+            toggleBtn.textContent = willShow ? '閉じる' : `もっと見る(+${rest.length}件)`;
+          });
+        }
       }
 
       function cardHtml(p) {

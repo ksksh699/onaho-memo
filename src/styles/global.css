@@ -5893,73 +5893,26 @@ main {
   margin: 0 0 1.4rem;
 }
 
-/* ---- セールページ: 最近の値下がり ---- */
+/* ---- セールページ: 気になる商品のセール(2026-09-11) ---- */
 .price-drops {
   margin-bottom: 1.5rem;
 }
 
-.price-drop-list {
-  list-style: none;
-  margin: 0 0 1.8rem;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 0.7rem;
-}
-
-.price-drop-item {
-  display: flex;
-  gap: 0.7rem;
-  align-items: center;
-  background: var(--bg-card);
+.watchlist-sale-toggle {
+  display: block;
+  margin: 0.8rem auto 0;
+  background: transparent;
+  color: var(--accent);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 0.6rem 0.7rem;
-  text-decoration: none;
-  color: var(--text);
-  transition: border-color 0.15s ease;
-}
-
-.price-drop-item:hover {
-  border-color: var(--accent);
-}
-
-.price-drop-item img {
-  width: 60px;
-  height: 80px;
-  object-fit: contain;
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  flex-shrink: 0;
-}
-
-.price-drop-body {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: 0.15rem;
-}
-
-.price-drop-name {
+  border-radius: 999px;
+  padding: 0.5rem 1.4rem;
   font-size: 0.85rem;
   font-weight: 500;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  cursor: pointer;
 }
 
-.price-drop-prices {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-}
-
-.price-drop-prices s {
-  color: var(--text-muted);
+.watchlist-sale-toggle:hover {
+  border-color: var(--accent);
 }
 
 .price-drop-prices strong {
