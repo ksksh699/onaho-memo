@@ -51,7 +51,7 @@
     var CSS =
       '.om-embed{box-sizing:border-box;margin:16px 0;padding:20px 22px;border:1px solid #d9dfe9;border-radius:12px;background:#fff;font-family:inherit;color:#1f1f22;line-height:1.5;box-shadow:0 2px 10px rgba(43,95,173,.08)}' +
       '.om-embed *{box-sizing:border-box}' +
-      '.om-lead{margin:18px 0 -6px!important;font-size:14px!important;line-height:1.6!important}' +
+      '.om-lead{margin:18px 0 -6px!important;font-size:13px!important;line-height:1.6!important}' +
       '.om-head{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:#6b6b70}' +
       // text-decoration に !important を付けているのは、オナ王のテーマ側の「記事内リンクは下線」の
       // 指定(#mainEntity a など、こちらより詳細度が高い)に負けて、ラベル・商品名・ボタンにまで
