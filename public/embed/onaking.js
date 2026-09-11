@@ -23,6 +23,8 @@
  *   data-after="<CSSセレクタ>"   見出しが無いときの予備の差し込み先(".item-box" の最後の1つ。"" で無効)
  *   data-content="<CSSセレクタ>" 記事本文の入れ物("#mainEntity > .clearfix")
  *   data-no-auto="1"             自動差し込みをしない(data-onahomemo の場所にだけ描画)
+ *   data-lead-text="<文字列>"    自動モードでカードの直前に添える一言("▼全サイトの価格を一覧でみたい人はオナホめもをどうぞ")。
+ *                                "" で一言なし。直前の要素に既に「オナホめも」の文字があるときは自動的に省く(2026-09-12)
  *
  * 失敗しても(オナホめもが落ちている等)オナ王の表示には一切影響しないよう、全体を try で包む。
  */
@@ -42,11 +44,14 @@
       after: script && script.hasAttribute('data-after') ? script.getAttribute('data-after') : '.item-box',
       content: (script && script.getAttribute('data-content')) || '#mainEntity > .clearfix',
       noAuto: !!(script && script.getAttribute('data-no-auto')),
+      // 自動モードでカードの直前に添える一言(記事の文章として案内している形にする。2026-09-12)
+      leadText: script && script.hasAttribute('data-lead-text') ? script.getAttribute('data-lead-text') : '▼全サイトの価格を一覧でみたい人はオナホめもをどうぞ',
     };
 
     var CSS =
       '.om-embed{box-sizing:border-box;margin:16px 0;padding:20px 22px;border:1px solid #d9dfe9;border-radius:12px;background:#fff;font-family:inherit;color:#1f1f22;line-height:1.5;box-shadow:0 2px 10px rgba(43,95,173,.08)}' +
       '.om-embed *{box-sizing:border-box}' +
+      '.om-lead{margin:18px 0 -6px!important;font-size:14px!important;line-height:1.6!important}' +
       '.om-head{display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:13px;color:#6b6b70}' +
       // text-decoration に !important を付けているのは、オナ王のテーマ側の「記事内リンクは下線」の
       // 指定(#mainEntity a など、こちらより詳細度が高い)に負けて、ラベル・商品名・ボタンにまで
@@ -306,8 +311,20 @@
           targets.forEach(function (t) {
             var box = makeBox();
             box.innerHTML = html;
-            if (t.mode === 'after') t.el.parentNode.insertBefore(box, t.el.nextSibling);
-            else t.el.appendChild(box);
+            if (t.mode === 'after') {
+              // カードの直前に一言添える(記事側に既に「オナホめも」への案内文があれば二重にしない)
+              var prevText = ((t.el.textContent || '') + ' ' + ((t.el.nextElementSibling && t.el.nextElementSibling.textContent) || '')).replace(/\s+/g, ' ');
+              if (opts.leadText && prevText.indexOf('オナホめも') === -1) {
+                var lead = document.createElement('p');
+                lead.className = 'om-lead';
+                lead.textContent = opts.leadText;
+                t.el.parentNode.insertBefore(lead, t.el.nextSibling);
+                t.el = lead;
+              }
+              t.el.parentNode.insertBefore(box, t.el.nextSibling);
+            } else {
+              t.el.appendChild(box);
+            }
           });
         })
         .catch(function () {});
