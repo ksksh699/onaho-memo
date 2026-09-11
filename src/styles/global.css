@@ -1693,6 +1693,7 @@ main {
   font-size: 0.88rem;
   line-height: 1.6;
   margin: 0;
+  white-space: pre-wrap;
 }
 .site-rating {
   color: var(--accent);
