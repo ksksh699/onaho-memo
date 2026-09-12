@@ -93,7 +93,7 @@
 - 手動追加品「やわらかちゃんのオナホールデビュー」「放課後ノ花外活動」は他店にも在庫があったためリンク追加(price は最安値に更新)
 - 9/11 深夜〜12: hole6053(ViViDoll AYAKA)に NLS(pcode 52586)・M-ZAKKA(afb x112829-h7405885_b)を追加。トイズハートの「メーカーセール」タグ反映のため update-products を手動実行(セール中 909件に)。レビュー本文の改行が消える件は `.review-body` に white-space:pre-wrap で修正。セールページ(/sale/)の「最近値下がりした商品」欄を撤去し、ログイン中ユーザーの「気になる」商品のうちセール中のものを上位3件+開閉で表示する欄に置き換え(ブラウザ側スクリプト、checks.status='interested' と v_products_listing)。オナ王カードのスマホ表示を調整(上記3章)
 
-## 8. 他ショップのセール情報の巡回(2026-09-12 ステップ1〜4 すべて完了・稼働中)
+## 8. 他ショップのセール情報の巡回(2026-09-12 ステップ1〜3 完了・稼働中。4 未着手)
 
 じょいさんの要望: FANZA以外のショップのセールも拾いたい。価格ベース(定価比・値下がり履歴)ではなく**巡回方式**で行う(NLSは毎週水曜に新作数本を1週間セール、他店は不定期に数十〜百本)。
 
@@ -103,8 +103,9 @@
 3. **巡回スクリプト `crawl-shop-sales.js`**: 完了。6ショップすべて取得できている
    (2026-09-12 初回投入: 大魔王57 / 信長132 / エムズ384 / ホットパワーズ15 / M-ZAKKA347 / NLS3 = **有効939件**。
    うち `shop_product_ids` 経由で自社商品に紐づいたのは **339件(36%)**)
-4. **表示**: 完了(2026-09-12)。下記「表示まわり」を参照。
-   残件は「気になる」商品の他ショップセール通知のみ(未着手)
+4. **表示**: 未着手。※`shop_product_ids` には同じ (shop, shop_pid) が複数商品に紐づく箇所がある
+   (通常版と数量限定版、パッケージレス、FANZA独占版などが同じショップ商品ページを指すため。NLS44・信長34・大魔王30組など)。
+   単純に join すると1件のセールが複数行に増えるので注意。商品ページのショップ一覧に「SALE ○%OFF ○/○まで」バッジ → セールページに「他ショップのセール」欄(割引率順・ショップ絞り込み) → 「セール中」判定を FANZAタグ OR 他ショップのセール有り に拡張。「気になる」商品の他ショップセール通知はその後
 
 ### `shop_sales` テーブル
 `(shop, shop_pid, name, sale_price, regular_price, discount_percent, sale_label, ends_on, source_url, first_seen_at, last_seen_at, is_active)`、PK(shop, shop_pid)、公開SELECTポリシーあり。
@@ -127,34 +128,10 @@ ESM。`.env` を dotenv で読むので PC 実行時は環境変数の指定不�
   決め打ちにすると文字化けし、商品名も「通常◯◯円→◯◯円」の抽出も静かに失敗する(実際に一度やらかした)
 - ページ送りがあるショップは、取りこぼしたまま成功扱いにしないこと(同上の理由)
 
-### 表示まわり(2026-09-12 実装)
-- **商品ページ**(`src/pages/products/[id].astro`): ショップ一覧で、セール中のショップに「SALE 40%OFF 9/19まで」のバッジを出す。
-  **価格も巡回で取得したセール価格に差し替える**(`{shop}_price` は週1回の価格確認なのでセール中は古い高い価格のままになるため)。
-  「最安」バッジも同じ price を見ているので自動的にセール価格ベースになる。割引率・終了日が取れないショップは「SALE」だけ表示
-- **セールページ**(`src/pages/sale/`): FANZAと他ショップを**1つの一覧に統合**。並びの既定は割引率順で、
-  FANZAと他ショップの割引率のうち高い方(`best_discount_percent`)を見る。上部にショップ別の絞り込みチップ
-  (すべて / FANZA / M-ZAKKA / エムズ / 信長トイズ / ホットパワーズ)。チップは `?shop=` で本体一覧に効く
-- **トップページ**(`src/pages/index.astro`): 「セール対象のみ」と「本日のセール対象」件数を同じ判定に統一
-- **商品カード**(`ProductCards.astro` とトップの `renderCards`): 他ショップでセール中なら
-  ショップ名・セール価格・割引率・終了日の行を追加し、SALEリボンも出す
-- 2026-09-12時点の件数: セール中 **638件**(FANZA 413 / 他ショップ 236 / 両方 11)
-
-### DBビュー(表示用)
-- `v_product_shop_sales`: shop_sales(is_active) を shop_product_ids 経由で products に紐づけた行。商品ページ用
-- `v_shop_sale_by_product`: 上を商品1行に集約(sale_shops / shop_sale_best_discount / shop_sale_min_price / shop_sale_ends_on)
-- `products_with_stats` と `v_products_listing` に列を追加:
-  `has_shop_sale` / `sale_shops` / `shop_sale_*` / `is_on_sale` / `has_fanza_sale`(+ listing のみ `best_discount_percent`)
-  - **`is_on_sale` =「FANZAのセール系タグ OR 他ショップでセール中」**。判定はSQL側の1か所にまとめてあり、JSは列を見るだけ
-  - **SQL内のキーワードは `src/lib/listing.js` の `CAMPAIGN_KEYWORDS` と揃えること**(products_with_stats に2か所)
-  - 置き換え時に、旧JS判定(タグ一覧をキーワードで絞って overlaps)と同じ結果(413件・差分ゼロ)になることを照合済み
-
 ### 運用
 - GitHub Actions `.github/workflows/crawl-shop-sales.yml`: 毎日 22:00 UTC(= 翌7:00 JST)。`--exclude=mzakka,daimaoh` で本番巡回、結果は Job Summary の表に。参考情報として M-ZAKKA の `--check` も毎回実行(`continue-on-error`)し、クラウドから通るようになったら気づけるようにしてある。**大魔王は実Chromeが要るので Actions では一切実行しない**
 - PC: `run_shop_sales_crawl.bat`(`--only=mzakka,daimaoh`)を run_mzakka_crawl.bat と同じ要領でタスクスケジューラに登録。
   大魔王が画面ありのChromeを使うので **「ユーザーがログオンしているときのみ実行する」**にすること。ログは `shop_sales_crawl_task.log`
-  - 2026-09-12 に登録済み。タスク名 **`onahomemo-shop-sales-crawl`**、毎日 8:00、ログオン中のみ、
-    8時にPCが起動していなかった場合は起動後に実行(StartWhenAvailable)。所要時間は実測21秒
-  - 手動実行は `schtasks /run /tn "onahomemo-shop-sales-crawl"`。時刻変更はタスクスケジューラのトリガータブから
 - 依存: `cheerio`(全ショップ)と `playwright-core`(大魔王のみ)。`playwright-core` はブラウザ本体をダウンロードせず、PCの実Chromeを使う。
   `.gitignore` に `.chrome-profile-daimaoh/` と `shop_sales_crawl_task.log` を追加済み
 
