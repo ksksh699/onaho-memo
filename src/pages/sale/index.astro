@@ -48,7 +48,6 @@ const shopTally = new Map();
 for (const row of shopSaleRows) {
   for (const shop of row.sale_shops ?? []) shopTally.set(shop, (shopTally.get(shop) ?? 0) + 1);
 }
-const shopSaleTotal = shopSaleRows.length;
 const fanzaSaleCount = fanzaCountResult.count ?? 0;
 // FANZAを先頭に、あとは件数の多い順
 const shopCounts = [
@@ -121,11 +120,6 @@ const description = `いまセール中のオナホール${count}件を割引率
       )}
       {shopCounts.length > 0 && (
         <section class="other-shop-sales">
-          <h2 class="section-title">ショップで絞り込む</h2>
-          <p class="listing-lead">
-            ショップを選ぶと、その店でセール中の商品だけに絞り込みます。
-            FANZA以外のショップのセールは1日1回巡回して更新しています(現在{shopSaleTotal.toLocaleString('ja-JP')}件)。
-          </p>
           <ul class="other-shop-filter">
             <li>
               <a href={shopChipHref(null)} class={filters.shop ? '' : 'is-active'}>すべてのセール</a>
