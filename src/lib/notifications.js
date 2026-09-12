@@ -17,14 +17,16 @@ import { supabase } from './supabase.js';
 //   follow          … 自分が誰かにフォローされた
 //   sale            … 自分が「気になる」に登録している商品がセールになった
 //                      (sale_watchテーブルへのinsertトリガーで検知。1時間ごとのバッチ)
+//                      2026-09-12 から、FANZA以外のショップでセールになった場合も同じ type で通知する
+//                      (shop_sale_watch へのinsertトリガー。meta.source='shop'、meta.shops にショップのキー)
 //   price_drop      … 自分が「気になる」に登録している商品が値下がりした
 //                      (price_historyへのinsertトリガーで検知。5%以上の値下がりで、かつ
 //                       全ショップ中の最安値になったとき。metaに shop/old_price/new_price)
 
 const NOTIFY_LIMIT = 20;
 
-// 値下がり通知に表示するショップ名(price_history.shop のキー → 表示名)
-const PRICE_DROP_SHOP_NAMES = {
+// 通知に表示するショップ名(shop のキー → 表示名)。値下がり通知と他ショップのセール通知で使う
+const SHOP_NAMES = {
   fanza: 'FANZA',
   nls: 'NLS',
   daimaoh: '大魔王',
@@ -128,13 +130,21 @@ async function enrichNotifications(rows) {
     } else if (r.type === 'sale') {
       const product = productById[r.product_id];
       const productName = product?.name ?? '気になる商品';
-      text = `「${productName}」がセール中です`;
+      // 他ショップのセール(meta.source==='shop')なら、どの店かを出す。
+      // FANZAのセール通知は今まで通り店名なし
+      const meta = r.meta ?? {};
+      const shopNames = Array.isArray(meta.shops)
+        ? meta.shops.map((k) => SHOP_NAMES[k] ?? k).join('・')
+        : '';
+      text = shopNames
+        ? `「${productName}」が${shopNames}でセール中です`
+        : `「${productName}」がセール中です`;
       href = product?.dmm_content_id ? `/products/${product.dmm_content_id}/` : '/mypage';
     } else if (r.type === 'price_drop') {
       const product = productById[r.product_id];
       const productName = product?.name ?? '気になる商品';
       const meta = r.meta ?? {};
-      const shopName = PRICE_DROP_SHOP_NAMES[meta.shop] ?? '';
+      const shopName = SHOP_NAMES[meta.shop] ?? '';
       const priceText =
         meta.old_price && meta.new_price
           ? `(${shopName ? `${shopName} ` : ''}¥${Number(meta.old_price).toLocaleString()} → ¥${Number(meta.new_price).toLocaleString()})`
