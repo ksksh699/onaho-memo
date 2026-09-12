@@ -1,0 +1,46 @@
+name: Crawl shop sales
+
+on:
+  schedule:
+    # 毎日 22:00 (UTC) = 日本時間 翌朝7:00 に自動実行
+    - cron: '0 22 * * *'
+  workflow_dispatch:
+    inputs:
+      check_only:
+        description: '疎通確認のみ実行する(DBは更新しない)'
+        type: boolean
+        default: false
+
+jobs:
+  crawl-shop-sales:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v4
+
+      - name: Node.jsをセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 必要な部品をインストール
+        run: npm install
+
+      # M-ZAKKA はクラウドIPから取得できないため本番の巡回から除外している。
+      # 状況が変わっていないか確認するために、疎通確認だけ毎回実行しておく(失敗しても止めない)。
+      # 通販大魔王は Cloudflare の判定を通すのに「画面ありの実Chrome」が必要で、
+      # Actions では動かせないため PC 専用(run_shop_sales_crawl.bat)。ここでは一切実行しない。
+      - name: 疎通確認(M-ZAKKA・参考情報)
+        run: node crawl-shop-sales.js --check --only=mzakka
+        continue-on-error: true
+
+      - name: 他ショップのセールを巡回(M-ZAKKA・通販大魔王以外)
+        if: ${{ github.event.inputs.check_only != 'true' }}
+        run: node crawl-shop-sales.js --exclude=mzakka,daimaoh
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: 疎通確認のみ(手動実行でcheck_onlyを選んだ場合)
+        if: ${{ github.event.inputs.check_only == 'true' }}
+        run: node crawl-shop-sales.js --check --exclude=mzakka,daimaoh

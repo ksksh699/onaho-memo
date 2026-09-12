@@ -7,8 +7,9 @@ import ProductCards from '../../components/ProductCards.astro';
 import ListingPager from '../../components/ListingPager.astro';
 import ListingToolbar from '../../components/ListingToolbar.astro';
 import {
-  LISTING_SELECT, parsePage, pageRange, totalPages, setListingCacheHeaders, pageHref, fetchCampaignTags,
+  LISTING_SELECT, parsePage, pageRange, totalPages, setListingCacheHeaders, pageHref,
   parseListingFilters, applyListingFilters, applyListingSort, fetchListingFilterOptions, hasActiveFilters,
+  filterParams, SHOP_LABELS,
 } from '../../lib/listing.js';
 
 // セール中の商品一覧(2026-09-08)。URL: /sale/?page=N
@@ -19,21 +20,46 @@ const DEFAULT_SORT = 'discount_desc';
 const page = parsePage(Astro.url.searchParams);
 const [from, to] = pageRange(page);
 const filters = parseListingFilters(Astro.url.searchParams, { defaultSort: DEFAULT_SORT });
-const [campaignTags, filterOptions] = await Promise.all([fetchCampaignTags(), fetchListingFilterOptions()]);
+const filterOptions = await fetchListingFilterOptions();
 const filtered = hasActiveFilters(filters) || filters.sort !== DEFAULT_SORT;
 
-let products = [];
-let count = 0;
-if (campaignTags.length > 0) {
-  let query = supabase
-    .from('v_products_listing')
-    .select(LISTING_SELECT, { count: 'exact' })
-    .overlaps('genre_tags', campaignTags);
-  query = applyListingFilters(query, { ...filters, sale: false }, { campaignTags });
-  query = applyListingSort(query, filters.sort).range(from, to);
-  const result = await query;
-  products = result.data ?? [];
-  count = result.count ?? 0;
+// セール中の判定は v_products_listing.is_on_sale にまとめてある(2026-09-12)。
+// 「FANZAのセール系タグが付いている」か「他ショップ(NLS・大魔王・信長・エムズ・
+// ホットパワーズ・M-ZAKKA)でセール中」のどちらかであれば対象。
+// 並びの既定は割引率順で、FANZAと他ショップの割引率のうち高い方(best_discount_percent)を見る。
+let query = supabase
+  .from('v_products_listing')
+  .select(LISTING_SELECT, { count: 'exact' })
+  .eq('is_on_sale', true);
+query = applyListingFilters(query, { ...filters, sale: false }, {});
+query = applyListingSort(query, filters.sort).range(from, to);
+const result = await query;
+const products = result.data ?? [];
+const count = result.count ?? 0;
+
+// ショップ別の絞り込みチップに出す件数。
+// 他ショップは1商品1行の小さな配列だけ取ってJS側で集計し、FANZAは件数だけ数える。
+const [shopSaleResult, fanzaCountResult] = await Promise.all([
+  supabase.from('v_products_listing').select('sale_shops').eq('has_shop_sale', true),
+  supabase.from('v_products_listing').select('*', { count: 'exact', head: true }).eq('has_fanza_sale', true),
+]);
+const shopSaleRows = shopSaleResult.data ?? [];
+const shopTally = new Map();
+for (const row of shopSaleRows) {
+  for (const shop of row.sale_shops ?? []) shopTally.set(shop, (shopTally.get(shop) ?? 0) + 1);
+}
+const shopSaleTotal = shopSaleRows.length;
+const fanzaSaleCount = fanzaCountResult.count ?? 0;
+// FANZAを先頭に、あとは件数の多い順
+const shopCounts = [
+  ...(fanzaSaleCount > 0 ? [['fanza', fanzaSaleCount]] : []),
+  ...[...shopTally.entries()].sort((a, b) => b[1] - a[1]),
+];
+
+function shopChipHref(shop) {
+  const params = filterParams({ ...filters, shop: shop ?? '' }, { defaultSort: DEFAULT_SORT });
+  const q = params.toString();
+  return `/sale/${q ? `?${q}` : ''}`;
 }
 
 // 「気になる」に登録した商品がセール中かどうかは、ログイン状態によって内容が変わる
@@ -47,9 +73,9 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=0, s-maxage=300, st
 const pages = totalPages(count);
 const basePath = '/sale/';
 const canonical = `https://onahomemo.com${pageHref(basePath, page)}`;
-const maxDiscount = products[0]?.discount_percent ?? 0;
+const maxDiscount = products[0]?.best_discount_percent ?? products[0]?.discount_percent ?? 0;
 const title = `セール中のオナホ一覧(${count}件・割引率順)${page > 1 ? ` ${page}ページ目` : ''} | オナホめも`;
-const description = `いまセール中のオナホール${count}件を割引率の高い順に表示${maxDiscount ? `(最大${maxDiscount}%OFF)` : ''}。価格・定価・レビューを確認して、各商品ページで8ショップの価格を比較できます。`;
+const description = `いまセール中のオナホール${count}件を割引率の高い順に表示${maxDiscount ? `(最大${maxDiscount}%OFF)` : ''}。FANZAに加えNLS・大魔王・信長トイズ・エムズ・ホットパワーズ・M-ZAKKAのセールも掲載。各商品ページで8ショップの価格を比較できます。`;
 ---
 
 <html lang="ja">
@@ -81,7 +107,7 @@ const description = `いまセール中のオナホール${count}件を割引率
       <h1 class="listing-title">セール中のオナホ一覧</h1>
       <p class="listing-lead">
         {count > 0
-          ? `${count.toLocaleString('ja-JP')}件を割引率の高い順に表示${page > 1 ? `(${page} / ${pages}ページ)` : ''}。価格はFANZAの現在価格です。各商品ページで8ショップの価格を比較できます。`
+          ? `${count.toLocaleString('ja-JP')}件を割引率の高い順に表示${page > 1 ? `(${page} / ${pages}ページ)` : ''}。FANZAのセールに加えて、他ショップでセール中の商品も含みます。各商品ページで8ショップの価格を比較できます。`
           : 'いまセール中の商品はありません。'}
       </p>
       {page === 1 && !filtered && (
@@ -91,6 +117,27 @@ const description = `いまセール中のオナホール${count}件を割引率
           <ul id="watchlist-sale-list" class="grid listing-grid"></ul>
           <ul id="watchlist-sale-list-more" class="grid listing-grid" hidden></ul>
           <button type="button" id="watchlist-sale-toggle" class="watchlist-sale-toggle" hidden></button>
+        </section>
+      )}
+      {shopCounts.length > 0 && (
+        <section class="other-shop-sales">
+          <h2 class="section-title">ショップで絞り込む</h2>
+          <p class="listing-lead">
+            ショップを選ぶと、その店でセール中の商品だけに絞り込みます。
+            FANZA以外のショップのセールは1日1回巡回して更新しています(現在{shopSaleTotal.toLocaleString('ja-JP')}件)。
+          </p>
+          <ul class="other-shop-filter">
+            <li>
+              <a href={shopChipHref(null)} class={filters.shop ? '' : 'is-active'}>すべてのセール</a>
+            </li>
+            {shopCounts.map(([shop, n]) => (
+              <li>
+                <a href={shopChipHref(shop)} class={filters.shop === shop ? 'is-active' : ''}>
+                  {SHOP_LABELS[shop] ?? shop}({n})
+                </a>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
       <ListingToolbar filters={filters} options={filterOptions} basePath={basePath} hideSale defaultSort={DEFAULT_SORT} resultCount={filtered ? count : null} />

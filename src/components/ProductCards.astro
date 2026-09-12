@@ -2,7 +2,7 @@
 // 一覧ページ用の商品カード(サーバー側描画)。
 // トップページ(index.astro)のブラウザ側テンプレート renderCards() と同じクラス名・構造にして
 // 見た目を揃えている。トップにある「☰ 記録」ボタン(ログイン機能)は、一覧ページでは省略している。
-import { isNewArrival, isPreorder, isCampaignTag } from '../lib/listing.js';
+import { isNewArrival, isPreorder, isCampaignTag, SHOP_LABELS } from '../lib/listing.js';
 
 const { products = [] } = Astro.props;
 ---
@@ -11,6 +11,13 @@ const { products = [] } = Astro.props;
   {products.map((p) => {
     const isCampaign = (p.genre_tags ?? []).some((t) => isCampaignTag(t));
     const hasDiscount = isCampaign && p.discount_percent > 0;
+    // 他ショップのセール情報(v_other_shop_sale_products から渡ってきた場合だけ表示する)
+    const saleShops = p.sale_shops ?? null;
+    const shopSaleLabel = saleShops?.length
+      ? saleShops.map((k) => SHOP_LABELS[k] ?? k).join('・')
+      : null;
+    const shopSalePct = p.shop_sale_best_discount != null ? Math.round(Number(p.shop_sale_best_discount)) : null;
+    const shopSaleEnds = p.shop_sale_ends_on ? String(p.shop_sale_ends_on).match(/^(\d{4})-(\d{2})-(\d{2})$/) : null;
     return (
       <li class="card">
         {hasDiscount && <span class="sale-ribbon">SALE</span>}
@@ -28,6 +35,18 @@ const { products = [] } = Astro.props;
               {p.price ? `¥${Number(p.price).toLocaleString('ja-JP')}` : '価格情報なし'}
               {hasDiscount && <span class="discount-badge-small">{p.discount_percent}%OFF</span>}
             </p>
+            {shopSaleLabel && (
+              <p class="card-shop-sale">
+                <span class="card-shop-sale-name">{shopSaleLabel}</span>
+                {p.shop_sale_min_price != null && (
+                  <span class="card-shop-sale-price">¥{Number(p.shop_sale_min_price).toLocaleString('ja-JP')}</span>
+                )}
+                {shopSalePct ? <span class="discount-badge-small">{shopSalePct}%OFF</span> : null}
+                {shopSaleEnds && (
+                  <span class="card-shop-sale-ends">{Number(shopSaleEnds[2])}/{Number(shopSaleEnds[3])}まで</span>
+                )}
+              </p>
+            )}
             <div class="card-ratings">
               {p.dmm_review_average && (
                 <p class="card-rating dmm">

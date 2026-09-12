@@ -1,0 +1,45 @@
+name: Update product database
+
+on:
+  schedule:
+    # 毎週月曜日の 03:00 (UTC) = 日本時間 12:00 に自動実行
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    # このボタンで手動実行もできるようにしておく
+
+jobs:
+  update-products:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v4
+
+      - name: Node.jsをセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 必要な部品をインストール
+        run: npm install
+
+      - name: 商品データを取得(全件)
+        run: node fetch-products.js
+        env:
+          DMM_API_ID: ${{ secrets.DMM_API_ID }}
+          DMM_AFFILIATE_ID: ${{ secrets.DMM_AFFILIATE_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: オナホールに印をつける
+        run: node mark-onaholes.js
+        env:
+          DMM_API_ID: ${{ secrets.DMM_API_ID }}
+          DMM_AFFILIATE_ID: ${{ secrets.DMM_AFFILIATE_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: ショップリンクの欠けをチェック(再発防止レポート)
+        run: node report-shop-link-gaps.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

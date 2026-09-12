@@ -220,17 +220,16 @@ const campaignTags = (allTagsData ?? [])
 
 const weeklyNewCount = weeklyNewCountResult.count ?? 0;
 
-// 「本日のセール対象」欄用: セール系タグが付いている商品の件数
+// 「本日のセール対象」欄用: セール中の商品の件数
 // (トップページの「セール対象のみ」フィルターと同じ条件)
-let saleTargetCount = 0;
-if (campaignTags.length > 0) {
-  const { count: saleTargetCountResult } = await supabase
-    .from('products')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_onahole', true)
-    .overlaps('genre_tags', campaignTags);
-  saleTargetCount = saleTargetCountResult ?? 0;
-}
+// 2026-09-12 から「FANZAのセール系タグ OR 他ショップでセール中」に拡張。
+// 判定は products_with_stats.is_on_sale にまとめてある。
+const { count: saleTargetCountResult } = await supabase
+  .from('products_with_stats')
+  .select('*', { count: 'exact', head: true })
+  .eq('is_onahole', true)
+  .eq('is_on_sale', true);
+const saleTargetCount = saleTargetCountResult ?? 0;
 
 const minYear = minDateRow?.[0]?.release_date
   ? new Date(minDateRow[0].release_date).getFullYear()
@@ -702,6 +701,17 @@ const RANKINGS = [
       const searchInput = document.getElementById('search-input');
       const saleFilter = document.getElementById('sale-filter');
       const onakingFilter = document.getElementById('onaking-filter');
+      // 他ショップの表示名(src/lib/listing.js の SHOP_LABELS と揃える)
+      const SHOP_LABELS = {
+        nls: 'NLS',
+        daimaoh: '大魔王',
+        nobunagatoys: '信長トイズ',
+        ems: 'エムズ',
+        hotpowers: 'ホットパワーズ',
+        mzakka: 'M-ZAKKA',
+        pyuarabu: 'ぴゅあらばショップ',
+      };
+
       let campaignTags = [];
       function isCampaignTag(tag) {
         return campaignTags.includes(tag);
@@ -784,9 +794,19 @@ const RANKINGS = [
               ? Math.round((1 - p.price / listPrice) * 100)
               : null;
 
+            // 他ショップのセール(crawl-shop-sales.js が集めたもの)
+            const shopSaleLabel = (p.sale_shops ?? []).length
+              ? p.sale_shops.map((k) => SHOP_LABELS[k] ?? k).join('・')
+              : null;
+            const shopSalePct =
+              p.shop_sale_best_discount != null ? Math.round(Number(p.shop_sale_best_discount)) : null;
+            const shopSaleEnds = p.shop_sale_ends_on
+              ? String(p.shop_sale_ends_on).match(/^(\d{4})-(\d{2})-(\d{2})$/)
+              : null;
+
             return `
           <li class="card">
-            ${hasDiscount ? '<span class="sale-ribbon">SALE</span>' : ''}
+            ${hasDiscount || shopSaleLabel ? '<span class="sale-ribbon">SALE</span>' : ''}
             ${
               isPreorder(p.release_date)
                 ? '<span class="new-badge preorder-badge">予約受付中</span>'
@@ -803,6 +823,16 @@ const RANKINGS = [
                   ${p.price ? `¥${p.price.toLocaleString()}` : '価格情報なし'}
                   ${hasDiscount ? `<span class="discount-badge-small">${discountPercent}%OFF</span>` : ''}
                 </p>
+                ${
+                  shopSaleLabel
+                    ? `<p class="card-shop-sale">
+                         <span class="card-shop-sale-name">${shopSaleLabel}</span>
+                         ${p.shop_sale_min_price != null ? `<span class="card-shop-sale-price">¥${Number(p.shop_sale_min_price).toLocaleString('ja-JP')}</span>` : ''}
+                         ${shopSalePct ? `<span class="discount-badge-small">${shopSalePct}%OFF</span>` : ''}
+                         ${shopSaleEnds ? `<span class="card-shop-sale-ends">${Number(shopSaleEnds[2])}/${Number(shopSaleEnds[3])}まで</span>` : ''}
+                       </p>`
+                    : ''
+                }
                 <div class="card-ratings">
                   ${
                     p.dmm_review_average
@@ -872,7 +902,8 @@ const RANKINGS = [
       function applyFilters(q, { maker, searchTerm, yearFrom, yearTo, priceMin, priceMax }) {
         if (maker) q = q.eq('maker', maker);
         if (searchTerm) q = q.ilike('name', `%${searchTerm}%`);
-        if (saleFilter.checked) q = q.overlaps('genre_tags', campaignTags);
+        // セール中 = FANZAのセール系タグ OR 他ショップでセール中(products_with_stats.is_on_sale)
+        if (saleFilter.checked) q = q.eq('is_on_sale', true);
         if (onakingFilter.checked) q = q.eq('is_onaking_reviewed', true);
         if (yearFrom) q = q.gte('release_date', `${yearFrom}-01-01`);
         if (yearTo) q = q.lte('release_date', `${yearTo}-12-31`);
@@ -908,7 +939,7 @@ const RANKINGS = [
         let query = supabase
           .from('products_with_stats')
           .select(
-            'id, dmm_content_id, name, maker, price, image_url, dmm_review_average, dmm_review_count, raw_data, genre_tags, site_rating_avg, site_rating_count, want_count, release_date'
+            'id, dmm_content_id, name, maker, price, image_url, dmm_review_average, dmm_review_count, raw_data, genre_tags, site_rating_avg, site_rating_count, want_count, release_date, has_shop_sale, sale_shops, shop_sale_best_discount, shop_sale_min_price, shop_sale_ends_on'
           )
           .eq('is_onahole', true)
           .range(from, to);

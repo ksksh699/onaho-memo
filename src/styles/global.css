@@ -1900,6 +1900,102 @@ main {
   letter-spacing: 0.05em;
 }
 
+/* 他ショップのセール(セールページの欄・商品カードの補足行) */
+.other-shop-sales {
+  margin: 1.5rem 0 2rem;
+}
+
+.other-shop-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  list-style: none;
+  padding: 0;
+  margin: 0.6rem 0 1rem;
+}
+
+.other-shop-filter a {
+  display: inline-block;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  background: var(--bg-card);
+}
+
+.other-shop-filter a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.other-shop-filter a.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.other-shop-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin: 1rem 0 0;
+  font-size: 0.85rem;
+}
+
+.other-shop-pager a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.other-shop-pager .is-disabled {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.other-shop-pager-status {
+  color: var(--text-muted);
+}
+
+.card-shop-sale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0.15rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+.card-shop-sale-name {
+  color: var(--text-muted);
+}
+
+.card-shop-sale-price {
+  font-weight: 700;
+  color: var(--sale);
+}
+
+.card-shop-sale-ends {
+  color: var(--text-muted);
+}
+
+/* 他ショップのセールバッジ(商品ページのショップ一覧)。SALE 40%OFF 9/19まで のように出す */
+.shop-link-sale {
+  display: inline-block;
+  background: var(--sale);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .discount-badge-small {
   display: inline-block;
   background: var(--sale);

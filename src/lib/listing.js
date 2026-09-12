@@ -10,8 +10,22 @@ export const NEW_ARRIVAL_DAYS = 14;
 // トップページと同じ「セール系タグ」の判定キーワード(index.astro の CAMPAIGN_KEYWORDS と揃える)
 export const CAMPAIGN_KEYWORDS = ['セール', '特価', '祭', 'キャンペーン', 'OFF', '割引'];
 
+// 他ショップの表示名(商品ページの SHOP_DEFS と揃える)。他ショップのセール欄で使う
+export const SHOP_LABELS = {
+  // FANZA はセールの出どころが genre_tags なので sale_shops には入らないが、
+  // セールページのショップ別チップでは並べて選べるようにしている
+  fanza: 'FANZA',
+  nls: 'NLS',
+  daimaoh: '大魔王',
+  nobunagatoys: '信長トイズ',
+  ems: 'エムズ',
+  hotpowers: 'ホットパワーズ',
+  mzakka: 'M-ZAKKA',
+  pyuarabu: 'ぴゅあらばショップ',
+};
+
 export const LISTING_SELECT =
-  'id, dmm_content_id, name, maker, price, image_url, release_date, genre_tags, dmm_review_average, dmm_review_count, site_rating_avg, site_rating_count, list_price, discount_percent';
+  'id, dmm_content_id, name, maker, price, image_url, release_date, genre_tags, dmm_review_average, dmm_review_count, site_rating_avg, site_rating_count, list_price, discount_percent, sale_shops, shop_sale_best_discount, shop_sale_min_price, shop_sale_ends_on, best_discount_percent';
 
 export function isCampaignTag(tag) {
   return CAMPAIGN_KEYWORDS.some((k) => String(tag).includes(k));
@@ -97,11 +111,13 @@ export function parseListingFilters(searchParams, { defaultSort = 'new' } = {}) 
     priceMax: cleanInt(searchParams.get('price_max'), 0, 9999999),
     sale: searchParams.get('sale') === '1',
     onaking: searchParams.get('onaking') === '1',
+    // 他ショップのセール絞り込み(セールページのチップ)。知らないショップ名は無視する
+    shop: SHOP_LABELS[searchParams.get('shop') ?? ''] ? searchParams.get('shop') : '',
   };
 }
 
 export function hasActiveFilters(f) {
-  return Boolean(f.q || f.maker || f.yearFrom || f.yearTo || f.priceMin !== '' || f.priceMax !== '' || f.sale || f.onaking);
+  return Boolean(f.q || f.maker || f.yearFrom || f.yearTo || f.priceMin !== '' || f.priceMax !== '' || f.sale || f.onaking || f.shop);
 }
 
 // 絞り込み条件をクエリ文字列に戻す(ページ送りリンクや canonical に使う)
@@ -116,6 +132,7 @@ export function filterParams(f, { defaultSort = 'new' } = {}) {
   if (f.priceMax !== '') p.set('price_max', String(f.priceMax));
   if (f.sale) p.set('sale', '1');
   if (f.onaking) p.set('onaking', '1');
+  if (f.shop) p.set('shop', f.shop);
   return p;
 }
 
@@ -124,7 +141,14 @@ export function filterParams(f, { defaultSort = 'new' } = {}) {
 export function applyListingFilters(query, f, { campaignTags = [] } = {}) {
   if (f.q) query = query.ilike('name', `%${f.q.replace(/[%_\\]/g, '\\$&')}%`);
   if (f.maker) query = query.eq('maker', f.maker);
-  if (f.sale && campaignTags.length > 0) query = query.overlaps('genre_tags', campaignTags);
+  // 「セール中」= FANZAのセール系タグ OR 他ショップでセール中(2026-09-12)。
+  // 判定は v_products_listing.is_on_sale にまとめてあるので、ここではその列を見るだけ。
+  // (campaignTags は以前この判定に使っていた名残。タグ一覧の表示など他の用途では今も使う)
+  if (f.sale) query = query.eq('is_on_sale', true);
+  // ショップ別の絞り込み(セールページのチップ)。
+  // FANZAのセールはタグ由来なので has_fanza_sale、他ショップは sale_shops を見る。
+  if (f.shop === 'fanza') query = query.eq('has_fanza_sale', true);
+  else if (f.shop) query = query.contains('sale_shops', [f.shop]);
   if (f.onaking) query = query.eq('is_onaking_reviewed', true);
   if (f.yearFrom) query = query.gte('release_date', `${f.yearFrom}-01-01`);
   if (f.yearTo) query = query.lte('release_date', `${f.yearTo}-12-31`);
@@ -137,7 +161,8 @@ export function applyListingFilters(query, f, { campaignTags = [] } = {}) {
 export function applyListingSort(query, sort) {
   switch (sort) {
     case 'discount_desc':
-      query = query.order('discount_percent', { ascending: false });
+      // FANZAの割引率と他ショップの割引率のうち高い方(best_discount_percent)で並べる
+      query = query.order('best_discount_percent', { ascending: false });
       break;
     case 'price_asc':
       query = query.order('price', { ascending: true, nullsFirst: false });

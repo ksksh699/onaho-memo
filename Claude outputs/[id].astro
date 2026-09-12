@@ -7,25 +7,6 @@ import SiteFooter from '../../components/SiteFooter.astro';
 // 商品数が非常に多い(4000件超)ため、ビルド時に全ページを事前生成すると
 // デプロイに膨大な時間がかかる。そのため事前生成はせず、リクエストごとに
 // その場でSupabaseから該当商品を取得する(SSR)方式にしている。
-//
-// このページのサーバー側レンダリング結果はログイン状態に依存しない
-// (自分のレビュー編集・いいね済み判定・コメント削除ボタン等の個人向け処理は
-// すべてブラウザ側スクリプトで行っている)ため、トップページと同様に
-// VercelのCDN(エッジキャッシュ)にキャッシュさせる。
-//   - s-maxage=60: CDNは1分間、同じHTMLをそのまま返す(この間はSupabaseへの問い合わせがゼロ)
-//   - stale-while-revalidate=600: 1分を過ぎても最大10分は古いHTMLを即座に返しつつ、裏で再生成する
-// 商品ページはレビュー・コメントなど利用者の投稿がそのまま載るページなので、
-// トップページ(5分)より短めにして「投稿したのに表示されない」時間を最小限にしている。
-// 注意: 他の人のレビュー・評価・コメントが公開一覧に載るのは最大1分程度遅れる
-// (投稿者本人の入力欄はブラウザ側で即座に描き直されるため影響なし)。
-//
-// Vary: Cookie … 年齢確認ゲート(src/middleware.js)の素通り防止(index.astroの説明を参照)。
-Astro.response.headers.set('Vary', 'Cookie');
-Astro.response.headers.set(
-  'Cache-Control',
-  'public, max-age=0, s-maxage=60, stale-while-revalidate=600'
-);
-
 const { id } = Astro.params;
 const { data: product } = await supabase
   .from('products')
@@ -48,9 +29,7 @@ const stockLabels = {
   maker_stock: '取り寄せ',
 };
 const stock = rawData.stock;
-// FANZA側のstock値には日本語ラベルを用意していない値("empty"や"order"など)も
-// 存在するため、マッピングが無い場合は英語の生値をそのまま出さず非表示にする
-const stockLabel = stockLabels[stock] ?? null;
+const stockLabel = stockLabels[stock] ?? stock;
 const imageUrlSmall = rawData.imageURL?.list ?? product.image_url;
 // 一覧用サムネイル(90x120程度)は詳細ページで引き伸ばすとぼやけるため、
 // DMMの命名規則(...pt.jpg → ...pl.jpg)で高解像度版を推測して優先表示する。
@@ -62,7 +41,7 @@ const hasDiscount = listPrice && product.price && listPrice > product.price;
 const discountPercent = hasDiscount ? Math.round((1 - product.price / listPrice) * 100) : null;
 
 // 以下3つはお互いに依存しない問い合わせなので、Promise.allでまとめて並列実行する
-const [publicReviewsResult, ratingResult, onakingLinkResult, shopSalesResult] = await Promise.all([
+const [publicReviewsResult, ratingResult, onakingLinkResult] = await Promise.all([
   supabase
     .from('checks')
     .select(
@@ -80,81 +59,52 @@ const [publicReviewsResult, ratingResult, onakingLinkResult, shopSalesResult] = 
     .select('onaking_url')
     .eq('product_id', product.id)
     .maybeSingle(),
-  // 他ショップのセール(crawl-shop-sales.js が毎日集めたもの)。1ショップにつき最大1行
-  supabase
-    .from('v_product_shop_sales')
-    .select('shop, sale_price, regular_price, discount_percent, sale_label, ends_on')
-    .eq('product_id', product.id),
 ]);
 
 const { data: publicReviews } = publicReviewsResult;
 
-// 公開レビューに紐づく追加情報(いいね数・コメント・投稿者ニックネーム)は、
-// どれも「公開レビューのID一覧」さえ分かれば取れるので、1つずつ順番に待たず
-// Promise.allでまとめて並列に問い合わせる。
-// (以前は いいね数→コメント→ニックネーム と3回直列に往復していたため、
-//  その分だけ表示までの待ち時間が積み上がっていた)
+// レビューへの「いいね」数(誰が押したかはクライアント側でセッションを見て判定する)
 const reviewIds = (publicReviews ?? []).map((r) => r.id);
-const reviewerIds = [...new Set((publicReviews ?? []).map((r) => r.user_id).filter(Boolean))];
-
-// ニックネームは、プロフィールを公開設定にしている人の分だけ表示する
-// (checksとprofilesの間に外部キー関係がないため、埋め込みselectではなく手動で結合する)
-const fetchPublicNicknames = (userIds) =>
-  userIds.length > 0
-    ? supabase
-        .from('profiles')
-        .select('id, nickname')
-        .in('id', userIds)
-        .eq('is_public', true)
-        .not('nickname', 'is', null)
-    : Promise.resolve({ data: [] });
-
-const [likeCountResult, commentResult, reviewerProfileResult] = await Promise.all([
-  // レビューへの「いいね」数(誰が押したかはクライアント側でセッションを見て判定する)
-  reviewIds.length > 0
-    ? supabase.rpc('get_review_like_counts', { check_ids: reviewIds })
-    : Promise.resolve({ data: [] }),
-  // レビューへのコメント(質問・回答用)。公開レビューにのみ紐づく
-  reviewIds.length > 0
-    ? supabase
-        .from('review_comments')
-        .select('id, check_id, user_id, body, created_at')
-        .in('check_id', reviewIds)
-        .order('created_at', { ascending: true })
-    : Promise.resolve({ data: [] }),
-  // レビュー投稿者のニックネーム(コメント投稿者の分はコメント取得後に不足分だけ追加取得)
-  fetchPublicNicknames(reviewerIds),
-]);
-
 let reviewLikeCounts = {};
-for (const row of likeCountResult.data ?? []) {
-  reviewLikeCounts[row.check_id] = row.like_count;
+if (reviewIds.length > 0) {
+  const { data: likeCountRows } = await supabase.rpc('get_review_like_counts', {
+    check_ids: reviewIds,
+  });
+  for (const row of likeCountRows ?? []) {
+    reviewLikeCounts[row.check_id] = row.like_count;
+  }
 }
 
+// レビューへのコメント(質問・回答用)。公開レビューにのみ紐づく
 let commentsByCheckId = {};
-for (const c of commentResult.data ?? []) {
-  if (!commentsByCheckId[c.check_id]) commentsByCheckId[c.check_id] = [];
-  commentsByCheckId[c.check_id].push(c);
+if (reviewIds.length > 0) {
+  const { data: commentRows } = await supabase
+    .from('review_comments')
+    .select('id, check_id, user_id, body, created_at')
+    .in('check_id', reviewIds)
+    .order('created_at', { ascending: true });
+  for (const c of commentRows ?? []) {
+    if (!commentsByCheckId[c.check_id]) commentsByCheckId[c.check_id] = [];
+    commentsByCheckId[c.check_id].push(c);
+  }
 }
 
+// レビュー投稿者・コメント投稿者のニックネームは、プロフィールを公開設定にしている人の分だけ表示する
+// (checksとprofilesの間に外部キー関係がないため、埋め込みselectではなく手動で結合する)
+const reviewerIds = (publicReviews ?? []).map((r) => r.user_id);
+const commentUserIds = Object.values(commentsByCheckId)
+  .flat()
+  .map((c) => c.user_id);
+const allUserIds = [...new Set([...reviewerIds, ...commentUserIds].filter(Boolean))];
 let reviewerNicknames = {};
-for (const p of reviewerProfileResult.data ?? []) {
-  reviewerNicknames[p.id] = p.nickname;
-}
-
-// コメント投稿者のうち、レビュー投稿者として既に取得済みでない人の分だけ追加で取得する
-// (コメントが無い商品ページでは、この問い合わせ自体が発生しない)
-const commentUserIds = [
-  ...new Set(
-    Object.values(commentsByCheckId)
-      .flat()
-      .map((c) => c.user_id)
-      .filter((uid) => uid && !reviewerIds.includes(uid))
-  ),
-];
-if (commentUserIds.length > 0) {
-  const { data: commentProfiles } = await fetchPublicNicknames(commentUserIds);
-  for (const p of commentProfiles ?? []) {
+if (allUserIds.length > 0) {
+  const { data: reviewerProfiles } = await supabase
+    .from('profiles')
+    .select('id, nickname')
+    .in('id', allUserIds)
+    .eq('is_public', true)
+    .not('nickname', 'is', null);
+  for (const p of reviewerProfiles ?? []) {
     reviewerNicknames[p.id] = p.nickname;
   }
 }
@@ -177,159 +127,67 @@ const releaseDateDisplay = product.release_date_text || product.release_date;
 const onakingLinkData = onakingLinkResult.data;
 const onakingUrl = onakingLinkData?.onaking_url ?? null;
 
-// 他ショップの購入リンク・価格比較。
-// 取り扱いの有無にかかわらず、常に8サイト全てを固定の順番で表示する
-// (取り扱いがあるサイトだけを出す方式だと、リンクの貼り忘れに気付けないため)。
-// 取り扱いがない(該当する{shop}_urlが未登録の)サイトは、そのサイトのトップページへ
-// リンクし、価格は「不明」と表示する。
-// トップページのURLは可能な限りアフィリエイトリンク化してある(踏んだ時点で成果対象になるように)。
-// - FANZA: DMMの「lurlに好きなURLを渡すとaf_id付きでリダイレクトしてくれる」汎用アフィリエイトリンクの仕組みを利用
-// - 信長トイズ: e-click(共通ASP)の「urlパラメータに好きな遷移先を渡せる」リダイレクト形式を利用
-// - 大魔王・NLS: それぞれ自社の /jump/{id}/ , /access.php?agency_id={id} が、商品を指定しない場合はトップページへ
-//   リダイレクトすることを実際に動作確認して採用
-// - ぴゅあらば・ホットパワーズ・エムズ(BannerBridge)、M-ZAKKA(afb)は、既存の商品リンクと同様に
-//   URLの汎用リダイレクトが効かない(adID/aパラメータが個別発行制)ため、各社の管理画面でトップページ用の
-//   リンクを1本ずつ新規発行してもらい、そのURLをそのまま設定している(2026-09-05、ユーザーが発行)。
-const SHOP_DEFS = [
-  {
-    key: 'fanza',
-    name: 'FANZA',
-    urlField: 'affiliate_url',
-    priceField: 'price',
-    topUrl:
-      'https://al.fanza.co.jp/?lurl=' +
-      encodeURIComponent('https://www.dmm.co.jp/mono/goods/') +
-      '&af_id=onakingcom-990&ch=api',
-  },
-  {
-    key: 'pyuarabu',
-    name: 'ぴゅあらばショップ',
-    urlField: 'pyuarabu_url',
-    priceField: 'pyuarabu_price',
-    topUrl: 'https://track.bannerbridge.net/click.php?APID=195458&affID=96868&siteID=218939',
-  },
-  {
-    key: 'nls',
-    name: 'NLS',
-    urlField: 'nls_url',
-    priceField: 'nls_price',
-    topUrl: 'https://www.e-nls.com/access.php?agency_id=af952539-mem&fid=388',
-  },
-  {
-    key: 'daimaoh',
-    name: '大魔王',
-    urlField: 'daimaoh_url',
-    priceField: 'daimaoh_price',
-    topUrl: 'https://daimaoh.co.jp/jump/zl361209-ohm/',
-  },
-  {
-    key: 'mzakka',
-    name: 'M-ZAKKA',
-    urlField: 'mzakka_url',
-    priceField: 'mzakka_price',
-    topUrl: 'https://t.afi-b.com/visit.php?a=x112829-k378996j&p=Y9915974',
-  },
-  {
-    key: 'hotpowers',
-    name: 'ホットパワーズ',
-    urlField: 'hotpowers_url',
-    priceField: 'hotpowers_price',
-    topUrl: 'https://track.bannerbridge.net/click.php?APID=32457&affID=96868&siteID=218939',
-  },
-  {
-    key: 'nobunagatoys',
-    name: '信長トイズ',
-    urlField: 'nobunagatoys_url',
-    priceField: 'nobunagatoys_price',
-    topUrl:
-      'https://www.e-click.jp/redirects/direct/33655/4171/?url=' +
-      'https%3A//www.nobunaga-toys.com/',
-  },
-  {
-    key: 'ems',
-    name: 'エムズ',
-    urlField: 'ems_url',
-    priceField: 'ems_price',
-    topUrl: 'https://track.bannerbridge.net/click.php?APID=171478&affID=96868&siteID=218939',
-  },
-];
-
-// 他ショップのセール情報をショップごとに引けるようにする(2026-09-12)。
-// セール中のショップは、products に記録されている価格ではなく巡回で取得したセール価格を表示する。
-// ({shop}_price は週1回の価格確認なので、セール中は古い(高い)価格のままになっていることがあるため。
-//  「最安」バッジの判定も、この price を見ているので自動的にセール価格ベースになる)
-const shopSaleByKey = new Map((shopSalesResult.data ?? []).map((r) => [r.shop, r]));
-
-// 「SALE 40%OFF 9/19まで」のような短いバッジ文言を作る。
-// 割引率が取れないショップ(NLS・大魔王・信長の一部)は「SALE」だけ、終了日が無ければ日付も省く。
-function shopSaleBadgeText(sale) {
-  if (!sale) return null;
-  const parts = ['SALE'];
-  const pct = sale.discount_percent != null ? Math.round(Number(sale.discount_percent)) : null;
-  if (pct) parts.push(`${pct}%OFF`);
-  const ends = sale.ends_on ? String(sale.ends_on).match(/^(\d{4})-(\d{2})-(\d{2})$/) : null;
-  if (ends) parts.push(`${Number(ends[2])}/${Number(ends[3])}まで`);
-  return parts.join(' ');
+// 他ショップの購入リンク・価格比較(パイロット導入中。対象商品のみ登録済み)
+// 各{shop}_urlが登録されている商品のみ自動的に表示順に組み込まれる
+const shopLinks = [];
+if (product.affiliate_url) {
+  shopLinks.push({ key: 'fanza', name: 'FANZA', price: product.price, url: product.affiliate_url });
+}
+if (product.pyuarabu_url) {
+  shopLinks.push({ key: 'pyuarabu', name: 'ぴゅあらばショップ', price: product.pyuarabu_price, url: product.pyuarabu_url });
+}
+if (product.nls_url) {
+  shopLinks.push({ key: 'nls', name: 'NLS', price: product.nls_price, url: product.nls_url });
+}
+if (product.daimaoh_url) {
+  shopLinks.push({ key: 'daimaoh', name: '大魔王', price: product.daimaoh_price, url: product.daimaoh_url });
+}
+if (product.hotpowers_url) {
+  shopLinks.push({ key: 'hotpowers', name: 'ホットパワーズ', price: product.hotpowers_price, url: product.hotpowers_url });
+}
+if (product.ems_url) {
+  shopLinks.push({ key: 'ems', name: 'エムズ', price: product.ems_price, url: product.ems_url });
+}
+if (product.mzakka_url) {
+  shopLinks.push({ key: 'mzakka', name: 'M-ZAKKA', price: product.mzakka_price, url: product.mzakka_url });
+}
+if (product.nobunagatoys_url) {
+  shopLinks.push({ key: 'nobunagatoys', name: '信長トイズ', price: product.nobunagatoys_price, url: product.nobunagatoys_url });
 }
 
-const orderedShopLinks = SHOP_DEFS.map((def) => {
-  const hasListing = Boolean(product[def.urlField]);
-  const sale = hasListing ? (shopSaleByKey.get(def.key) ?? null) : null;
-  const listedPrice = hasListing ? product[def.priceField] : null;
-  return {
-    key: def.key,
-    name: def.name,
-    hasListing,
-    price: sale?.sale_price ?? listedPrice,
-    saleBadge: shopSaleBadgeText(sale),
-    url: hasListing ? product[def.urlField] : def.topUrl,
-  };
-});
+// 表示順は「安い順」ではなく固定の優先順位:
+// 1) FANZA 2) ぴゅあらばショップ 3) 残りの中で一番安いサイト(同額ならNLSを優先)
+// FANZA/ぴゅあらばが未登録の場合はその枠を詰めて表示する
+const FIXED_ORDER = { fanza: 0, pyuarabu: 1 };
+const fixedShopLinks = shopLinks
+  .filter((s) => s.key in FIXED_ORDER)
+  .sort((a, b) => FIXED_ORDER[a.key] - FIXED_ORDER[b.key]);
+const restShopLinks = shopLinks
+  .filter((s) => !(s.key in FIXED_ORDER))
+  .sort((a, b) => {
+    const diff = (a.price ?? Infinity) - (b.price ?? Infinity);
+    if (diff !== 0) return diff;
+    if (a.key === 'nls') return -1;
+    if (b.key === 'nls') return 1;
+    return 0;
+  });
+const orderedShopLinks = [...fixedShopLinks, ...restShopLinks];
 
-// 「最安」バッジは、実際に価格が判明している(取り扱いがある)サイトの中でのみ判定する
-const knownPriceLinks = orderedShopLinks.filter((s) => s.hasListing && s.price != null);
-const cheapestPrice = knownPriceLinks.reduce((min, s) => (s.price < min ? s.price : min), Infinity);
-const showCheapestBadge = knownPriceLinks.length > 1;
+// 「最安」バッジは表示順にかかわらず、実際に一番安いサイトにだけ付ける
+const cheapestPrice = shopLinks.reduce(
+  (min, s) => (s.price != null && s.price < min ? s.price : min),
+  Infinity
+);
+const showCheapestBadge = shopLinks.length > 1 && Number.isFinite(cheapestPrice);
 const cheapestIndex = showCheapestBadge
-  ? orderedShopLinks.findIndex((s) => s.hasListing && s.price === cheapestPrice)
+  ? orderedShopLinks.findIndex((s) => s.price === cheapestPrice)
   : -1;
 
-// 最初はFANZAのみ表示し、タップで残り7サイトを開けるようにする。
-// ただしFANZAに取り扱いが無い商品(手動追加のFANZA未掲載品など)は、FANZAの「不明」だけを
-// 見せても意味がないので、取り扱いのあるショップをすべて先頭に出し、残りを折りたたむ(2026-09-10)。
-const fanzaListed = orderedShopLinks[0]?.hasListing;
-const visibleShopLinks = fanzaListed
-  ? orderedShopLinks.slice(0, 1)
-  : orderedShopLinks.filter((s) => s.hasListing).length > 0
-    ? orderedShopLinks.filter((s) => s.hasListing)
-    : orderedShopLinks.slice(0, 1);
-const moreShopLinks = orderedShopLinks.filter((s) => !visibleShopLinks.includes(s));
-// 「最安」バッジの位置は、表示順(visible → more)での添字で判定する
-const displayOrder = [...visibleShopLinks, ...moreShopLinks];
-const cheapestDisplayIndex = cheapestIndex >= 0 ? displayOrder.indexOf(orderedShopLinks[cheapestIndex]) : -1;
-
-// og:系タグ用のこのページの正規URL。Xなどに貼った時に商品名・画像入りの
-// カードとして表示されるようにする(レビュー保存後のシェアボタンは
-// products/[id].astroのクライアント側スクリプト側でlocation.hrefから作る)。
-const pageUrl = `${Astro.url.origin}/products/${product.dmm_content_id}/`;
-// 商品ページ常設の「この商品をXでシェア」ボタン(シェア画像は /og/product/{id}.png)
-const productShareText = `「${product.name}」${product.maker ? `(${product.maker})` : ''} のレビュー・8ショップ価格比較 #オナホ #オナホめも`;
-const productShareHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(productShareText)}&url=${encodeURIComponent(`${pageUrl}?utm_source=x`)}`;
-// ジャンルタグ(FANZA由来)をタグ別一覧ページへのリンクとして表示する。
-// セール系タグ(超特価祭など)は /sale/ に集約しているので、そちらへ向ける
-const CAMPAIGN_KEYWORDS_DETAIL = ['セール', '特価', '祭', 'キャンペーン', 'OFF', '割引'];
-const detailTags = (product.genre_tags ?? [])
-  .filter((t) => typeof t === 'string' && t.trim())
-  .map((t) => ({ tag: t, sale: CAMPAIGN_KEYWORDS_DETAIL.some((k) => t.includes(k)) }))
-  .slice(0, 12);
-// 検索結果に表示される説明文(メタディスクリプション)。長すぎると省略されるので160文字以内に収める
-const metaDescription = [
-  `${product.name}${product.maker ? `(${product.maker})` : ''}のレビュー・評価と価格比較。`,
-  product.price ? `${product.affiliate_url ? 'FANZA価格' : '参考価格'} ¥${Number(product.price).toLocaleString()}。` : '',
-  'FANZA・NLS・大魔王・信長トイズ・ホットパワーズ・エムズ・M-ZAKKA・ぴゅあらばの購入先を比較できます。',
-]
-  .join('')
-  .slice(0, 160);
+// 登録サイト数が増えても縦に間延びしないよう、上位のみ初期表示し、
+// 残りは<details>で折りたたんでおく
+const SHOP_LINKS_VISIBLE = 3;
+const visibleShopLinks = orderedShopLinks.slice(0, SHOP_LINKS_VISIBLE);
+const moreShopLinks = orderedShopLinks.slice(SHOP_LINKS_VISIBLE);
 ---
 
 <html lang="ja">
@@ -340,24 +198,11 @@ const metaDescription = [
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#2b5fad" />
-    <title>{product.name} | オナホめも</title>
-    <meta name="description" content={metaDescription} />
-    <link rel="canonical" href={pageUrl} />
-    <meta property="og:type" content="product" />
-    <meta property="og:description" content={metaDescription} />
-    <meta property="og:title" content={product.name} />
-    <meta property="og:url" content={pageUrl} />
-    <meta property="og:image" content={`${Astro.url.origin}/og/product/${product.dmm_content_id}.png`} />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content={`${product.name} - オナホめも評価と価格比較`} />
-    <meta property="og:site_name" content="オナホめも" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@onahomemo" />
+    <title>{product.name}</title>
   </head>
   <body>
     <SiteHeader />
-    <main class="detail" data-track-product={product.dmm_content_id}>
+    <main class="detail">
       <h1 class="detail-title">{product.name}</h1>
       <div class="detail-grid">
         <img
@@ -369,7 +214,7 @@ const metaDescription = [
         <div class="detail-info">
           <p class="maker">
             {product.maker ? (
-              <a href={`/makers/${encodeURIComponent(product.maker)}/`} class="maker-link">
+              <a href={`/?maker=${encodeURIComponent(product.maker)}`} class="maker-link">
                 {product.maker}
               </a>
             ) : (
@@ -388,7 +233,7 @@ const metaDescription = [
             <span class="site-rating-value">
               {productRating
                 ? `${'★'.repeat(Math.round(productRating.avg_rating))}${'☆'.repeat(5 - Math.round(productRating.avg_rating))} ${productRating.avg_rating}点(${productRating.rating_count}件)`
-                : '☆☆☆☆☆(0)'}
+                : 'まだ評価がありません。タップして記録する'}
             </span>
           </button>
 
@@ -400,24 +245,15 @@ const metaDescription = [
             </ul>
           )}
 
-          {stockLabel && (
+          {stock && (
             <p class="stock">
               {stockLabel}
             </p>
           )}
           {releaseDateDisplay && <p>発売日: {releaseDateDisplay}</p>}
-          {detailTags.length > 0 && (
-            <div class="detail-tags">
-              {detailTags.map((t) => (
-                <a href={t.sale ? '/sale/' : `/tags/${encodeURIComponent(t.tag)}/`} class={`term-chip ${t.sale ? 'sale' : ''}`}>
-                  {t.sale ? `セール中(${t.tag})` : t.tag}
-                </a>
-              ))}
-            </div>
-          )}
           {product.dmm_review_average && (
             <p>
-              <a href={product.affiliate_url} target="_blank" rel="noopener nofollow" class="fanza-review-link" data-shop="fanza" data-listing="1">
+              <a href={product.affiliate_url} target="_blank" rel="noopener nofollow" class="fanza-review-link">
                 FANZAレビュー: {product.dmm_review_average}点({product.dmm_review_count}件)
               </a>
             </p>
@@ -428,12 +264,9 @@ const metaDescription = [
       <div class="detail-actions">
           {product.manual_note && <p class="manual-note">{product.manual_note}</p>}
 
-          <div class="shop-links">
-              <p class="shop-links-title">購入サイトを比較(価格は税込)</p>
-              <a href={productShareHref} target="_blank" rel="noopener noreferrer" class="x-share-btn product-share-btn">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
-                この商品をXでシェア
-              </a>
+          {shopLinks.length > 0 ? (
+            <div class="shop-links">
+              <p class="shop-links-title">購入サイトを比較{shopLinks.length > 1 ? '(価格は税込)' : ''}</p>
               {hasDiscount && (
                 <p class="shop-links-ref-price">
                   参考価格: <span class="shop-links-ref-price-value">¥{listPrice.toLocaleString()}</span>
@@ -441,17 +274,16 @@ const metaDescription = [
               )}
               <ul class="shop-links-list">
                 {visibleShopLinks.map((s, i) => (
-                  <li class={`shop-link-item ${i === cheapestDisplayIndex ? 'cheapest' : ''}`}>
-                    <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link" data-shop={s.key} data-listing={s.hasListing ? '1' : '0'}>
+                  <li class={`shop-link-item ${i === cheapestIndex ? 'cheapest' : ''}`}>
+                    <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link">
                       <span class="shop-link-name">{s.name}</span>
                       <span class="shop-link-price">
-                        {s.hasListing ? (s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし') : '不明'}
-                        {s.key === 'fanza' && s.hasListing && hasDiscount && (
+                        {s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし'}
+                        {s.key === 'fanza' && hasDiscount && (
                           <span class="discount-badge-small">{discountPercent}%OFF</span>
                         )}
-                        {s.saleBadge && <span class="shop-link-sale">{s.saleBadge}</span>}
                       </span>
-                      {i === cheapestDisplayIndex && <span class="shop-link-badge">最安</span>}
+                      {i === cheapestIndex && <span class="shop-link-badge">最安</span>}
                     </a>
                   </li>
                 ))}
@@ -460,17 +292,13 @@ const metaDescription = [
                 <details class="shop-links-more">
                   <summary>他{moreShopLinks.length}サイトを見る</summary>
                   <ul class="shop-links-list">
-                    {moreShopLinks.map((s, i) => (
-                      <li class={`shop-link-item ${i + visibleShopLinks.length === cheapestDisplayIndex ? 'cheapest' : ''}`}>
-                        <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link" data-shop={s.key} data-listing={s.hasListing ? '1' : '0'}>
+                    {moreShopLinks.map((s) => (
+                      <li class="shop-link-item">
+                        <a href={s.url} target="_blank" rel="noopener nofollow" class="shop-link">
                           <span class="shop-link-name">{s.name}</span>
                           <span class="shop-link-price">
-                            {s.hasListing ? (s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし') : '不明'}
-                            {s.saleBadge && <span class="shop-link-sale">{s.saleBadge}</span>}
+                            {s.price ? `¥${s.price.toLocaleString()}` : '価格情報なし'}
                           </span>
-                          {i + visibleShopLinks.length === cheapestDisplayIndex && (
-                            <span class="shop-link-badge">最安</span>
-                          )}
                         </a>
                       </li>
                     ))}
@@ -478,8 +306,18 @@ const metaDescription = [
                 </details>
               )}
             </div>
+          ) : (
+            <>
+              {product.price && <p class="detail-price-fallback">¥{product.price.toLocaleString()}</p>}
+              {product.affiliate_url && (
+                <a class="buy-link" href={product.affiliate_url} target="_blank" rel="noopener nofollow">
+                  {product.is_manual ? '購入ページを見る' : 'FANZAで詳細を見る'}
+                </a>
+              )}
+            </>
+          )}
 
-          <div id="check-widget" class="check-widget" data-product-id={product.id} data-product-name={product.name}>
+          <div id="check-widget" class="check-widget" data-product-id={product.id}>
             <p class="check-loading">読み込み中...</p>
           </div>
 
@@ -873,8 +711,7 @@ const metaDescription = [
         );
 
         widget.innerHTML = `
-          <h3 class="check-title">${existing ? '記録を編集する' : '記録する'}</h3>
-          ${existing ? '<p class="check-edit-hint">前回保存した内容を編集できます。書き足して保存すると上書きされます。</p>' : ''}
+          <h3 class="check-title">記録する</h3>
 
           <div class="status-buttons">
             ${Object.entries(STATUS_LABELS)
@@ -988,11 +825,10 @@ const metaDescription = [
           </label>
 
           <div class="check-actions">
-            <button type="button" id="save-btn" class="btn-primary">${existing ? '更新する' : '保存する'}</button>
+            <button type="button" id="save-btn" class="btn-primary">保存する</button>
             ${existing ? '<button type="button" id="delete-btn" class="btn-outline">記録を削除</button>' : ''}
           </div>
           <p id="save-status" class="save-status"></p>
-          <div id="review-share-area"></div>
         `;
 
         let currentStatus = status;
@@ -1306,7 +1142,7 @@ const metaDescription = [
 
           const hasItemRatings = Object.values(currentItemRatings).some((v) => v);
 
-          const { data: savedCheck, error } = await supabase.from('checks').upsert(
+          const { error } = await supabase.from('checks').upsert(
             {
               user_id: session.user.id,
               product_id: productId,
@@ -1326,53 +1162,14 @@ const metaDescription = [
               similar_products: similarProductsValue || null,
             },
             { onConflict: 'user_id,product_id' }
-          ).select('id, is_public').maybeSingle();
+          );
 
           if (error) {
             console.error(error);
             saveStatusEl.textContent = '保存に失敗しました';
           } else {
-            // ひとことレビュー・詳細レビューのどちらかを書いていた場合だけ、
-            // 保存後に「このレビューをXでシェアする」を出す。
-            // init()はフォーム全体(#save-status・#review-share-areaを含む)を
-            // 作り直すので、先に判定材料だけ控えておき、再描画が終わってから
-            // 新しい要素に対してメッセージ・シェアボタンを反映する。
-            const wroteReview = Boolean(reviewTextValue.trim() || detailReviewTextValue.trim());
-            const productName = widget.dataset.productName || '';
-
-            await init();
-
-            const freshStatusEl = document.getElementById('save-status');
-            if (freshStatusEl) freshStatusEl.textContent = '保存しました';
-
-            // レビュー(ひとこと/詳細)か星評価を付けた場合、シェアカードを出す。
-            // 公開レビューなら専用ページ(/share/review/{id}: 星・タイトル・本文冒頭入りの画像カードが出る)、
-            // 非公開レビューなら商品ページのURLをシェアする(本文は表に出さない)。
-            const shareArea = document.getElementById('review-share-area');
-            const wroteSomething = wroteReview || Boolean(currentRating);
-            if (shareArea && wroteSomething) {
-              const isPublicReview = Boolean(savedCheck?.is_public && savedCheck?.id);
-              const stars = currentRating ? `${'★'.repeat(currentRating)}${'☆'.repeat(5 - currentRating)} ` : '';
-              const shareText = `「${productName}」のレビューを書きました ${stars}#オナホ #オナホめも`;
-              const shareUrl = isPublicReview
-                ? `${location.origin}/share/review/${savedCheck.id}?utm_source=x`
-                : `${location.origin}${location.pathname}?utm_source=x`;
-              const shareHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
-              const previewSrc = isPublicReview
-                ? `/og/review/${savedCheck.id}.png?t=${Date.now()}`
-                : `/og/product/${location.pathname.split('/')[2]}.png`;
-              shareArea.innerHTML = `
-                <div class="share-card">
-                  <p class="share-card-title">レビューを投稿しました。Xでシェアして広めませんか？</p>
-                  <img class="share-card-preview" src="${previewSrc}" alt="シェア画像のプレビュー" width="600" height="315" loading="lazy" />
-                  <a href="${shareHref}" target="_blank" rel="noopener noreferrer" class="share-card-btn">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 4l16 16M20 4L4 20" /></svg>
-                    このレビューをXでシェアする
-                  </a>
-                  <p class="share-card-note">${isPublicReview ? 'シェアするとこの画像付きで投稿されます。' : '非公開レビューのため、商品ページのカードでシェアされます。'}</p>
-                </div>
-              `;
-            }
+            saveStatusEl.textContent = '保存しました';
+            init();
           }
         });
 

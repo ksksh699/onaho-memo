@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>通知イメージ(スマホ版)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #f6f6f5;
+    --bg-card: #ffffff;
+    --text: #1f1f22;
+    --text-muted: #6b6b70;
+    --accent: #2b5fad;
+    --sale: #d84f39;
+    --border: #e2e1de;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-pill: 999px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: #e9e9e7;
+    color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif;
+    padding: 40px 16px;
+  }
+
+  .caption {
+    max-width: 390px;
+    margin: 0 auto 20px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  .phone {
+    width: 390px;
+    max-width: 100%;
+    margin: 0 auto;
+    background: var(--bg);
+    border-radius: 28px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    overflow: hidden;
+    position: relative;
+    border: 8px solid #1f1f22;
+  }
+
+  .phone-screen {
+    position: relative;
+    min-height: 560px;
+    padding-bottom: 64px;
+  }
+
+  .site-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    position: relative;
+  }
+
+  .site-logo {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.02em;
+  }
+
+  .site-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+  }
+
+  .notify-wrap { position: relative; }
+
+  .notify-bell-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    background: none;
+    border: none;
+    color: var(--accent);
+    padding: 0;
+    border-radius: var(--radius-sm);
+  }
+
+  .notify-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    border-radius: var(--radius-pill);
+    background: var(--sale);
+    color: #fff;
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+  }
+
+  .site-auth-area {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .notify-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: 280px;
+    max-width: calc(100vw - 2rem);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    z-index: 50;
+  }
+
+  .notify-dropdown-title {
+    margin: 0;
+    padding: 0.7rem 0.9rem 0.45rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .notify-list { display: flex; flex-direction: column; }
+
+  .notify-item {
+    display: block;
+    padding: 0.6rem 0.9rem;
+    border-top: 1px solid var(--border);
+    text-decoration: none;
+    color: var(--text);
+  }
+
+  .notify-item:last-child { padding-bottom: 0.8rem; }
+
+  .notify-item-unread { background: rgba(255, 90, 90, 0.06); }
+
+  .notify-item-text {
+    margin: 0 0 0.2rem;
+    font-size: 0.76rem;
+    line-height: 1.4;
+  }
+
+  .notify-item-time {
+    margin: 0;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+  }
+
+  .body-fill {
+    padding: 1.2rem 1rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    text-align: center;
+  }
+
+  .site-bottom-nav {
+    display: flex;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border);
+    padding: 0.5rem 0 0.6rem;
+  }
+
+  .site-bottom-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.15rem;
+    font-size: 0.62rem;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+  .below-note {
+    max-width: 390px;
+    margin: 20px auto 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-align: center;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+  <p class="caption">スマホ版。上部ヘッダーの右側は鈴アイコン→ユーザー名の並びで、PCと同じ位置に出ます(真ん中のナビだけ消えて、下部の固定タブに置き換わります)</p>
+
+  <div class="phone">
+    <div class="phone-screen">
+      <header class="site-header">
+        <span class="site-logo">オナホめも</span>
+        <div class="site-header-right">
+          <div class="notify-wrap">
+            <button class="notify-bell-btn" aria-label="通知">
+              <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+              <span class="notify-badge">4</span>
+            </button>
+            <div class="notify-dropdown">
+              <p class="notify-dropdown-title">通知</p>
+              <div class="notify-list">
+                <a href="#" class="notify-item notify-item-unread">
+                  <p class="notify-item-text">さくらさんがあなたのスレッド「保湿力ランキング作りたい」にコメントしました</p>
+                  <p class="notify-item-time">たった今</p>
+                </a>
+                <a href="#" class="notify-item notify-item-unread">
+                  <p class="notify-item-text">「メイドインジャパン とろサラ」がセール中です</p>
+                  <p class="notify-item-time">32分前</p>
+                </a>
+                <a href="#" class="notify-item notify-item-unread">
+                  <p class="notify-item-text">みかんさんが「東京No.1ソープ嬢のオマ●コ」のレビューに「いいね」しました</p>
+                  <p class="notify-item-time">2時間前</p>
+                </a>
+                <a href="#" class="notify-item notify-item-unread">
+                  <p class="notify-item-text">こんぶさんにフォローされました</p>
+                  <p class="notify-item-time">5時間前</p>
+                </a>
+              </div>
+            </div>
+          </div>
+          <div class="site-auth-area">じょい</div>
+        </div>
+      </header>
+
+      <div class="body-fill">(この下にいつものトップページの内容が続きます)</div>
+
+      <nav class="site-bottom-nav">
+        <div class="site-bottom-nav-item">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V11M12 20V4M20 20v-6" /></svg>
+          <span>ランキング</span>
+        </div>
+        <div class="site-bottom-nav-item">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12.6 21.4a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1 0-2.8l8-8H18a2 2 0 0 1 2 2v6a2 2 0 0 1-.6 1.4Z" /></svg>
+          <span>セール中</span>
+        </div>
+        <div class="site-bottom-nav-item">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H8l-4 4V4Z" /></svg>
+          <span>掲示板</span>
+        </div>
+        <div class="site-bottom-nav-item">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4" /><path d="M4.7 20c1.4-3.9 4.8-5.4 7.3-5.4s5.9 1.5 7.3 5.4" /></svg>
+          <span>マイページ</span>
+        </div>
+        <div class="site-bottom-nav-item">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8.2" r="2.9" /><path d="M2.6 19.6c1-3.1 3.8-4.7 6.4-4.7s5.4 1.6 6.4 4.7" /></svg>
+          <span>フォロー中</span>
+        </div>
+      </nav>
+    </div>
+  </div>
+
+  <p class="below-note">
+    通知の鈴アイコンは「掲示板」「マイページ」のような下部タブには入らず、PCと同じくヘッダーに固定です。<br />
+    タップした時の見た目・動作(赤バッジ→タップで既読、一覧から各ページへ飛べる)はPC版と全く同じです。
+  </p>
+
+</body>
+</html>
