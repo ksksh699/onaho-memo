@@ -1,5 +1,5 @@
 import { supabase } from '../../../lib/supabase.js';
-import { renderPng, pngResponse, fetchImageAsDataUrl } from '../../../lib/ogImage.js';
+import { renderPng, pngResponse, fetchImageAsDataUrl, fallbackPngResponse } from '../../../lib/ogImage.js';
 import { buildProductCard, largeImageUrl } from '../../../lib/ogProductCard.js';
 
 // 商品ページ用のシェア画像(2026-09-08)。
@@ -33,7 +33,7 @@ export async function GET({ params, url }) {
   if (!product) {
     if (debug) return new Response(`product not found: ${JSON.stringify(productResult.error ?? null)}`, { status: 500 });
     // 存在しない商品はサイト共通のOGP画像へ
-    return Response.redirect(new URL('/ogp.png', url.origin), 302);
+    return fallbackPngResponse(url.origin);
   }
 
   try {
@@ -46,6 +46,6 @@ export async function GET({ params, url }) {
   } catch (err) {
     console.error('[og/product] 生成に失敗:', err);
     if (debug) return new Response(`${err?.name}: ${err?.message}\n${(err?.stack ?? '').split('\n').slice(0, 6).join('\n')}`, { status: 500 });
-    return Response.redirect(new URL('/ogp.png', url.origin), 302);
+    return fallbackPngResponse(url.origin);
   }
 }

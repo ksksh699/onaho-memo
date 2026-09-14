@@ -133,6 +133,33 @@ export function pngResponse(png, { maxAgeSeconds = 86400 } = {}) {
   });
 }
 
+// 各 og/*.png.js の共通フォールバック(2026-09-15)。
+// 商品が見つからない・生成に失敗した、といった場合にサイト共通のOGP画像(public/ogp.png)を返す。
+// 以前は302リダイレクトにしていたが、XなどSNSのクローラーはog:imageのリダイレクトを
+// 追わないことが多く、一度の失敗(コールドスタート等の一時的なもの含む)でシェアされた
+// カードがそのまま「壊れた画像」としてキャッシュされてしまう不具合があったため、
+// 画像そのものを直接200番で返すように変更した。
+// キャッシュは成功時より短め(1分)にして、一時的な失敗ならすぐ次のリクエストで
+// 本来の画像に戻れるようにしている。
+export async function fallbackPngResponse(origin) {
+  try {
+    const res = await fetch(`${origin}/ogp.png`);
+    if (res.ok) {
+      const buf = Buffer.from(await res.arrayBuffer());
+      return new Response(buf, {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=300',
+        },
+      });
+    }
+  } catch {
+    /* 最終手段としてリダイレクトへ */
+  }
+  return Response.redirect(new URL('/ogp.png', origin), 302);
+}
+
 // 星表示用: 4.3 → "★★★★☆" のような文字列
 export function starString(avg) {
   const n = Math.max(0, Math.min(5, Math.round(Number(avg) || 0)));

@@ -1,5 +1,5 @@
 import { supabase } from '../../../lib/supabase.js';
-import { renderPng, pngResponse, fetchImageAsDataUrl } from '../../../lib/ogImage.js';
+import { renderPng, pngResponse, fetchImageAsDataUrl, fallbackPngResponse } from '../../../lib/ogImage.js';
 import { buildUserCard } from '../../../lib/ogUserCard.js';
 
 // 公開プロフィール用のシェア画像(2026-09-08)。
@@ -17,7 +17,7 @@ export async function GET({ params, url }) {
   const nickname = decodeURIComponent(params.nickname ?? '');
   const debug = url.searchParams.get('debug') === '1';
   const fallback = (reason) =>
-    debug ? new Response(`fallback: ${reason}`, { status: 500 }) : Response.redirect(new URL('/ogp.png', url.origin), 302);
+    debug ? new Response(`fallback: ${reason}`, { status: 500 }) : fallbackPngResponse(url.origin);
 
   const { data: profile } = await supabase
     .from('profiles')

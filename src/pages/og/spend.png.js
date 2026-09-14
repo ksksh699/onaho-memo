@@ -1,4 +1,4 @@
-import { renderPng, pngResponse } from '../../lib/ogImage.js';
+import { renderPng, pngResponse, fallbackPngResponse } from '../../lib/ogImage.js';
 import { parseSpendParams, buildSpendCard } from '../../lib/shareSpend.js';
 
 // 「合計使用金額」シェア画像(2026-09-08)。
@@ -17,6 +17,6 @@ export async function GET({ url }) {
     if (url.searchParams.get('debug') === '1') {
       return new Response(`${err?.name}: ${err?.message}\n${(err?.stack ?? '').split('\n').slice(0, 6).join('\n')}`, { status: 500 });
     }
-    return Response.redirect(new URL('/ogp.png', url.origin), 302);
+    return fallbackPngResponse(url.origin);
   }
 }

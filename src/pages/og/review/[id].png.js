@@ -1,4 +1,4 @@
-import { renderPng, pngResponse, fetchImageAsDataUrl } from '../../../lib/ogImage.js';
+import { renderPng, pngResponse, fetchImageAsDataUrl, fallbackPngResponse } from '../../../lib/ogImage.js';
 import { buildReviewCard } from '../../../lib/ogReviewCard.js';
 import { loadPublicReview } from '../../../lib/reviewShare.js';
 
@@ -9,7 +9,7 @@ import { loadPublicReview } from '../../../lib/reviewShare.js';
 export const prerender = false;
 
 export async function GET({ params, url }) {
-  const fallback = () => Response.redirect(new URL('/ogp.png', url.origin), 302);
+  const fallback = () => fallbackPngResponse(url.origin);
   const data = await loadPublicReview(params.id);
   if (!data) return fallback();
 
