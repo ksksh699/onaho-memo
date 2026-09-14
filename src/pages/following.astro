@@ -27,9 +27,7 @@ import SiteFooter from '../components/SiteFooter.astro';
         </div>
 
         <div class="mp-main-panel" data-main-panel="timeline">
-          <p class="mp-empty">
-            タイムラインは近日公開予定です。フォロー中のユーザーの「使った」登録やレビュー投稿、マイベストTOP3の変更などが、ここに新着順で表示されるようになります。
-          </p>
+          <div id="timeline-content"><p class="mypage-loading">読み込み中...</p></div>
         </div>
 
         <div class="mp-main-panel" data-main-panel="follows">
@@ -53,8 +51,27 @@ import SiteFooter from '../components/SiteFooter.astro';
       const panels = document.querySelectorAll('#following-app .mp-main-panel');
 
       let currentSession = null;
-      let currentTab = 'follows';
+      let currentTab = 'timeline';
       let followersLoaded = false;
+      let timelineLoaded = false;
+
+      function timeAgoLabel(isoDate) {
+        const diffMs = Date.now() - new Date(isoDate).getTime();
+        const minutes = Math.floor(diffMs / 60000);
+        if (minutes < 1) return 'たった今';
+        if (minutes < 60) return `${minutes}分前`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}時間前`;
+        const days = Math.floor(hours / 24);
+        if (days < 30) return `${days}日前`;
+        return new Date(isoDate).toLocaleDateString('ja-JP');
+      }
+
+      function avatarHtml(profile, cls) {
+        return profile.avatar_url
+          ? `<img class="${cls}" src="${profile.avatar_url}" alt="" loading="lazy" />`
+          : `<div class="${cls} ${cls}-empty"></div>`;
+      }
 
       try {
         const saved = localStorage.getItem(TAB_KEY);
@@ -141,6 +158,131 @@ import SiteFooter from '../components/SiteFooter.astro';
         container.innerHTML = `<ul class="people-list">${html}</ul>`;
       }
 
+      function timelineItemHtml(activity, { profile, product }) {
+        const profileHref = `/users/${encodeURIComponent(profile.nickname)}`;
+        const productHref = product ? `/products/${product.dmm_content_id}/` : '#';
+        const nameLink = `<a href="${profileHref}">${profile.nickname}</a>`;
+
+        let actionText = '';
+        let quote = '';
+        if (activity.type === 'used') {
+          actionText = `${nameLink}さんが「${product?.name ?? '商品'}」を使ったと記録しました`;
+        } else if (activity.type === 'review') {
+          actionText = `${nameLink}さんが「${product?.name ?? '商品'}」の口コミを投稿しました`;
+          const text = activity.reviewText ?? '';
+          quote = text.length > 60 ? `${text.slice(0, 60)}…` : text;
+        } else if (activity.type === 'top3') {
+          actionText = `${nameLink}さんがマイベストTOP3の${activity.rank}位に「${product?.name ?? '商品'}」を選びました`;
+        }
+
+        const productHtml = product
+          ? `
+            <a href="${productHref}" class="timeline-product">
+              <img src="${product.image_url}" alt="${product.name}" loading="lazy" />
+              <span class="timeline-product-name">${product.name}</span>
+            </a>
+          `
+          : '';
+
+        return `
+          <li class="timeline-item">
+            <a href="${profileHref}" class="timeline-avatar-link">${avatarHtml(profile, 'timeline-avatar')}</a>
+            <div class="timeline-body">
+              <p class="timeline-text">${actionText}</p>
+              ${productHtml}
+              ${quote ? `<p class="timeline-quote">${quote}</p>` : ''}
+              <p class="timeline-time">${timeAgoLabel(activity.created_at)}</p>
+            </div>
+          </li>
+        `;
+      }
+
+      async function loadTimeline(session) {
+        const container = document.getElementById('timeline-content');
+
+        const { data: followRows, error: followError } = await supabase
+          .from('follows')
+          .select('followee_id')
+          .eq('follower_id', session.user.id);
+
+        if (followError) {
+          container.innerHTML = `<p>読み込みに失敗しました: ${followError.message}</p>`;
+          return;
+        }
+
+        const followeeIds = (followRows ?? []).map((r) => r.followee_id);
+        if (followeeIds.length === 0) {
+          container.innerHTML = `
+            <p class="mp-empty">まだ誰もフォローしていません。フォローすると、そのユーザーの「使った」登録や口コミ投稿、マイベストTOP3の変更がここに表示されます。</p>
+          `;
+          return;
+        }
+
+        const { data: rows, error } = await supabase
+          .from('activity_log')
+          .select('id, user_id, type, check_id, product_id, rank, created_at')
+          .in('user_id', followeeIds)
+          .order('created_at', { ascending: false })
+          .limit(30);
+
+        if (error) {
+          container.innerHTML = `<p>読み込みに失敗しました: ${error.message}</p>`;
+          return;
+        }
+
+        if (!rows || rows.length === 0) {
+          container.innerHTML = `<p class="mp-empty">まだ動向がありません。フォロー中のユーザーが「使った」登録や口コミを投稿すると、ここに表示されます。</p>`;
+          return;
+        }
+
+        const profileIds = [...new Set(rows.map((r) => r.user_id))];
+        const productIds = [...new Set(rows.map((r) => r.product_id).filter(Boolean))];
+        const checkIds = [...new Set(rows.filter((r) => r.type === 'used' || r.type === 'review').map((r) => r.check_id).filter(Boolean))];
+
+        const [{ data: profiles }, { data: products }, { data: checks }] = await Promise.all([
+          supabase.from('profiles').select('id, nickname, avatar_url, is_public, best_product_id_1, best_product_id_2, best_product_id_3').in('id', profileIds),
+          productIds.length > 0
+            ? supabase.from('products').select('id, name, maker, image_url, dmm_content_id').in('id', productIds)
+            : Promise.resolve({ data: [] }),
+          checkIds.length > 0
+            ? supabase.from('checks').select('id, status, is_public, review_text, detail_review_text').in('id', checkIds)
+            : Promise.resolve({ data: [] }),
+        ]);
+
+        const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
+        const productById = new Map((products ?? []).map((p) => [p.id, p]));
+        const checkById = new Map((checks ?? []).map((c) => [c.id, c]));
+
+        const html = rows
+          .map((activity) => {
+            const profile = profileById.get(activity.user_id);
+            if (!profile || profile.is_public === false) return null;
+
+            const product = activity.product_id ? productById.get(activity.product_id) : null;
+
+            if (activity.type === 'used' || activity.type === 'review') {
+              const check = activity.check_id ? checkById.get(activity.check_id) : null;
+              // 投稿後に非公開化・削除された場合はタイムラインにも出さない
+              if (!check || check.is_public !== true) return null;
+              if (activity.type === 'used' && check.status !== 'used') return null;
+              const reviewText = check.detail_review_text || check.review_text || '';
+              if (activity.type === 'review' && !reviewText) return null;
+              return timelineItemHtml({ ...activity, reviewText }, { profile, product });
+            }
+
+            if (activity.type === 'top3') {
+              const currentPick = profile[`best_product_id_${activity.rank}`];
+              if (currentPick !== activity.product_id) return null;
+              return timelineItemHtml(activity, { profile, product });
+            }
+
+            return null;
+          })
+          .filter(Boolean);
+
+        container.innerHTML = html.length > 0 ? `<ul class="timeline-list">${html.join('')}</ul>` : `<p class="mp-empty">まだ動向がありません。フォロー中のユーザーが「使った」登録や口コミを投稿すると、ここに表示されます。</p>`;
+      }
+
       function applyTab(tab) {
         currentTab = tab;
         tabsNav.querySelectorAll('.mp-main-tab').forEach((btn) => {
@@ -158,6 +300,10 @@ import SiteFooter from '../components/SiteFooter.astro';
         if (tab === 'followers' && !followersLoaded && currentSession) {
           followersLoaded = true;
           loadFollowers(currentSession);
+        }
+        if (tab === 'timeline' && !timelineLoaded && currentSession) {
+          timelineLoaded = true;
+          loadTimeline(currentSession);
         }
       }
 
