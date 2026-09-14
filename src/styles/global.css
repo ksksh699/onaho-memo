@@ -4174,6 +4174,77 @@ main {
   margin-bottom: 0;
 }
 
+/* フォロー・フォロワータブの一覧(X風のコンパクトな1行表示) */
+.people-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.people-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.people-row:last-child {
+  border-bottom: none;
+}
+
+.people-avatar-link {
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.people-avatar,
+.people-avatar-empty {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--border);
+}
+
+.people-info {
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.people-name {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.people-info:hover .people-name {
+  color: var(--accent);
+}
+
+.people-bio {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.people-action {
+  flex-shrink: 0;
+}
+
 .badge-chips-section {
   margin-bottom: 1.5rem;
 }
