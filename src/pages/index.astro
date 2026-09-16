@@ -874,7 +874,7 @@ const RANKINGS = [
 
         const { data } = await supabase
           .from('checks')
-          .select('product_id, status, tier, memo')
+          .select('product_id, status, tier, memo, is_public')
           .eq('user_id', session.user.id)
           .in('product_id', productIds);
 
@@ -1070,6 +1070,15 @@ const RANKINGS = [
         const existingMemo = userChecksMap[productId]?.memo ?? null;
         const memoValue = memo !== undefined ? (memo || null) : existingMemo;
 
+        // 公開/非公開の扱い(2026-09-16)。checks.is_public のDB既定値は false のため、
+        // ここで is_public を渡さずに新規登録すると「非公開」で保存され、公開プロフィール
+        // (/users/xxx)の「気になる」「使った」に出てこない不具合があった。
+        // 商品ページの記録フォームは「非公開」にチェックしない限り公開(true)で保存しているので、
+        // トップページからの新規登録もそれに合わせて公開にする。すでに記録がある商品は
+        // 商品ページで選んだ公開/非公開の設定をそのまま引き継ぐ(勝手に公開に変えない)。
+        const existingIsPublic = userChecksMap[productId]?.is_public;
+        const isPublicValue = typeof existingIsPublic === 'boolean' ? existingIsPublic : true;
+
         const { error } = await supabase.from('checks').upsert(
           {
             user_id: session.user.id,
@@ -1077,6 +1086,7 @@ const RANKINGS = [
             status,
             tier,
             memo: memoValue,
+            is_public: isPublicValue,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'user_id,product_id' }
@@ -1087,7 +1097,7 @@ const RANKINGS = [
           return;
         }
 
-        userChecksMap[productId] = { product_id: productId, status, tier, memo: memoValue };
+        userChecksMap[productId] = { product_id: productId, status, tier, memo: memoValue, is_public: isPublicValue };
 
         const btn = document.querySelector(`.quick-check[data-product-id="${productId}"] .quick-check-btn`);
         if (btn) {
@@ -1269,20 +1279,39 @@ const RANKINGS = [
           return;
         }
 
+        // セール中の判定(2026-09-16修正)。以前は「FANZAの定価(list_price)より価格が安い」だけで
+        // 判定していたが、ネット価格は常に定価より安いため、セールでない商品まで全部載ってしまっていた。
+        // セールページ(/sale/)と同じく v_products_listing.is_on_sale(FANZAのセール系タグが付いている、
+        // または他ショップでセール中)を使い、本当にセール中のものだけに絞る。
         const { data: productsData } = await supabase
-          .from('products')
-          .select('id, dmm_content_id, name, maker, price, image_url, raw_data')
-          .in('id', ids);
+          .from('v_products_listing')
+          .select(
+            'id, dmm_content_id, name, maker, price, image_url, list_price, discount_percent, has_fanza_sale, has_shop_sale, sale_shops, shop_sale_min_price, best_discount_percent'
+          )
+          .in('id', ids)
+          .eq('is_on_sale', true);
 
         const saleItems = (productsData ?? [])
           .map((p) => {
-            const listPrice = p.raw_data?.prices?.list_price ? Number(p.raw_data.prices.list_price) : null;
-            const hasDiscount = Boolean(listPrice && p.price && listPrice > p.price);
-            if (!hasDiscount) return null;
-            const discountPercent = Math.round((1 - p.price / listPrice) * 100);
-            return { ...p, listPrice, discountPercent };
+            // 表示する割引率はFANZAと他ショップのうち高い方(セールページと同じ)
+            const discountPercent = p.best_discount_percent ?? p.discount_percent ?? 0;
+            // FANZAでセール中なら「セール価格 + 定価の打ち消し線」、他ショップだけなら
+            // 「他ショップのセール最安値 + ショップ名」を出す
+            let priceHtml;
+            if (p.has_fanza_sale && p.price) {
+              priceHtml =
+                `¥${Number(p.price).toLocaleString('ja-JP')}` +
+                (p.list_price && p.list_price > p.price
+                  ? `<span class="ranking-list-price">¥${Number(p.list_price).toLocaleString('ja-JP')}</span>`
+                  : '');
+            } else {
+              const shopNames = (p.sale_shops ?? []).map((k) => SHOP_LABELS[k] ?? k).join('・');
+              priceHtml =
+                (p.shop_sale_min_price ? `¥${Number(p.shop_sale_min_price).toLocaleString('ja-JP')}` : '') +
+                (shopNames ? `<span class="ranking-sale-shop">${shopNames}でセール中</span>` : '');
+            }
+            return { ...p, discountPercent, priceHtml };
           })
-          .filter(Boolean)
           .sort((a, b) => b.discountPercent - a.discountPercent);
 
         if (saleItems.length === 0) {
@@ -1295,23 +1324,20 @@ const RANKINGS = [
             <div class="ranking-block">
               <h2 class="ranking-title">
                 気になるでセール中
-                <span class="ranking-subtitle">「気になる」に登録した商品のうち、いま値下がりしているもの</span>
+                <span class="ranking-subtitle">「気になる」に登録した商品のうち、いまセール中のもの</span>
               </h2>
               <ul class="ranking-scroll">
                 ${saleItems
                   .map(
                     (p) => `
                   <li class="ranking-card">
-                    <span class="ranking-rank ranking-rank-sale">${p.discountPercent}%OFF</span>
+                    <span class="ranking-rank ranking-rank-sale">${p.discountPercent > 0 ? `${p.discountPercent}%OFF` : 'SALE'}</span>
                     <a href="/products/${p.dmm_content_id}/">
                       <img src="${p.image_url}" alt="${p.name}" loading="lazy" />
                       <div class="ranking-card-body">
                         <p class="ranking-maker">${p.maker ?? ''}</p>
                         <h3>${p.name}</h3>
-                        <p class="ranking-metric">
-                          ¥${p.price.toLocaleString()}
-                          <span class="ranking-list-price">¥${p.listPrice.toLocaleString()}</span>
-                        </p>
+                        <p class="ranking-metric">${p.priceHtml}</p>
                       </div>
                     </a>
                   </li>

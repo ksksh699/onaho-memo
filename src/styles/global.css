@@ -3468,6 +3468,13 @@ main {
   margin-left: 0.4rem;
 }
 
+/* トップ「気になるでセール中」: 他ショップだけがセール中のときのショップ名(打ち消し線なし) */
+.ranking-sale-shop {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-left: 0.4rem;
+}
+
 .ranking-card-body {
   padding: 0.6rem;
 }
