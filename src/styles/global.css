@@ -5827,6 +5827,14 @@ main {
   color: var(--text);
 }
 
+/* グッド/バッド・返信アイコン(2026-09-22): 絵文字から線アイコンに差し替えたため、
+   カウント文字とベースラインが揃うようinline-flexで中央揃えにする。
+   アイコン自体は縮まないようflex:noneで固定サイズを維持する */
+.reaction-icon,
+.reply-icon {
+  flex: none;
+}
+
 /* アクティブ状態も彩度のある塗りつぶしにはせず、文字を濃く・太くして
    枠線をわずかに濃くする程度に留める(2026-09-22) */
 .reaction-btn.is-active {
@@ -5834,6 +5842,13 @@ main {
   color: var(--text);
   font-weight: 700;
   background: transparent;
+}
+
+/* アクティブ時のアイコンだけ、うっすら塗りつぶして「押した感」を出す(2026-09-22)。
+   ボタン自体の配色は上のis-activeのまま変えない */
+.reaction-btn.is-active .reaction-icon {
+  fill: currentColor;
+  fill-opacity: 0.15;
 }
 
 .reaction-btn:disabled {

@@ -133,15 +133,19 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
         </div>
         <p class="board-post-body">{thread.body}</p>
         <div class="post-actions">
-          <button type="button" class="reply-trigger-btn" data-reply-target="" data-reply-author="">
+          <button type="button" class="reply-trigger-btn" data-reply-target="" data-reply-author="" aria-label="返信" title="返信">
+            {/* 返信アイコン(2026-09-22): Feather風のcorner-up-left線アイコンに絵文字から差し替え */}
+            <svg class="reply-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5A5.5 5.5 0 0 1 20 14.5v0a5.5 5.5 0 0 1-5.5 5.5H11" /></svg>
             返信
           </button>
-          <button type="button" class="reaction-btn" data-post-type="thread" data-post-id={thread.id} data-kind="good">
-            <span aria-hidden="true">👍</span>
+          <button type="button" class="reaction-btn" data-post-type="thread" data-post-id={thread.id} data-kind="good" aria-label="グッド" title="グッド">
+            {/* グッド/バッドアイコン(2026-09-22): 絵文字👍/👎をサイトの線アイコンに合わせたthumbs-up/downのSVGへ差し替え。
+                バッドは同じpathを180度回転させて使い回す */}
+            <svg class="reaction-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14Z" /><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3v11Z" /></svg>
             <span class="reaction-good-count">{goodCounts[thread.id] ?? 0}</span>
           </button>
-          <button type="button" class="reaction-btn" data-post-type="thread" data-post-id={thread.id} data-kind="bad" aria-label="バッド">
-            <span aria-hidden="true">👎</span>
+          <button type="button" class="reaction-btn" data-post-type="thread" data-post-id={thread.id} data-kind="bad" aria-label="バッド" title="バッド">
+            <svg class="reaction-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14Z" transform="rotate(180 12 12)" /><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3v11Z" transform="rotate(180 12 12)" /></svg>
           </button>
         </div>
         <div class="board-post-actions">
@@ -193,15 +197,16 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
               </div>
               <p class="board-post-body">{r.body}</p>
               <div class="post-actions">
-                <button type="button" class="reply-trigger-btn" data-reply-target={r.id} data-reply-author={authorDisplayName(r.user_id)} data-reply-number={postNumberById[r.id]}>
+                <button type="button" class="reply-trigger-btn" data-reply-target={r.id} data-reply-author={authorDisplayName(r.user_id)} data-reply-number={postNumberById[r.id]} aria-label="返信" title="返信">
+                  <svg class="reply-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5A5.5 5.5 0 0 1 20 14.5v0a5.5 5.5 0 0 1-5.5 5.5H11" /></svg>
                   返信
                 </button>
-                <button type="button" class="reaction-btn" data-post-type="reply" data-post-id={r.id} data-kind="good">
-                  <span aria-hidden="true">👍</span>
+                <button type="button" class="reaction-btn" data-post-type="reply" data-post-id={r.id} data-kind="good" aria-label="グッド" title="グッド">
+                  <svg class="reaction-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14Z" /><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3v11Z" /></svg>
                   <span class="reaction-good-count">{goodCounts[r.id] ?? 0}</span>
                 </button>
-                <button type="button" class="reaction-btn" data-post-type="reply" data-post-id={r.id} data-kind="bad" aria-label="バッド">
-                  <span aria-hidden="true">👎</span>
+                <button type="button" class="reaction-btn" data-post-type="reply" data-post-id={r.id} data-kind="bad" aria-label="バッド" title="バッド">
+                  <svg class="reaction-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14Z" transform="rotate(180 12 12)" /><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3v11Z" transform="rotate(180 12 12)" /></svg>
                 </button>
               </div>
               <div class="board-post-actions">
