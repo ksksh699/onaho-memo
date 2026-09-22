@@ -5173,6 +5173,12 @@ main {
   background: var(--sale);
 }
 
+/* 2026-09-22: 運営からのお知らせ(site_updates)用。既存のNEW(青)・SALE(赤)と
+   ぶつからないよう、ランキングのマスター帯(.rank-master)と同じ紫系の色を流用している */
+.new-info-tag-update {
+  background: #6b3fb8;
+}
+
 .new-info-link {
   color: var(--text);
   text-decoration: none;

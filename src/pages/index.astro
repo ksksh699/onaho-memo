@@ -49,6 +49,16 @@ const weeklyNewCutoff = new Date();
 weeklyNewCutoff.setDate(weeklyNewCutoff.getDate() - WEEKLY_NEW_DAYS);
 const weeklyNewCutoffStr = weeklyNewCutoff.toISOString().slice(0, 10);
 
+// 2026-09-22: 「新着情報」欄に運営からのお知らせ(site_updates)を「更新」タグで混ぜる。
+// 表示条件はSupabase側のRLS(published_at<=now かつ expires_at が空 or 未来)が主だが、
+// expires_atを空のまま放置したお知らせが無期限に残り続けないよう、コード側でも
+// 「公開から14日以内」の行だけに絞り込んでいる(二重の安全策)。
+const SITE_UPDATE_DAYS = 14;
+const nowIso = new Date().toISOString();
+const siteUpdateCutoffIso = new Date(
+  Date.now() - SITE_UPDATE_DAYS * 24 * 60 * 60 * 1000
+).toISOString();
+
 // 以下はお互いに依存しない問い合わせなので、1つずつ直列で待つのではなく
 // Promise.allでまとめて並列実行することで、体感速度を大きく改善している。
 // (直列だと「全部の合計時間」、並列だと「一番遅い1つ分の時間」で済む)
@@ -69,6 +79,7 @@ const [
   monthlyViewRankingResult,
   newlyOnSaleResult,
   latestReviewsResult,
+  siteUpdatesResult,
   weeklyNewCountResult,
 ] = await Promise.all([
   supabase
@@ -159,6 +170,14 @@ const [
     .order('updated_at', { ascending: false })
     .limit(10),
   supabase
+    .from('site_updates')
+    .select('id, title, url, published_at')
+    .lte('published_at', nowIso)
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    .gte('published_at', siteUpdateCutoffIso)
+    .order('published_at', { ascending: false })
+    .limit(3),
+  supabase
     .from('products')
     .select('*', { count: 'exact', head: true })
     .eq('is_onahole', true)
@@ -181,6 +200,7 @@ const siteRatingRankingData = siteRatingRankingResult.data;
 const fanzaRankingData = fanzaRankingResult.data;
 const monthlyViewRankingData = monthlyViewRankingResult.data;
 const newlyOnSaleData = newlyOnSaleResult.data;
+const siteUpdatesData = siteUpdatesResult.data;
 const latestReviews = (latestReviewsResult.data ?? []).filter((r) => r.products);
 
 // レビュー投稿者のニックネームは、プロフィールを公開設定にしている人の分だけ表示する
@@ -260,6 +280,29 @@ if (newlyOnSaleCount > 0) {
     tag: 'SALE',
     detail: '',
   });
+}
+
+// 運営からのお知らせ(site_updates)は「更新」タグで一番上に表示する。
+// tag自体は表示用の日本語文字列なので、タグの色分けに使うCSSクラスは
+// 別途tagClassで明示的に'update'を指定する(タグ文字列をそのままlowerCaseすると
+// new-info-tag-更新 のような使いづらいクラス名になってしまうため)。
+const siteUpdateDateFormatter = new Intl.DateTimeFormat('ja-JP', {
+  timeZone: 'Asia/Tokyo',
+  month: 'numeric',
+  day: 'numeric',
+});
+const siteUpdateItems = (siteUpdatesData ?? []).map((u) => ({
+  id: `update-${u.id}`,
+  dmm_content_id: null,
+  name: u.title,
+  tag: '更新',
+  tagClass: 'update',
+  href: u.url || null,
+  detail: siteUpdateDateFormatter.format(new Date(u.published_at)),
+}));
+
+if (siteUpdateItems.length > 0) {
+  newInfoItems.unshift(...siteUpdateItems);
 }
 
 const RANKINGS = [
@@ -386,8 +429,10 @@ const RANKINGS = [
         <ul class="new-info-list">
           {newInfoItems.map((p) => (
             <li class="new-info-item">
-              <span class={`new-info-tag new-info-tag-${p.tag.toLowerCase()}`}>{p.tag}</span>
-              {p.dmm_content_id ? (
+              <span class={`new-info-tag new-info-tag-${p.tagClass ?? p.tag.toLowerCase()}`}>{p.tag}</span>
+              {p.href ? (
+                <a href={p.href} class="new-info-link">{p.name}</a>
+              ) : p.dmm_content_id ? (
                 <a href={`/products/${p.dmm_content_id}/`} class="new-info-link">{p.name}</a>
               ) : p.id === 'sale-summary' ? (
                 <button type="button" class="new-info-link new-info-sale-trigger">{p.name}</button>
