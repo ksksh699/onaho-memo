@@ -689,10 +689,29 @@ const spendShareUrl = profile
 
           <div id="follow-section" class="follow-section" data-profile-id={profile.id}>
             <span class="follow-counts">
-              フォロワー <strong id="follower-count">{followerCount}</strong>人 ・
-              フォロー中 <strong id="following-count">{followingCount}</strong>人
+              <button type="button" class="follow-count-btn" id="follower-count-btn" data-people-tab="followers" aria-expanded="false">
+                フォロワー <strong id="follower-count">{followerCount}</strong>人
+              </button>
+              ・
+              <button type="button" class="follow-count-btn" id="following-count-btn" data-people-tab="following" aria-expanded="false">
+                フォロー中 <strong id="following-count">{followingCount}</strong>人
+              </button>
             </span>
             <button id="follow-btn" class="follow-btn" style="display:none;">フォローする</button>
+          </div>
+
+          <!-- 2026-09-22: フォロワー/フォロー中の人数をタップすると開く一覧パネル(初回タップ時に遅延読み込み) -->
+          <div id="people-panel" class="people-panel" hidden>
+            <div class="mp-main-tabs people-panel-tabs" id="people-panel-tabs" role="tablist">
+              <button type="button" class="mp-main-tab mp-main-tab-active" data-people-tab="followers" role="tab" aria-selected="true">フォロワー</button>
+              <button type="button" class="mp-main-tab" data-people-tab="following" role="tab" aria-selected="false">フォロー中</button>
+            </div>
+            <div class="people-panel-section" data-people-section="followers">
+              <div id="people-followers-content"><p class="mp-empty">読み込み中...</p></div>
+            </div>
+            <div class="people-panel-section" data-people-section="following" hidden>
+              <div id="people-following-content"><p class="mp-empty">読み込み中...</p></div>
+            </div>
           </div>
 
           <div class="mp-stats">
@@ -1309,6 +1328,204 @@ const spendShareUrl = profile
         applyBadgesView(savedBadgesView);
       }
 
+      // 2026-09-22: 公開プロフィールの「フォロワー N人 ・ フォロー中 N人」をタップすると、
+      // その一覧をこのページ内のパネルで開けるようにする(following.astroのフォロー/フォロワータブと
+      // 同じ .people-list / .people-row 系マークアップ・CSSを再利用し、初回タップ時のみ遅延読み込みする)。
+      function initPeoplePanel(profileId, session) {
+        const panel = document.getElementById('people-panel');
+        const tabsNav = document.getElementById('people-panel-tabs');
+        if (!panel || !tabsNav) return;
+
+        const sections = {
+          followers: document.querySelector('[data-people-section="followers"]'),
+          following: document.querySelector('[data-people-section="following"]'),
+        };
+        const contentEls = {
+          followers: document.getElementById('people-followers-content'),
+          following: document.getElementById('people-following-content'),
+        };
+        const countBtns = {
+          followers: document.getElementById('follower-count-btn'),
+          following: document.getElementById('following-count-btn'),
+        };
+        const loaded = { followers: false, following: false };
+        let isOpen = false;
+        let currentTab = 'followers';
+
+        function peopleRowHtml(p, { showButton, isFollowing }) {
+          const bio = p.oshi_maker ? `推し: ${p.oshi_maker}` : p.bio || '';
+          const avatar = p.avatar_url
+            ? `<img class="people-avatar" src="${p.avatar_url}" alt="" loading="lazy" />`
+            : `<div class="people-avatar people-avatar-empty"></div>`;
+          const href = `/users/${encodeURIComponent(p.nickname)}`;
+          const button = showButton
+            ? `<button type="button" class="follow-btn people-action ${isFollowing ? 'following' : ''}" data-user-id="${p.id}">${isFollowing ? 'フォロー中' : 'フォローする'}</button>`
+            : '';
+          return `
+            <li class="people-row">
+              <a href="${href}" class="people-avatar-link">${avatar}</a>
+              <a href="${href}" class="people-info">
+                <span class="people-name">${p.nickname}</span>
+                ${bio ? `<span class="people-bio">${bio}</span>` : ''}
+              </a>
+              ${button}
+            </li>
+          `;
+        }
+
+        async function loadList(kind) {
+          const container = contentEls[kind];
+          const relColumn = kind === 'followers' ? 'followee_id' : 'follower_id';
+          const otherColumn = kind === 'followers' ? 'follower_id' : 'followee_id';
+          const LIMIT = 200;
+          const emptyText = kind === 'followers' ? 'まだフォロワーはいません' : 'まだ誰もフォローしていません';
+
+          const [countResult, rowsResult] = await Promise.all([
+            supabase.from('follows').select('*', { count: 'exact', head: true }).eq(relColumn, profileId),
+            supabase
+              .from('follows')
+              .select(otherColumn)
+              .eq(relColumn, profileId)
+              .order('created_at', { ascending: false })
+              .limit(LIMIT),
+          ]);
+
+          const totalCount = countResult.count;
+          const { data: rows, error } = rowsResult;
+
+          if (error) {
+            container.innerHTML = `<p>読み込みに失敗しました: ${error.message}</p>`;
+            return;
+          }
+
+          const ids = (rows ?? []).map((r) => r[otherColumn]);
+          if (ids.length === 0) {
+            container.innerHTML = `<p class="mp-empty">${emptyText}</p>`;
+            return;
+          }
+
+          // 非公開プロフィール・ニックネーム未設定のユーザーは一覧に出さない
+          // (profilesのRLSは全行SELECT可能なため、ここで明示的に絞り込む)
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, nickname, avatar_url, oshi_maker, bio')
+            .in('id', ids)
+            .eq('is_public', true)
+            .not('nickname', 'is', null);
+
+          const publicProfiles = profiles ?? [];
+          const skipped = ids.length > publicProfiles.length;
+
+          if (publicProfiles.length === 0) {
+            container.innerHTML =
+              `<p class="mp-empty">${emptyText}</p>` +
+              (skipped ? `<p class="people-note">非公開設定のユーザーは表示されません</p>` : '');
+            return;
+          }
+
+          // フォロー日時の新しい順(取得時の順序)を保ったまま表示する
+          const order = new Map(ids.map((id, i) => [id, i]));
+          publicProfiles.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+
+          let followingSet = new Set();
+          if (session && session.user.id !== profileId) {
+            const { data: myFollowRows } = await supabase
+              .from('follows')
+              .select('followee_id')
+              .eq('follower_id', session.user.id)
+              .in(
+                'followee_id',
+                publicProfiles.map((p) => p.id)
+              );
+            followingSet = new Set((myFollowRows ?? []).map((r) => r.followee_id));
+          }
+
+          const rowsHtml = publicProfiles
+            .map((p) =>
+              peopleRowHtml(p, {
+                showButton: Boolean(session) && session.user.id !== p.id,
+                isFollowing: followingSet.has(p.id),
+              })
+            )
+            .join('');
+
+          let html = `<ul class="people-list">${rowsHtml}</ul>`;
+          if (totalCount != null && totalCount > LIMIT) {
+            html += `<p class="people-more">他 ${totalCount - LIMIT}人</p>`;
+          }
+          if (skipped) {
+            html += `<p class="people-note">非公開設定のユーザーは表示されません</p>`;
+          }
+          container.innerHTML = html;
+        }
+
+        function showTab(tab) {
+          currentTab = tab;
+          tabsNav.querySelectorAll('.mp-main-tab').forEach((btn) => {
+            const active = btn.dataset.peopleTab === tab;
+            btn.classList.toggle('mp-main-tab-active', active);
+            btn.setAttribute('aria-selected', active ? 'true' : 'false');
+          });
+          Object.entries(sections).forEach(([key, el]) => {
+            if (el) el.hidden = key !== tab;
+          });
+          Object.entries(countBtns).forEach(([key, btn]) => {
+            if (btn) btn.setAttribute('aria-expanded', isOpen && key === tab ? 'true' : 'false');
+          });
+          if (!loaded[tab]) {
+            loaded[tab] = true;
+            loadList(tab);
+          }
+        }
+
+        function openPanel(tab) {
+          isOpen = true;
+          panel.hidden = false;
+          showTab(tab);
+        }
+
+        function closePanel() {
+          isOpen = false;
+          panel.hidden = true;
+          Object.values(countBtns).forEach((btn) => btn && btn.setAttribute('aria-expanded', 'false'));
+        }
+
+        Object.entries(countBtns).forEach(([tab, btn]) => {
+          if (!btn) return;
+          btn.addEventListener('click', () => {
+            if (isOpen && currentTab === tab) {
+              closePanel();
+            } else {
+              openPanel(tab);
+            }
+          });
+        });
+
+        tabsNav.addEventListener('click', (e) => {
+          const btn = e.target.closest('.mp-main-tab');
+          if (!btn) return;
+          showTab(btn.dataset.peopleTab);
+        });
+
+        // 一覧内のフォロー/フォロー解除ボタン(following.astroの挙動と同じくその場でトグル)
+        panel.addEventListener('click', async (e) => {
+          const btn = e.target.closest('.follow-btn');
+          if (!btn || !session) return;
+          const targetId = btn.dataset.userId;
+          const isFollowing = btn.classList.contains('following');
+          btn.disabled = true;
+          if (isFollowing) {
+            await supabase.from('follows').delete().eq('follower_id', session.user.id).eq('followee_id', targetId);
+          } else {
+            await supabase.from('follows').insert({ follower_id: session.user.id, followee_id: targetId });
+          }
+          const nowFollowing = !isFollowing;
+          btn.classList.toggle('following', nowFollowing);
+          btn.textContent = nowFollowing ? 'フォロー中' : 'フォローする';
+          btn.disabled = false;
+        });
+      }
+
       async function initFollow() {
         const section = document.getElementById('follow-section');
         if (!section) return;
@@ -1317,6 +1534,8 @@ const spendShareUrl = profile
         const {
           data: { session },
         } = await supabase.auth.getSession();
+
+        initPeoplePanel(profileId, session);
 
         if (session && session.user.id === profileId) {
           const editBtn = document.getElementById('edit-profile-btn');
