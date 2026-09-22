@@ -1427,8 +1427,11 @@ const spendShareUrl = profile
           const order = new Map(ids.map((id, i) => [id, i]));
           publicProfiles.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
 
+          // ログイン中なら、一覧に出す人を自分がフォロー済みかどうかを取得する。
+          // 以前は「他人のプロフィールを見ているときだけ」取得していたため、自分のプロフィールで
+          // フォロー/フォロワー一覧を開くと全員が「フォローする」表示になる不具合があった(2026-09-22修正)。
           let followingSet = new Set();
-          if (session && session.user.id !== profileId) {
+          if (session) {
             const { data: myFollowRows } = await supabase
               .from('follows')
               .select('followee_id')
