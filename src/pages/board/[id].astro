@@ -20,9 +20,16 @@ if (!thread) {
 
 const { data: replies } = await supabase
   .from('board_replies')
-  .select('id, thread_id, user_id, body, created_at')
+  .select('id, thread_id, user_id, body, created_at, reply_to_id')
   .eq('thread_id', id)
   .order('created_at', { ascending: true });
+
+// 返信の「引用元」表示用に、同スレッド内の返信をID引きできるようにしておく
+// (reply_to_idは削除時にON DELETE SET NULLされるため、値があれば必ず同スレッド内に存在する)
+const replyById = {};
+for (const r of replies ?? []) {
+  replyById[r.id] = r;
+}
 
 // 投稿者のニックネームは、プロフィールを公開設定にしている人の分だけ表示する
 const userIds = [...new Set([thread.user_id, ...(replies ?? []).map((r) => r.user_id)])];
@@ -34,6 +41,26 @@ if (userIds.length > 0) {
     .in('id', userIds);
   for (const p of profiles ?? []) {
     profileMap[p.id] = p;
+  }
+}
+
+function authorDisplayName(userId) {
+  const p = profileMap[userId];
+  return p?.is_public && p?.nickname ? p.nickname : '非公開ユーザー';
+}
+
+// 「グッド」件数は誰でも見える(2026-09-22)。「バッド」は自分の押下状態しか出さないため、
+// ここでは件数を集計しない(kind='good'の行だけ取得する)
+const postIds = [thread.id, ...(replies ?? []).map((r) => r.id)];
+let goodCounts = {};
+if (postIds.length > 0) {
+  const { data: goodRows } = await supabase
+    .from('board_post_reactions')
+    .select('post_id')
+    .eq('kind', 'good')
+    .in('post_id', postIds);
+  for (const row of goodRows ?? []) {
+    goodCounts[row.post_id] = (goodCounts[row.post_id] ?? 0) + 1;
   }
 }
 
@@ -95,6 +122,18 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
           <span class="board-post-date">{formatDateTime(thread.created_at)}</span>
         </div>
         <p class="board-post-body">{thread.body}</p>
+        <div class="post-actions">
+          <button type="button" class="reply-trigger-btn" data-reply-target="" data-reply-author="">
+            返信
+          </button>
+          <button type="button" class="reaction-btn" data-post-type="thread" data-post-id={thread.id} data-kind="good">
+            <span aria-hidden="true">👍</span>
+            <span class="reaction-good-count">{goodCounts[thread.id] ?? 0}</span>
+          </button>
+          <button type="button" class="reaction-btn" data-post-type="thread" data-post-id={thread.id} data-kind="bad" aria-label="バッド">
+            <span aria-hidden="true">👎</span>
+          </button>
+        </div>
         <div class="board-post-actions">
           <button type="button" class="board-report-btn" data-target-type="thread" data-target-id={thread.id}>
             通報
@@ -118,41 +157,70 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
       {(!replies || replies.length === 0) && <p class="no-reviews">まだ返信がありません。</p>}
 
       <ul class="board-reply-list">
-        {(replies ?? []).map((r) => (
-          <li class="board-post board-reply-post" data-post-id={r.id} data-user-id={r.user_id}>
-            <div class="board-post-meta">
-              {profileMap[r.user_id]?.is_public && profileMap[r.user_id]?.nickname ? (
-                <a href={`/users/${encodeURIComponent(profileMap[r.user_id].nickname)}`} class="board-author">
-                  {profileMap[r.user_id].nickname}
+        {(replies ?? []).map((r) => {
+          // reply_to_idは対象の返信が削除されるとON DELETE SET NULLでnullになる。
+          // その場合(またはスレッド内に見つからない場合)は引用行を出さない
+          const quoteTarget = r.reply_to_id ? replyById[r.reply_to_id] : null;
+          return (
+            <li id={`reply-${r.id}`} class="board-post board-reply-post" data-post-id={r.id} data-user-id={r.user_id}>
+              {quoteTarget && (
+                <a href={`#reply-${quoteTarget.id}`} class="reply-quote">
+                  &gt; {authorDisplayName(quoteTarget.user_id)}さんへの返信
                 </a>
-              ) : (
-                <span class="board-author board-author-private">非公開ユーザー</span>
               )}
-              <span class="board-post-date">{formatDateTime(r.created_at)}</span>
-            </div>
-            <p class="board-post-body">{r.body}</p>
-            <div class="board-post-actions">
-              <button type="button" class="board-report-btn" data-target-type="reply" data-target-id={r.id}>
-                通報
-              </button>
-              <button type="button" class="board-delete-btn" data-target-type="reply" data-target-id={r.id} style="display:none;">
-                削除
-              </button>
-            </div>
-            <div class="board-report-form" data-report-for={r.id} hidden>
-              <textarea class="board-report-reason" maxlength="300" placeholder="通報理由(任意)"></textarea>
-              <div class="board-form-actions">
-                <button type="button" class="best-one-clear-btn board-report-submit-btn">通報する</button>
-                <button type="button" class="board-report-cancel-btn">キャンセル</button>
+              <div class="board-post-meta">
+                {profileMap[r.user_id]?.is_public && profileMap[r.user_id]?.nickname ? (
+                  <a href={`/users/${encodeURIComponent(profileMap[r.user_id].nickname)}`} class="board-author">
+                    {profileMap[r.user_id].nickname}
+                  </a>
+                ) : (
+                  <span class="board-author board-author-private">非公開ユーザー</span>
+                )}
+                <span class="board-post-date">{formatDateTime(r.created_at)}</span>
               </div>
-              <p class="board-report-status"></p>
-            </div>
-          </li>
-        ))}
+              <p class="board-post-body">{r.body}</p>
+              <div class="post-actions">
+                <button type="button" class="reply-trigger-btn" data-reply-target={r.id} data-reply-author={authorDisplayName(r.user_id)}>
+                  返信
+                </button>
+                <button type="button" class="reaction-btn" data-post-type="reply" data-post-id={r.id} data-kind="good">
+                  <span aria-hidden="true">👍</span>
+                  <span class="reaction-good-count">{goodCounts[r.id] ?? 0}</span>
+                </button>
+                <button type="button" class="reaction-btn" data-post-type="reply" data-post-id={r.id} data-kind="bad" aria-label="バッド">
+                  <span aria-hidden="true">👎</span>
+                </button>
+              </div>
+              <div class="board-post-actions">
+                <button type="button" class="board-report-btn" data-target-type="reply" data-target-id={r.id}>
+                  通報
+                </button>
+                <button type="button" class="board-delete-btn" data-target-type="reply" data-target-id={r.id} style="display:none;">
+                  削除
+                </button>
+              </div>
+              <div class="board-report-form" data-report-for={r.id} hidden>
+                <textarea class="board-report-reason" maxlength="300" placeholder="通報理由(任意)"></textarea>
+                <div class="board-form-actions">
+                  <button type="button" class="best-one-clear-btn board-report-submit-btn">通報する</button>
+                  <button type="button" class="board-report-cancel-btn">キャンセル</button>
+                </div>
+                <p class="board-report-status"></p>
+              </div>
+            </li>
+          );
+        })}
       </ul>
 
       <div class="board-reply-form">
         <label class="profile-edit-label" for="board-reply-input">返信する</label>
+
+        <div class="reply-to-banner" id="reply-to-banner" hidden>
+          <span id="reply-to-banner-text"></span>
+          <button type="button" id="reply-to-cancel-btn" aria-label="返信をキャンセル">×</button>
+        </div>
+        <input type="hidden" id="board-reply-to-id" value="" />
+
         <textarea id="board-reply-input" class="board-thread-body-input" maxlength="2000" rows="4" placeholder="返信を書く"></textarea>
 
         <div class="board-nickname-gate" hidden>
@@ -222,6 +290,34 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
         });
       }
 
+      // 自分が既に押している「グッド/バッド」があれば、対応するボタンをアクティブ表示にする
+      async function initReactionState() {
+        const reactionBtns = [...document.querySelectorAll('.reaction-btn')];
+        if (reactionBtns.length === 0) return;
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const postIds = [...new Set(reactionBtns.map((b) => b.dataset.postId))];
+        const { data: myReactions } = await supabase
+          .from('board_post_reactions')
+          .select('post_type, post_id, kind')
+          .eq('user_id', session.user.id)
+          .in('post_id', postIds);
+
+        const kindByKey = {};
+        for (const r of myReactions ?? []) {
+          kindByKey[`${r.post_type}:${r.post_id}`] = r.kind;
+        }
+
+        for (const btn of reactionBtns) {
+          const key = `${btn.dataset.postType}:${btn.dataset.postId}`;
+          if (kindByKey[key] === btn.dataset.kind) btn.classList.add('is-active');
+        }
+      }
+
       document.addEventListener('click', async (e) => {
         const delBtn = e.target.closest('.board-delete-btn');
         if (delBtn) {
@@ -238,6 +334,20 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
           if (error) {
             alert('削除に失敗しました');
             return;
+          }
+
+          // board_post_reactionsはRLSで「自分の行」しか消せないため、ここでは自分が押した分だけ削除する。
+          // 他ユーザーが押した分は投稿削除後は孤立したまま残るが、表示にも件数にも使われないので実害はない(2026-09-22)
+          const {
+            data: { session: sessionForCleanup },
+          } = await supabase.auth.getSession();
+          if (sessionForCleanup) {
+            await supabase
+              .from('board_post_reactions')
+              .delete()
+              .eq('post_type', isThread ? 'thread' : 'reply')
+              .eq('post_id', targetId)
+              .eq('user_id', sessionForCleanup.user.id);
           }
 
           if (isThread) {
@@ -310,6 +420,102 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
           setTimeout(() => {
             form.hidden = true;
           }, 1200);
+          return;
+        }
+
+        // 「返信」ボタン: 返信フォームにフォーカスし、返信対象(reply_to_id)をセットする。
+        // スレッド本文への「返信」(data-reply-target="")の場合はreply_to_idをクリアするだけの通常の返信になる
+        const replyTriggerBtn = e.target.closest('.reply-trigger-btn');
+        if (replyTriggerBtn) {
+          const targetId = replyTriggerBtn.dataset.replyTarget || '';
+          const targetAuthor = replyTriggerBtn.dataset.replyAuthor || '';
+          const hiddenInput = document.getElementById('board-reply-to-id');
+          const banner = document.getElementById('reply-to-banner');
+          const bannerText = document.getElementById('reply-to-banner-text');
+          const textarea = document.getElementById('board-reply-input');
+
+          hiddenInput.value = targetId;
+          if (targetId) {
+            bannerText.textContent = `${targetAuthor}さんの書き込みに返信`;
+            banner.hidden = false;
+          } else {
+            banner.hidden = true;
+          }
+
+          document.querySelector('.board-reply-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          textarea?.focus();
+          return;
+        }
+
+        // 返信対象バナーの×ボタン: 通常の返信(reply_to_id無し)に戻す
+        const replyToCancelBtn = e.target.closest('#reply-to-cancel-btn');
+        if (replyToCancelBtn) {
+          document.getElementById('board-reply-to-id').value = '';
+          document.getElementById('reply-to-banner').hidden = true;
+          return;
+        }
+
+        // 「グッド/バッド」ボタン: 1人1票。同じボタンをもう一度押すと取り消し、逆のボタンを押すと切り替え
+        const reactionBtn = e.target.closest('.reaction-btn');
+        if (reactionBtn) {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (!session) {
+            alert('リアクションするにはログインが必要です');
+            return;
+          }
+
+          const postType = reactionBtn.dataset.postType;
+          const postId = reactionBtn.dataset.postId;
+          const kind = reactionBtn.dataset.kind;
+          const container = reactionBtn.closest('.post-actions');
+          const goodBtn = container.querySelector('.reaction-btn[data-kind="good"]');
+          const badBtn = container.querySelector('.reaction-btn[data-kind="bad"]');
+          const countEl = goodBtn.querySelector('.reaction-good-count');
+          const activeBtn = container.querySelector('.reaction-btn.is-active');
+          const currentKind = activeBtn?.dataset.kind ?? null;
+
+          goodBtn.disabled = true;
+          badBtn.disabled = true;
+
+          if (currentKind === kind) {
+            const { error } = await supabase
+              .from('board_post_reactions')
+              .delete()
+              .eq('post_type', postType)
+              .eq('post_id', postId)
+              .eq('user_id', session.user.id);
+            if (!error) {
+              reactionBtn.classList.remove('is-active');
+              if (kind === 'good') countEl.textContent = Math.max(0, Number(countEl.textContent) - 1);
+            }
+          } else if (currentKind) {
+            const { error } = await supabase
+              .from('board_post_reactions')
+              .update({ kind })
+              .eq('post_type', postType)
+              .eq('post_id', postId)
+              .eq('user_id', session.user.id);
+            if (!error) {
+              activeBtn.classList.remove('is-active');
+              reactionBtn.classList.add('is-active');
+              if (kind === 'good') countEl.textContent = Number(countEl.textContent) + 1;
+              else countEl.textContent = Math.max(0, Number(countEl.textContent) - 1);
+            }
+          } else {
+            const { error } = await supabase
+              .from('board_post_reactions')
+              .insert({ post_type: postType, post_id: postId, user_id: session.user.id, kind });
+            if (!error) {
+              reactionBtn.classList.add('is-active');
+              if (kind === 'good') countEl.textContent = Number(countEl.textContent) + 1;
+            }
+          }
+
+          goodBtn.disabled = false;
+          badBtn.disabled = false;
+          return;
         }
       });
 
@@ -347,9 +553,12 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
         submitBtn.disabled = true;
         statusEl.textContent = '投稿中...';
 
+        // reply_to_idが空文字ならスレッド本文への通常の返信としてnullを送る(2026-09-22)
+        const replyToId = document.getElementById('board-reply-to-id')?.value || null;
+
         const { error } = await supabase
           .from('board_replies')
-          .insert({ thread_id: threadId, user_id: session.user.id, body });
+          .insert({ thread_id: threadId, user_id: session.user.id, body, reply_to_id: replyToId });
 
         submitBtn.disabled = false;
 
@@ -399,6 +608,7 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
 
       initPermissions();
       initReportState();
+      initReactionState();
     </script>
   </body>
 </html>

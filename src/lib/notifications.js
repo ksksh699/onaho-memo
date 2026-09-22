@@ -11,6 +11,9 @@ import { supabase } from './supabase.js';
 //
 // type別の内訳:
 //   board_reply     … 自分が建てた掲示板スレッドに誰かが返信した
+//   board_reply_to  … 自分の掲示板の書き込み(返信)に、誰かがさらに返信した
+//                      (自分がスレ主でもある場合はboard_replyは送らずこちらだけになる。2026-09-22)
+//                      meta.reply_id に新しく投稿された返信のIDが入り、#reply-<id> にリンクする
 //   review_comment  … 自分のレビューに誰かがコメントした/自分が既にコメント済みの
 //                      レビューに他の人がさらにコメントした
 //   review_like     … 自分のレビューに誰かが「いいね」した
@@ -76,7 +79,14 @@ async function enrichNotifications(rows) {
   if (rows.length === 0) return [];
 
   const actorIds = [...new Set(rows.map((r) => r.actor_id).filter(Boolean))];
-  const threadIds = [...new Set(rows.filter((r) => r.type === 'board_reply').map((r) => r.thread_id).filter(Boolean))];
+  const threadIds = [
+    ...new Set(
+      rows
+        .filter((r) => r.type === 'board_reply' || r.type === 'board_reply_to')
+        .map((r) => r.thread_id)
+        .filter(Boolean)
+    ),
+  ];
   const checkIds = [
     ...new Set(rows.filter((r) => r.type === 'review_comment' || r.type === 'review_like').map((r) => r.check_id).filter(Boolean)),
   ];
@@ -127,6 +137,10 @@ async function enrichNotifications(rows) {
       const title = titleByThreadId[r.thread_id] ?? 'スレッド';
       text = `${actorName}さんがあなたのスレッド「${title}」にコメントしました`;
       href = `/board/${r.thread_id}/`;
+    } else if (r.type === 'board_reply_to') {
+      const replyId = (r.meta ?? {}).reply_id;
+      text = `${actorName}さんがあなたの書き込みに返信しました`;
+      href = replyId ? `/board/${r.thread_id}/#reply-${replyId}` : `/board/${r.thread_id}/`;
     } else if (r.type === 'follow') {
       text = `${actorName}さんにフォローされました`;
       href = r.actor_id && nicknameByUserId[r.actor_id] ? `/users/${encodeURIComponent(nicknameByUserId[r.actor_id])}` : '/mypage';

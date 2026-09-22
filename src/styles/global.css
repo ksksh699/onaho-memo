@@ -5756,6 +5756,114 @@ main {
   color: #fff;
 }
 
+/* 掲示板の「返信/グッド・バッド」アクション行(2026-09-22) */
+.post-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.reply-trigger-btn {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+}
+
+.reply-trigger-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.reaction-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+}
+
+.reaction-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.reaction-btn.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* バッドは押している自分にだけ分かればいいので、目立たせすぎない色にする */
+.reaction-btn[data-kind='bad'].is-active {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.reaction-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* 返信元の引用リンク(「> ○○さんへの返信」) */
+.reply-quote {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  margin-bottom: 0.5rem;
+}
+
+.reply-quote:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* 返信フォーム上部の「○○さんの書き込みに返信」バナー */
+.reply-to-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.9rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.reply-to-banner[hidden] {
+  display: none;
+}
+
+#reply-to-cancel-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.2rem;
+}
+
+#reply-to-cancel-btn:hover {
+  color: var(--danger);
+}
+
 .board-report-form {
   margin-top: 0.9rem;
   padding-top: 0.9rem;
