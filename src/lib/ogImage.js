@@ -74,6 +74,12 @@ export function loadFonts(origin) {
 
 // 画像URLを取得して data: URL にして返す(satoriに外部URLを直接渡すより、
 // タイムアウトや失敗時の扱いを自分で制御できる)。失敗したら null。
+//
+// 2026-09-22: マイページから手動追加した商品の画像は、アップロード時にブラウザ側で
+// WebPに再圧縮される(src/lib/imageCompress.js)。PNG/PNGを生成しているのは
+// satori→@resvg/resvg-js(SVG→PNG変換)だが、resvgはWebPの埋め込み画像をデコードできず、
+// 画像部分だけ何も描画されずに真っ白になってしまう不具合があった。
+// そのためWebPは事前にPNGへ変換してから埋め込む。
 export async function fetchImageAsDataUrl(url, { timeoutMs = 4000 } = {}) {
   if (!url) return null;
   const controller = new AbortController();
@@ -84,10 +90,26 @@ export async function fetchImageAsDataUrl(url, { timeoutMs = 4000 } = {}) {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; onahomemo-og/1.0)' },
     });
     if (!res.ok) return null;
-    const type = res.headers.get('content-type') || 'image/jpeg';
+    let type = res.headers.get('content-type') || 'image/jpeg';
     if (!type.startsWith('image/')) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
+    let buf = Buffer.from(await res.arrayBuffer());
     if (buf.length === 0) return null;
+
+    // resvgが直接デコードできない形式(WebPなど)はPNGに変換する。
+    // sharpは@astrojs/vercelの画像最適化用にnode_modulesへ既に入っているので追加のパッケージ導入は不要。
+    // 万一sharpが使えない場合は null を返し、呼び出し側の「No Image」プレースホルダーに委ねる。
+    const looksLikeWebp = type.includes('webp') || /\.webp(\?.*)?$/i.test(url);
+    if (looksLikeWebp) {
+      try {
+        const { default: sharp } = await import('sharp');
+        buf = await sharp(buf).png().toBuffer();
+        type = 'image/png';
+      } catch (convErr) {
+        console.error('[ogImage] WebP→PNG変換に失敗:', convErr);
+        return null;
+      }
+    }
+
     return `data:${type};base64,${buf.toString('base64')}`;
   } catch {
     return null;

@@ -29,7 +29,25 @@ export function buildReviewCard({ product, review, nickname, imageDataUrl }) {
     },
     imageDataUrl
       ? h('img', { src: imageDataUrl, style: { width: 300, height: 400, objectFit: 'contain' } })
-      : h('div', { style: { display: 'flex', fontSize: 26, color: COLORS.muted } }, 'No Image')
+      // 画像が取得できない場合でもカードが真っ白に見えないよう、色付きの枠+商品名を出す(2026-09-22)
+      : h(
+          'div',
+          {
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 300,
+              height: 400,
+              background: COLORS.bg,
+              padding: '0 20px',
+              textAlign: 'center',
+            },
+          },
+          h('div', { style: { display: 'flex', fontSize: 22, color: COLORS.muted, marginBottom: 10 } }, 'No Image'),
+          h('div', { style: { display: 'block', fontSize: 22, fontWeight: 700, color: COLORS.text, lineHeight: 1.4, lineClamp: 4 } }, product.name)
+        )
   );
 
   const textCol = h(

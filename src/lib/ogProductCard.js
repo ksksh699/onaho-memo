@@ -58,7 +58,25 @@ export function buildProductCard({ product, stats, imageDataUrl }) {
           src: imageDataUrl,
           style: { width: 340, height: 400, objectFit: 'contain' },
         })
-      : h('div', { style: { display: 'flex', fontSize: 28, color: COLORS.muted } }, 'No Image')
+      // 画像が取得できない場合でもカードが真っ白に見えないよう、色付きの枠+商品名を出す(2026-09-22)
+      : h(
+          'div',
+          {
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 340,
+              height: 400,
+              background: COLORS.bg,
+              padding: '0 20px',
+              textAlign: 'center',
+            },
+          },
+          h('div', { style: { display: 'flex', fontSize: 24, color: COLORS.muted, marginBottom: 10 } }, 'No Image'),
+          h('div', { style: { display: 'block', fontSize: 24, fontWeight: 700, color: COLORS.text, lineHeight: 1.4, lineClamp: 4 } }, product.name)
+        )
   );
 
   const ratingRow = h(
