@@ -5567,6 +5567,8 @@ main {
   padding: 1.1rem 1.3rem;
   display: block;
   transition: border-color 0.15s ease;
+  /* カード全体をクリック対象にしたため、クリックできることが分かるようにする(2026-09-22) */
+  cursor: pointer;
 }
 
 .board-thread-card:hover {

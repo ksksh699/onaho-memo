@@ -318,6 +318,18 @@ function formatDateTime(iso) {
         }
       });
 
+      // スレッド枠全体をクリック可能にする(2026-09-22)。
+      // タイトルの<a>はアクセシビリティのため残したまま、カードの余白(抜粋文・日時など)を
+      // クリックしてもスレッドへ飛べるようにする。投稿者名リンクなど、カード内の他の
+      // リンク/ボタンをクリックしたときはそちらの動作を優先し、ここでは何もしない。
+      document.querySelectorAll('.board-thread-card').forEach((card) => {
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('a, button, input, textarea, select, label')) return;
+          const titleLink = card.querySelector('.board-thread-title');
+          if (titleLink) titleLink.click();
+        });
+      });
+
       // 管理者だけに通報一覧へのリンクを出す
       (async () => {
         const link = document.getElementById('board-admin-reports-link');
