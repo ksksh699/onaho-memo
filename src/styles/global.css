@@ -5687,6 +5687,9 @@ main {
   box-shadow: var(--shadow-card);
   padding: 1.2rem 1.4rem;
   margin-bottom: 1.5rem;
+  /* 引用リンク・通知リンクでジャンプした時に、固定ヘッダー(高さ約4.5rem)の
+     下に投稿の頭が隠れないようにする(2026-09-22) */
+  scroll-margin-top: 4.75rem;
 }
 
 .board-op-post {
@@ -5695,6 +5698,32 @@ main {
 
 .board-reply-post {
   margin-bottom: 0;
+}
+
+/* 通知リンクの旧#reply-<uuid>ジャンプ先用の目印(2026-09-22)。中身を持たないため
+   .board-postと同じscroll-margin-topを付けておく */
+.post-anchor {
+  display: block;
+  height: 0;
+  scroll-margin-top: 4.75rem;
+}
+
+/* 引用リンクのタップ・通知リンクからのジャンプ先を一時的にハイライトする(2026-09-22)。
+   .post-highlightはJSで付け外しするクラス、:target/:has(:target)はURLの#post-<番号>や
+   #reply-<uuid>そのものによるジャンプ(ページ読み込み直後など)をCSSだけでカバーする */
+.post-highlight,
+.board-post:target,
+.board-post:has(:target) {
+  animation: post-highlight-fade 1.8s ease-out;
+}
+
+@keyframes post-highlight-fade {
+  from {
+    background: color-mix(in srgb, var(--accent) 16%, var(--bg-card));
+  }
+  to {
+    background: var(--bg-card);
+  }
 }
 
 .board-post-meta {
@@ -5707,6 +5736,12 @@ main {
 }
 
 .board-post-date {
+  color: var(--text-muted);
+}
+
+/* 投稿の通し番号(スレッド本文が#1、返信が#2,#3…)(2026-09-22) */
+.post-number {
+  font-weight: 700;
   color: var(--text-muted);
 }
 
@@ -5756,61 +5791,49 @@ main {
   color: #fff;
 }
 
-/* 掲示板の「返信/グッド・バッド」アクション行(2026-09-22) */
+/* 掲示板の「返信/グッド・バッド」アクション行(2026-09-22)。
+   スマホで1行に収まるよう折り返さず、タップ領域は36px以上を確保する */
 .post-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.6rem;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
   margin-bottom: 0.8rem;
 }
 
-.reply-trigger-btn {
+/* 目立たせすぎないよう、周りに馴染むゴーストボタンにする
+   (.follow-btn.following や .btn-outline と同じ、枠線+text-mutedの控えめな配色)(2026-09-22) */
+.reply-trigger-btn,
+.reaction-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 2.25rem;
   font-family: 'Noto Sans JP', sans-serif;
   font-size: 0.76rem;
   color: var(--text-muted);
   background: transparent;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
-  padding: 0.35rem 0.9rem;
-  cursor: pointer;
-}
-
-.reply-trigger-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.reaction-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-family: 'Noto Sans JP', sans-serif;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
   padding: 0.35rem 0.8rem;
   cursor: pointer;
+  white-space: nowrap;
 }
 
+.reply-trigger-btn:hover,
 .reaction-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--text-muted);
+  color: var(--text);
 }
 
+/* アクティブ状態も彩度のある塗りつぶしにはせず、文字を濃く・太くして
+   枠線をわずかに濃くする程度に留める(2026-09-22) */
 .reaction-btn.is-active {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-/* バッドは押している自分にだけ分かればいいので、目立たせすぎない色にする */
-.reaction-btn[data-kind='bad'].is-active {
-  border-color: var(--danger);
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--text-muted) 60%, var(--text) 40%);
+  color: var(--text);
+  font-weight: 700;
+  background: transparent;
 }
 
 .reaction-btn:disabled {
@@ -5818,13 +5841,26 @@ main {
   opacity: 0.6;
 }
 
-/* 返信元の引用リンク(「> ○○さんへの返信」) */
+@media (max-width: 480px) {
+  .post-actions {
+    gap: 0.35rem;
+  }
+
+  .reply-trigger-btn,
+  .reaction-btn {
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
+  }
+}
+
+/* 返信元の引用リンク(「>>番号 ○○さんへの返信」)。タップして#post-<番号>へジャンプする(2026-09-22) */
 .reply-quote {
   display: block;
   font-size: 0.78rem;
   color: var(--text-muted);
   text-decoration: none;
   margin-bottom: 0.5rem;
+  padding: 0.15rem 0;
 }
 
 .reply-quote:hover {
@@ -5832,7 +5868,7 @@ main {
   text-decoration: underline;
 }
 
-/* 返信フォーム上部の「○○さんの書き込みに返信」バナー */
+/* 返信フォーム上部の「>>番号 ○○さんの書き込みに返信」バナー */
 .reply-to-banner {
   display: flex;
   align-items: center;

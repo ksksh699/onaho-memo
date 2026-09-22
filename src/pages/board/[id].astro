@@ -31,6 +31,15 @@ for (const r of replies ?? []) {
   replyById[r.id] = r;
 }
 
+// 表示用の通し番号(2026-09-22): スレッド本文が1、返信はcreated_at順に2,3,4…
+// DBには保存せず表示のたびに計算する。返信投稿後はページを再読み込みして
+// サーバ側で番号を振り直すため(submitReply内のwindow.location.reload)、
+// クライアント側で追記する場合のような番号のズレは発生しない
+const postNumberById = { [thread.id]: 1 };
+(replies ?? []).forEach((r, i) => {
+  postNumberById[r.id] = i + 2;
+});
+
 // 投稿者のニックネームは、プロフィールを公開設定にしている人の分だけ表示する
 const userIds = [...new Set([thread.user_id, ...(replies ?? []).map((r) => r.user_id)])];
 let profileMap = {};
@@ -110,8 +119,9 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
         Xでシェア
       </a>
 
-      <article class="board-post board-op-post" data-post-id={thread.id} data-user-id={thread.user_id}>
+      <article id={`post-${postNumberById[thread.id]}`} class="board-post board-op-post" data-post-id={thread.id} data-user-id={thread.user_id}>
         <div class="board-post-meta">
+          <span class="post-number">#{postNumberById[thread.id]}</span>
           {profileMap[thread.user_id]?.is_public && profileMap[thread.user_id]?.nickname ? (
             <a href={`/users/${encodeURIComponent(profileMap[thread.user_id].nickname)}`} class="board-author">
               {profileMap[thread.user_id].nickname}
@@ -162,13 +172,16 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
           // その場合(またはスレッド内に見つからない場合)は引用行を出さない
           const quoteTarget = r.reply_to_id ? replyById[r.reply_to_id] : null;
           return (
-            <li id={`reply-${r.id}`} class="board-post board-reply-post" data-post-id={r.id} data-user-id={r.user_id}>
+            <li id={`post-${postNumberById[r.id]}`} class="board-post board-reply-post" data-post-id={r.id} data-user-id={r.user_id}>
+              {/* 通知メールなどからの旧来の#reply-<uuid>リンクを引き続き有効にするための目印(2026-09-22) */}
+              <span id={`reply-${r.id}`} class="post-anchor" aria-hidden="true"></span>
               {quoteTarget && (
-                <a href={`#reply-${quoteTarget.id}`} class="reply-quote">
-                  &gt; {authorDisplayName(quoteTarget.user_id)}さんへの返信
+                <a href={`#post-${postNumberById[quoteTarget.id]}`} class="reply-quote">
+                  &gt;&gt;{postNumberById[quoteTarget.id]} {authorDisplayName(quoteTarget.user_id)}さんへの返信
                 </a>
               )}
               <div class="board-post-meta">
+                <span class="post-number">#{postNumberById[r.id]}</span>
                 {profileMap[r.user_id]?.is_public && profileMap[r.user_id]?.nickname ? (
                   <a href={`/users/${encodeURIComponent(profileMap[r.user_id].nickname)}`} class="board-author">
                     {profileMap[r.user_id].nickname}
@@ -180,7 +193,7 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
               </div>
               <p class="board-post-body">{r.body}</p>
               <div class="post-actions">
-                <button type="button" class="reply-trigger-btn" data-reply-target={r.id} data-reply-author={authorDisplayName(r.user_id)}>
+                <button type="button" class="reply-trigger-btn" data-reply-target={r.id} data-reply-author={authorDisplayName(r.user_id)} data-reply-number={postNumberById[r.id]}>
                   返信
                 </button>
                 <button type="button" class="reaction-btn" data-post-type="reply" data-post-id={r.id} data-kind="good">
@@ -318,6 +331,26 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
         }
       }
 
+      // 引用リンク(「>>番号 ○○さんへの返信」)をタップした時に、ジャンプ先の投稿を
+      // 一時的にハイライトする(2026-09-22)。href先は#post-<番号>で、その投稿要素自体に
+      // idが振ってあるので、そのままハイライト対象にできる
+      function highlightPost(targetPost) {
+        if (!targetPost) return;
+        targetPost.classList.remove('post-highlight');
+        // 連続でタップした時にもアニメーションを再スタートさせるため、一度リフローを挟む
+        void targetPost.offsetWidth;
+        targetPost.classList.add('post-highlight');
+        setTimeout(() => targetPost.classList.remove('post-highlight'), 1500);
+      }
+
+      document.addEventListener('click', (e) => {
+        const quoteLink = e.target.closest('.reply-quote');
+        if (quoteLink) {
+          const targetId = (quoteLink.getAttribute('href') || '').replace(/^#/, '');
+          if (targetId) highlightPost(document.getElementById(targetId));
+        }
+      });
+
       document.addEventListener('click', async (e) => {
         const delBtn = e.target.closest('.board-delete-btn');
         if (delBtn) {
@@ -429,6 +462,7 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
         if (replyTriggerBtn) {
           const targetId = replyTriggerBtn.dataset.replyTarget || '';
           const targetAuthor = replyTriggerBtn.dataset.replyAuthor || '';
+          const targetNumber = replyTriggerBtn.dataset.replyNumber || '';
           const hiddenInput = document.getElementById('board-reply-to-id');
           const banner = document.getElementById('reply-to-banner');
           const bannerText = document.getElementById('reply-to-banner-text');
@@ -436,7 +470,7 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
 
           hiddenInput.value = targetId;
           if (targetId) {
-            bannerText.textContent = `${targetAuthor}さんの書き込みに返信`;
+            bannerText.textContent = `>>${targetNumber} ${targetAuthor}さんの書き込みに返信`;
             banner.hidden = false;
           } else {
             banner.hidden = true;
@@ -605,6 +639,13 @@ const xShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(sh
         gate.hidden = true;
         submitReply();
       });
+
+      // ページ読み込み時にURLに#post-<番号>や通知リンクの#reply-<uuid>が付いていたら、
+      // その投稿がどれか分かるように軽くハイライトする(:targetのCSSに加えてのフォールバック)(2026-09-22)
+      if (location.hash) {
+        const hashTarget = document.getElementById(location.hash.slice(1));
+        highlightPost(hashTarget?.closest('.board-post') ?? hashTarget);
+      }
 
       initPermissions();
       initReportState();
