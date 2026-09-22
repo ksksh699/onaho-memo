@@ -22,6 +22,9 @@ import { supabase } from './supabase.js';
 //   price_drop      … 自分が「気になる」に登録している商品が値下がりした
 //                      (price_historyへのinsertトリガーで検知。5%以上の値下がりで、かつ
 //                       全ショップ中の最安値になったとき。metaに shop/old_price/new_price)
+//   watch_review    … 自分が「気になる」に登録している商品に、新しく公開口コミが投稿された
+//                      (checksへのinsert/updateトリガーで検知。is_public=trueかつ
+//                       review_text/detail_review_textを新たに持つようになった時のみ)
 
 const NOTIFY_LIMIT = 20;
 
@@ -103,7 +106,7 @@ async function enrichNotifications(rows) {
     productIdSet.add(c.product_id);
   }
   for (const r of rows) {
-    if ((r.type === 'sale' || r.type === 'price_drop') && r.product_id) productIdSet.add(r.product_id);
+    if ((r.type === 'sale' || r.type === 'price_drop' || r.type === 'watch_review') && r.product_id) productIdSet.add(r.product_id);
   }
 
   let productById = {};
@@ -150,6 +153,11 @@ async function enrichNotifications(rows) {
           ? `(${shopName ? `${shopName} ` : ''}¥${Number(meta.old_price).toLocaleString()} → ¥${Number(meta.new_price).toLocaleString()})`
           : '';
       text = `「${productName}」が値下がりしました${priceText}`;
+      href = product?.dmm_content_id ? `/products/${product.dmm_content_id}/` : '/mypage';
+    } else if (r.type === 'watch_review') {
+      const product = productById[r.product_id];
+      const productName = product?.name ?? '気になる商品';
+      text = `気になる「${productName}」に${actorName}さんが口コミを投稿しました`;
       href = product?.dmm_content_id ? `/products/${product.dmm_content_id}/` : '/mypage';
     } else {
       const productId = productIdByCheckId[r.check_id];
