@@ -1533,6 +1533,9 @@ main {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 1rem;
+  /* 口コミ一覧ページ(/reviews/)のカードから#review-<id>でジャンプした時に、
+     固定ヘッダーの下に口コミの頭が隠れないようにする(.board-postと同じ値、2026-09-23) */
+  scroll-margin-top: 4.75rem;
 }
 
 .review-item-header {
@@ -3519,6 +3522,20 @@ main {
   align-items: baseline;
   gap: 0.6rem;
   flex-wrap: wrap;
+}
+
+/* 見出しの右に添える「もっと見る」リンク(2026-09-23、口コミ一覧ページへの導線) */
+.section-more-link {
+  margin-left: auto;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.section-more-link:hover {
+  text-decoration: underline;
 }
 
 .latest-reviews-scroll {
@@ -6135,6 +6152,130 @@ main {
 
 .listing-lead a {
   color: var(--accent);
+}
+
+/* ---- 口コミ一覧ページ(/reviews/) ----
+   縦一列・モバイル優先・横スクロールなし(2026-09-23)。
+   カードは .latest-review-card(トップページ・横スクロール版)と
+   .review-item(商品ページ・単一商品の口コミ)を参考にしつつ、
+   このページ専用のクラス名にしている(.reviews-list/.review-itemは
+   マイページ・ユーザーページの「投稿した口コミ一覧」で既に別の見た目で
+   使われているため、混ざらないように分けた) */
+.reviews-sort-section {
+  margin: 0 0 1.5rem;
+}
+
+.reviews-index-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.reviews-index-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.reviews-index-card-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 0.9rem;
+  color: inherit;
+}
+
+.reviews-index-card-thumb {
+  flex-shrink: 0;
+  width: 72px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #ececeb, #e2e1de);
+}
+
+.reviews-index-card-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.reviews-index-card-product {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0 0 0.15rem;
+  line-height: 1.4;
+}
+
+.reviews-index-card-maker {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin: 0 0 0.45rem;
+}
+
+.reviews-index-card-author {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.4rem;
+}
+
+.reviews-index-card-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #ececeb, #e2e1de);
+}
+
+.reviews-index-card-nickname {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.reviews-index-card-stars {
+  font-size: 0.8rem;
+  color: var(--gold);
+  margin: 0 0 0.3rem;
+  letter-spacing: 0.05em;
+}
+
+.reviews-index-card-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin: 0 0 0.3rem;
+  line-height: 1.4;
+}
+
+.reviews-index-card-excerpt {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin: 0 0 0.5rem;
+}
+
+.reviews-index-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.reviews-index-card-likes {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.reviews-index-card-date {
+  white-space: nowrap;
 }
 
 .term-list {

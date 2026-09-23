@@ -502,7 +502,7 @@ const metaDescription = [
         )}
         <ul class="review-list">
           {publicReviews?.map((r) => (
-            <li class="review-item">
+            <li class="review-item" id={`review-${r.id}`}>
               <div class="review-item-header">
                 {reviewerNicknames[r.user_id] && (
                   <a href={`/users/${encodeURIComponent(reviewerNicknames[r.user_id])}`} class="review-author">

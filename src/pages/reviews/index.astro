@@ -1,0 +1,250 @@
+---
+import { supabase } from '../../lib/supabase.js';
+import '../../styles/global.css';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+import ListingPager from '../../components/ListingPager.astro';
+import { parsePage, pageHref, filterParams, setListingCacheHeaders } from '../../lib/listing.js';
+import { reviewDisplayTitle, reviewDisplayExcerpt } from '../../lib/reviewText.js';
+
+// 口コミ一覧ページ(2026-09-23)。URL: /reviews/?sort=&page=
+// 掲示板での要望(ほわわ〜さん、2026-09-23)を受けて追加。
+// 構成・見た目はメーカー別/セールの一覧ページ(src/pages/sale/index.astro 等)に合わせる。
+// データは checks(口コミ)。トップページの「最新のレビュー」と同じ「公開されている口コミだけ」
+// という条件に加えて、本文もタイトルも空で星だけの記録は一覧に出したくないため、
+// review_text か detail_review_text のどちらかが入っているものだけに絞る(ratingだけは対象外)。
+const REVIEWS_PAGE_SIZE = 20;
+const DEFAULT_SORT = 'new';
+const SORT_OPTIONS = [
+  { value: 'new', label: '新着順' },
+  { value: 'rating', label: '評価が高い順' },
+  { value: 'likes', label: 'グッドが多い順' },
+];
+const SORT_LABELS = Object.fromEntries(SORT_OPTIONS.map((o) => [o.value, o.label]));
+const SORT_VALUES = new Set(SORT_OPTIONS.map((o) => o.value));
+
+const page = parsePage(Astro.url.searchParams);
+const sortParam = Astro.url.searchParams.get('sort') ?? '';
+const sort = SORT_VALUES.has(sortParam) ? sortParam : DEFAULT_SORT;
+// このページの絞り込みは並び替えだけなので、pageHref/filterParams(lib/listing.js)を
+// そのまま使うために sort だけを持った簡易オブジェクトを filters として渡す
+const filters = { sort };
+const from = (page - 1) * REVIEWS_PAGE_SIZE;
+const to = from + REVIEWS_PAGE_SIZE - 1;
+
+const REVIEW_SELECT =
+  'id, user_id, product_id, rating, review_title, review_text, detail_review_title, detail_review_text, updated_at, products(id, dmm_content_id, name, maker, image_url)';
+
+let reviews = [];
+let count = 0;
+let reviewLikeCounts = {};
+
+if (sort === 'likes') {
+  // Supabase(PostgREST)の.orderでは集計(グッド数)順に並べられないため、
+  // 1) 対象の口コミ全件のid・updated_atを取得 → 2) review_likesをJS側で集計 →
+  // 3) JSでソートしてページ分のidを決める → 4) 該当ページ分だけ詳細を取得、の2段階にする。
+  // 口コミ件数は当面数百件程度なので許容範囲。件数が増えたら集計ビューへの切り替えを検討する(2026-09-23)。
+  const { data: allRows } = await supabase
+    .from('checks')
+    .select('id, updated_at')
+    .eq('is_public', true)
+    .or('review_text.not.is.null,detail_review_text.not.is.null');
+  const rows = allRows ?? [];
+  count = rows.length;
+
+  const allIds = rows.map((r) => r.id);
+  const likeCountMap = new Map();
+  if (allIds.length > 0) {
+    const { data: likeRows } = await supabase.from('review_likes').select('check_id').in('check_id', allIds);
+    for (const l of likeRows ?? []) {
+      likeCountMap.set(l.check_id, (likeCountMap.get(l.check_id) ?? 0) + 1);
+    }
+  }
+
+  const sortedIds = rows
+    .slice()
+    .sort((a, b) => {
+      const diff = (likeCountMap.get(b.id) ?? 0) - (likeCountMap.get(a.id) ?? 0);
+      if (diff !== 0) return diff;
+      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+    })
+    .map((r) => r.id)
+    .slice(from, to + 1);
+
+  if (sortedIds.length > 0) {
+    const { data: pageRows } = await supabase.from('checks').select(REVIEW_SELECT).in('id', sortedIds);
+    const byId = new Map((pageRows ?? []).filter((r) => r.products).map((r) => [r.id, r]));
+    reviews = sortedIds.map((id) => byId.get(id)).filter(Boolean);
+  }
+  // このページの分のグッド数は、上で集計済みのlikeCountMapからそのまま拾う(再取得しない)
+  reviewLikeCounts = Object.fromEntries(reviews.map((r) => [r.id, likeCountMap.get(r.id) ?? 0]));
+} else {
+  let query = supabase
+    .from('checks')
+    .select(REVIEW_SELECT, { count: 'exact' })
+    .eq('is_public', true)
+    .or('review_text.not.is.null,detail_review_text.not.is.null');
+  query =
+    sort === 'rating'
+      ? query.order('rating', { ascending: false, nullsFirst: false }).order('updated_at', { ascending: false })
+      : query.order('updated_at', { ascending: false });
+  query = query.range(from, to);
+  const { data, count: c } = await query;
+  reviews = (data ?? []).filter((r) => r.products);
+  count = c ?? 0;
+
+  const ids = reviews.map((r) => r.id);
+  if (ids.length > 0) {
+    const { data: likeRows } = await supabase.from('review_likes').select('check_id').in('check_id', ids);
+    for (const l of likeRows ?? []) {
+      reviewLikeCounts[l.check_id] = (reviewLikeCounts[l.check_id] ?? 0) + 1;
+    }
+  }
+}
+
+// 投稿者のニックネーム・アイコンは、プロフィールを公開設定にしている人の分だけ表示する
+// (checksとprofilesの間に外部キー関係がないため、埋め込みselectではなく手動で結合する)。
+// トップページの latestReviewerNicknames と同じ扱い: 非公開・ニックネーム未設定は「匿名ユーザー」
+// (アイコンも出さない)。
+const reviewerIds = [...new Set(reviews.map((r) => r.user_id).filter(Boolean))];
+let reviewerProfiles = {};
+if (reviewerIds.length > 0) {
+  const { data: profileRows } = await supabase
+    .from('profiles')
+    .select('id, nickname, avatar_url')
+    .in('id', reviewerIds)
+    .eq('is_public', true)
+    .not('nickname', 'is', null);
+  for (const p of profileRows ?? []) {
+    reviewerProfiles[p.id] = { nickname: p.nickname, avatarUrl: p.avatar_url };
+  }
+}
+
+function sortHref(value) {
+  // 並び替えを変えたら1ページ目に戻す(pageは引き継がない)
+  const params = filterParams({ sort: value }, { defaultSort: DEFAULT_SORT });
+  const q = params.toString();
+  return `/reviews/${q ? `?${q}` : ''}`;
+}
+
+setListingCacheHeaders(Astro.response);
+
+const pages = Math.max(1, Math.ceil(count / REVIEWS_PAGE_SIZE));
+const basePath = '/reviews/';
+// canonicalは常に1ページ目・既定ソートのURL(/reviews/)にする(2026-09-23、仕様書指定)
+const canonical = 'https://onahomemo.com/reviews/';
+const filtered = sort !== DEFAULT_SORT || page > 1;
+const sortLabel = SORT_LABELS[sort];
+const title = `みんなの口コミ一覧(${count}件・${sortLabel}) | オナホめも`;
+const description = `オナホめもに投稿された口コミ${count}件を、新着順・評価が高い順・グッドが多い順で並び替えて一覧表示。気になる口コミをタップすると商品ページの該当レビューまで移動できます。`;
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#2b5fad" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {filtered && <meta name="robots" content="noindex, follow" />}
+    {page > 1 && <link rel="prev" href={`https://onahomemo.com${pageHref(basePath, page - 1, filters, { defaultSort: DEFAULT_SORT })}`} />}
+    {page < pages && <link rel="next" href={`https://onahomemo.com${pageHref(basePath, page + 1, filters, { defaultSort: DEFAULT_SORT })}`} />}
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="みんなの口コミ一覧 | オナホめも" />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content="オナホめも" />
+    <meta property="og:image" content="https://onahomemo.com/ogp.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@onahomemo" />
+  </head>
+  <body>
+    <SiteHeader />
+    <main class="listing-page">
+      <nav class="breadcrumb" aria-label="パンくず"><a href="/">ホーム</a><span>›</span><span>口コミ一覧</span></nav>
+      <h1 class="listing-title">みんなの口コミ一覧</h1>
+      <p class="listing-lead">
+        オナホめもに投稿された口コミを{count.toLocaleString('ja-JP')}件、{sortLabel}で表示しています。
+      </p>
+
+      <section class="reviews-sort-section">
+        <ul class="other-shop-filter">
+          {SORT_OPTIONS.map((o) => (
+            <li>
+              <a href={sortHref(o.value)} class={sort === o.value ? 'is-active' : ''}>{o.label}</a>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {reviews.length === 0 ? (
+        <p class="listing-lead">まだ口コミがありません。</p>
+      ) : (
+        <ul class="reviews-index-list">
+          {reviews.map((r) => {
+            const reviewTitle = reviewDisplayTitle(r);
+            const excerpt = reviewDisplayExcerpt(r, 80);
+            const profile = reviewerProfiles[r.user_id];
+            const nickname = profile?.nickname ?? '匿名ユーザー';
+            const avatarUrl = profile?.avatarUrl ?? null;
+            const likeCount = reviewLikeCounts[r.id] ?? 0;
+            return (
+              <li class="reviews-index-card">
+                <a href={`/products/${r.products.dmm_content_id}/#review-${r.id}`} class="reviews-index-card-link">
+                  <img
+                    src={r.products.image_url}
+                    alt={r.products.name}
+                    loading="lazy"
+                    class="reviews-index-card-thumb"
+                    width="72"
+                    height="96"
+                  />
+                  <div class="reviews-index-card-body">
+                    <p class="reviews-index-card-product">{r.products.name}</p>
+                    {r.products.maker && <p class="reviews-index-card-maker">{r.products.maker}</p>}
+                    <div class="reviews-index-card-author">
+                      {avatarUrl && <img src={avatarUrl} alt="" loading="lazy" class="reviews-index-card-avatar" />}
+                      <span class="reviews-index-card-nickname">{nickname}</span>
+                    </div>
+                    {r.rating && (
+                      <p class="reviews-index-card-stars">
+                        {'★'.repeat(r.rating)}
+                        {'☆'.repeat(5 - r.rating)}
+                      </p>
+                    )}
+                    {reviewTitle && <p class="reviews-index-card-title">{reviewTitle}</p>}
+                    {excerpt && <p class="reviews-index-card-excerpt">{excerpt}</p>}
+                    <div class="reviews-index-card-meta">
+                      <span class="reviews-index-card-likes">
+                        <svg
+                          class="reaction-icon"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.8"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        ><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14Z" /><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3v11Z" /></svg>
+                        {likeCount}
+                      </span>
+                      <span class="reviews-index-card-date">{new Date(r.updated_at).toLocaleDateString('ja-JP')}</span>
+                    </div>
+                  </div>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <ListingPager basePath={basePath} current={page} total={pages} filters={filters} defaultSort={DEFAULT_SORT} />
+    </main>
+    <SiteFooter />
+  </body>
+</html>

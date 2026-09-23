@@ -19,6 +19,7 @@ const CAMPAIGN_KEYWORDS = ['セール', '特価', '祭', 'キャンペーン', '
 const STATIC_PAGES = [
   { path: '/', changefreq: 'daily', priority: '1.0' },
   { path: '/sale/', changefreq: 'daily', priority: '0.8' },
+  { path: '/reviews/', changefreq: 'daily', priority: '0.6' },
   { path: '/makers/', changefreq: 'weekly', priority: '0.6' },
   { path: '/board/', changefreq: 'daily', priority: '0.6' },
   { path: '/terms', changefreq: 'yearly', priority: '0.1' },
