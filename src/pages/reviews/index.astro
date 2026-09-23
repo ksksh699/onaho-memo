@@ -4,7 +4,7 @@ import '../../styles/global.css';
 import SiteHeader from '../../components/SiteHeader.astro';
 import SiteFooter from '../../components/SiteFooter.astro';
 import {
-  parsePage, filterParams, setListingCacheHeaders, pagerPages, fetchListingFilterOptions,
+  parsePage, filterParams, setListingCacheHeaders, pagerPages,
 } from '../../lib/listing.js';
 import { reviewDisplayTitle, reviewDisplayExcerpt } from '../../lib/reviewText.js';
 
@@ -153,8 +153,25 @@ if (reviewerIds.length > 0) {
   }
 }
 
-// メーカー絞り込みの選択肢(発売年は使わないが、共通関数をそのまま流用する)
-const { makers } = await fetchListingFilterOptions();
+// メーカー絞り込みの選択肢: 件数は「そのメーカーの商品数」ではなく「口コミ件数」にする
+// (2026-09-23、じょいさんの指摘を受けて変更。listing.jsのfetchListingFilterOptions()は
+// 商品数ベースなのでここでは使わない)。件数が多いメーカーが並ぶ都合上スキーマ変更はせず、
+// maker列だけ全件取得してJS側で集計する(セールページの他ショップ件数集計と同じやり方)。
+// 現在選択中の絞り込み(キーワード・評価)には影響されない = 常に口コミ全体での件数
+const { data: makerRowsForFilter } = await supabase
+  .from('checks')
+  .select('products!inner(maker)')
+  .eq('is_public', true)
+  .or('review_text.not.is.null,detail_review_text.not.is.null');
+const makerTally = new Map();
+for (const row of makerRowsForFilter ?? []) {
+  const maker = row.products?.maker;
+  if (!maker) continue;
+  makerTally.set(maker, (makerTally.get(maker) ?? 0) + 1);
+}
+const makers = [...makerTally.entries()]
+  .map(([maker, cnt]) => ({ maker, cnt }))
+  .sort((a, b) => b.cnt - a.cnt || a.maker.localeCompare(b.maker, 'ja'));
 
 function reviewParams(f) {
   const p = filterParams(f, { defaultSort: DEFAULT_SORT }); // q・maker・sort はここでエンコードされる

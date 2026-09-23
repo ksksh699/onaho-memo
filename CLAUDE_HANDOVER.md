@@ -2,7 +2,7 @@
 
 新しいチャットを始めるとき、このファイルの内容を最初のメッセージに貼るか、
 「C:\projects\onahole-site\CLAUDE_HANDOVER.md を読んでから始めて」と伝える。
-最終更新: 2026-09-12
+最終更新: 2026-09-23
 
 ---
 
@@ -70,7 +70,8 @@
 ## 5. フロントの主なファイル
 
 - `src/pages/index.astro`(トップ。商品一覧の見出しに件数、絞り込みで「該当 N件 / 全 M件」)、`src/lib/listing.js` + `src/components/ListingToolbar.astro`(セール/メーカー/タグ一覧の絞り込み)
-- `src/pages/products/[id].astro`(商品ページ。ショップ一覧は最安・掲載ありを優先表示)
+- `src/pages/reviews/index.astro`(口コミ一覧、2026-09-23追加。詳細は7章)、`src/lib/reviewText.js`(口コミのタイトル/抜粋を出す共通関数。トップの「最新のレビュー」とここで共用)
+- `src/pages/products/[id].astro`(商品ページ。ショップ一覧は最安・掲載ありを優先表示。口コミ各行に `id="review-{id}"` あり = `/reviews/` からのジャンプ先)
 - `src/pages/mypage.astro`(マイページ。TOP3のXシェア促し、使った一覧の検索/並び替え、手動追加商品はショップごとに URL/価格を入力)、`src/pages/users/[nickname].astro`(公開プロフィール)
 - `src/pages/signup.astro` / `reset-password.astro` + `src/lib/passwordRules.js`(8文字以上・英字と数字。Supabase Auth 設定と同じ)
 - `src/lib/safeUrl.js`(SNSリンクは http/https のみ。DB側にも `profiles_sns_links_safe` 制約)
@@ -85,8 +86,25 @@
 - ビルド確認: `npm ci` 後 `npm run build`。Vercel アダプタが `public/fonts/NotoSansJP-*.ttf` 不在で失敗するのはローカルのみの問題(コンパイルが通っていればOK)
 - 未着手の課題: 非公開プロフィール(is_public=false)が API 経由で読める件(ポリシー変更 + 公開ビュー + nickname 参照箇所の監査)/ GA の `_ga` cookie で CDN キャッシュが効きにくい件
 
-## 7. 直近の状況(2026-09-11〜12)
+## 7. 直近の状況
 
+### 2026-09-23: 口コミ一覧ページ(/reviews/)追加
+
+掲示板要望(ほわわ〜さん)を受けて Fable が仕様書を作成 → Sonnet(別チャット)が実装。じょいさんは未確認だが、途中で3回スクショ確認済み(下記)。
+
+- **やったこと**: `checks` の公開レビュー(review_text/detail_review_text のどちらかがある。ratingのみは除外)を一覧表示する `/reviews/` を新規作成。新着順/評価順/グッド順の並び替え(`?sort=`)+ ページング(20件/ページ)。カードは商品サムネ・投稿者(公開ニックネーム+アイコン、非公開は「匿名ユーザー」)・星・タイトル/本文冒頭(全角80文字)・グッド数(掲示板の線画アイコン流用)・投稿日。カードタップで商品ページの該当口コミ(`#review-{id}`)へジャンプ。ヘッダーナビとトップの「最新のレビュー」見出しに導線を追加、sitemap.xmlにも追加
+  - グッド順だけ集計が絡む(`review_likes` を Supabase の `.order` で集計順にできないため、対象口コミ全件→JS集計→ソート→該当ページだけ詳細取得、の2段階)。件数が増えたら集計ビューへの切り替えを検討、とコードにコメント済み
+  - 公開直後にじょいさんから「並び替えだけだと絞り切れない」と要望が出たため追加対応: **メーカー・商品名キーワード・評価(★n以上)** の3つを絞り込みとして追加(セール/メーカーページの ListingToolbar と同じ見た目だが、別コンポーネントとして実装 = 口コミ一覧の並び替えUIと項目が被らないようにするため)。発売年・価格帯は「商品の属性で口コミを探すのは目的から外れる」という判断で見送り(要望が出たら次回)
+- **仕様書からの判断・逸脱**:
+  - CSSクラス名は仕様書指定の `.reviews-list`/`.review-item` ではなく `.reviews-index-*` にした。この2つは既にマイページ/ユーザーページの「投稿した口コミ一覧」(全く別の見た目)で使われていたため、名前を分けて衝突を避けた
+  - canonicalはページ・並び替え・絞り込みに関わらず常に `https://onahomemo.com/reviews/` 固定(仕様書指定通り)
+  - `products` の埋め込みは絞り込み(メーカー/キーワード)のため `products!inner(...)` にした(左結合だと埋め込みリレーションへの `.eq()`/`.ilike()` が効かない)
+- **バグ修正(2026-09-23、公開後にじょいさんのスクショで発覚)**: 口コミ一覧・トップの「最新のレビュー」の抜粋に `<div><br></div>` のようなHTMLタグがそのまま文字として表示される不具合。原因は `detail_review_text` がリッチテキスト(HTML、商品ページでは `set:html` で描画)なのに、抜粋作成時にタグを取り除かず切り出していたため。`src/lib/reviewText.js` の `reviewDisplayExcerpt` にタグ除去処理を追加して修正(`review_text` はプレーンテキストなので対象外)。**この修正分はSonnet側でPC反映済み・push未確認**
+- **デプロイ**: 1回目(一覧本体)・2回目(絞り込み追加)は git push・Vercelデプロイ・実画面(スクショ)まで確認済み。3回目(上記バグ修正)は **push・デプロイ未確認、次のチャットで確認を**
+- **変更ファイル**: `src/pages/reviews/index.astro`(新規)、`src/lib/reviewText.js`(新規)、`src/pages/index.astro`・`src/pages/products/[id].astro`・`src/components/SiteHeader.astro`・`src/pages/sitemap.xml.js`・`src/styles/global.css`(既存ファイルへの追記のみ、既存機能への削除・変更なし)
+- **じょいさん側の残タスク(Sonnetの作業外)**: 掲示板のほわわ〜さんへの返信、`site_updates` への新着情報登録(Fableに「push押しました」で依頼)
+
+### 2026-09-11〜12
 - FANZA のキャンペーンが「セール開催中」タグに切り替わり、355商品がセール中。コード変更なしで対応済み
 - ショップリンク欠けレポート(607件)を確認し、126リンクを追加(欠けは 600件に)。残りの大半は storeago 系(72件)と FANZA独占・限定版
 - norm_name の記号ゆれ統一と、木曜ルーチンの対象拡大を実施済み
